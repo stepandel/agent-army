@@ -13,14 +13,17 @@ export function currentStack(): string | null {
 }
 
 /**
- * Select a Pulumi stack (create if it doesn't exist)
+ * Select a Pulumi stack (create if it doesn't exist).
+ * Returns { ok, error } so callers can display the error message.
  */
-export function selectOrCreateStack(stackName: string): boolean {
+export function selectOrCreateStack(stackName: string): { ok: boolean; error?: string } {
   const select = capture("pulumi", ["stack", "select", stackName]);
-  if (select.exitCode === 0) return true;
+  if (select.exitCode === 0) return { ok: true };
 
   const init = capture("pulumi", ["stack", "init", stackName]);
-  return init.exitCode === 0;
+  if (init.exitCode === 0) return { ok: true };
+
+  return { ok: false, error: init.stderr || select.stderr };
 }
 
 /**

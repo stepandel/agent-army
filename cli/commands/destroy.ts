@@ -21,7 +21,8 @@ export async function destroyCommand(opts: DestroyOptions): Promise<void> {
   }
 
   // Select stack
-  if (!selectOrCreateStack(manifest.stackName)) {
+  const stackResult = selectOrCreateStack(manifest.stackName);
+  if (!stackResult.ok) {
     exitWithError(`Could not select Pulumi stack "${manifest.stackName}".`);
   }
 

@@ -45,7 +45,8 @@ export async function validateCommand(opts: ValidateOptions): Promise<void> {
   }
 
   // Select stack
-  if (!selectOrCreateStack(manifest.stackName)) {
+  const stackResult = selectOrCreateStack(manifest.stackName);
+  if (!stackResult.ok) {
     exitWithError(`Could not select Pulumi stack "${manifest.stackName}".`);
   }
 

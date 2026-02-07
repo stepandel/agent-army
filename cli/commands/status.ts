@@ -21,7 +21,9 @@ export async function statusCommand(opts: StatusOptions): Promise<void> {
   }
 
   // Select stack
-  if (!selectOrCreateStack(manifest.stackName)) {
+  const stackResult = selectOrCreateStack(manifest.stackName);
+  if (!stackResult.ok) {
+    if (stackResult.error) p.log.error(stackResult.error);
     exitWithError(`Could not select Pulumi stack "${manifest.stackName}".`);
   }
 

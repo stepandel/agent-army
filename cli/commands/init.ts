@@ -243,9 +243,10 @@ export async function initCommand(): Promise<void> {
 
   // Select/create stack
   s.start("Selecting Pulumi stack...");
-  const stackOk = selectOrCreateStack(basicConfig.stackName as string);
-  if (!stackOk) {
+  const stackResult = selectOrCreateStack(basicConfig.stackName as string);
+  if (!stackResult.ok) {
     s.stop("Failed to select/create stack");
+    if (stackResult.error) p.log.error(stackResult.error);
     exitWithError(`Could not select or create Pulumi stack "${basicConfig.stackName}".`);
   }
   s.stop("Pulumi stack ready");
