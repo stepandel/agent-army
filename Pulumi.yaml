@@ -1,0 +1,24 @@
+name: agent-army
+description: Multi-agent OpenClaw deployment - PM, Engineer, and Tester
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm
+
+# This project deploys 3 specialized AI agents on AWS:
+#   - Sage (PM): Project management, coordination, stakeholder communication
+#   - Atlas (Eng): Lead engineering, coding, feature development
+#   - Scout (Tester): Quality assurance, verification, bug hunting
+#
+# All agents share a single VPC for cost optimization.
+# Secrets are managed via Pulumi ESC (see Pulumi.dev.yaml).
+#
+# Prerequisites:
+#   - AWS credentials configured
+#   - Pulumi ESC environment with required secrets
+#   - Tailscale account with HTTPS enabled
+#
+# Deploy:
+#   pulumi up
+#
+# Access agents via Tailscale URLs in stack outputs.
