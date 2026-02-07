@@ -11,9 +11,8 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "outDir": "./dist",
-    "rootDir": "./src"
+    "outDir": "./dist"
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*", "index.ts", "shared-vpc.ts"],
+  "exclude": ["node_modules", "dist", "examples"]
 }

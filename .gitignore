@@ -8,6 +8,7 @@ dist/
 .pulumi/
 Pulumi.*.yaml
 !Pulumi.yaml
+!Pulumi.*.yaml.example
 
 # IDE
 .idea/

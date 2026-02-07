@@ -1,0 +1,55 @@
+# Pulumi Stack Configuration - Development Environment
+#
+# This configuration pulls secrets from Pulumi ESC.
+# See esc/agent-army-secrets.yaml.example for the ESC environment template.
+#
+# Setup:
+#   1. Create ESC environment: pulumi env init <org>/agent-army-dev
+#   2. Copy secrets from esc/agent-army-secrets.yaml.example
+#   3. Run: pulumi up
+
+environment:
+  - agent-army-dev
+
+config:
+  # AWS region for deployment
+  aws:region: us-east-1
+
+  # Tailscale DNS name (your tailnet domain)
+  # Example: tail12345.ts.net
+  agent-army:tailnetDnsName: ${esc:tailnetDnsName}
+
+  # Instance type for all agents
+  # WARNING: t3.micro is too small (1GB RAM insufficient)
+  agent-army:instanceType: t3.medium
+
+  # Owner name (used in workspace templates)
+  agent-army:ownerName: ${esc:ownerName}
+
+  # Shared secrets (pulled from ESC)
+  agent-army:anthropicApiKey:
+    fn::secret: ${esc:anthropicApiKey}
+  agent-army:tailscaleAuthKey:
+    fn::secret: ${esc:tailscaleAuthKey}
+
+  # Per-agent Slack credentials (optional, pulled from ESC)
+  agent-army:pmSlackToken:
+    fn::secret: ${esc:pmSlackToken}
+  agent-army:pmSlackSigningSecret:
+    fn::secret: ${esc:pmSlackSigningSecret}
+  agent-army:engSlackToken:
+    fn::secret: ${esc:engSlackToken}
+  agent-army:engSlackSigningSecret:
+    fn::secret: ${esc:engSlackSigningSecret}
+  agent-army:testerSlackToken:
+    fn::secret: ${esc:testerSlackToken}
+  agent-army:testerSlackSigningSecret:
+    fn::secret: ${esc:testerSlackSigningSecret}
+
+  # Per-agent Linear credentials (optional, pulled from ESC)
+  agent-army:pmLinearToken:
+    fn::secret: ${esc:pmLinearToken}
+  agent-army:engLinearToken:
+    fn::secret: ${esc:engLinearToken}
+  agent-army:testerLinearToken:
+    fn::secret: ${esc:testerLinearToken}
