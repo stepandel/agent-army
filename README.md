@@ -328,6 +328,19 @@ pulumi cancel
 | `sshPrivateKey` | SSH private key (Ed25519) |
 | `instanceId` | EC2 instance ID |
 
+## CLI
+
+The project includes an interactive CLI for the full agent lifecycle. See the **[CLI documentation](./cli/README.md)** for details.
+
+```bash
+npx agent-army init        # Interactive setup wizard
+npx agent-army deploy      # Deploy agents
+npx agent-army status      # Show agent statuses
+npx agent-army ssh sage    # SSH to an agent
+npx agent-army validate    # Health check agents
+npx agent-army destroy     # Tear down resources
+```
+
 ## Examples
 
 See the [examples/](./examples/) directory:
