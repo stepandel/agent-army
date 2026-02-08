@@ -100,7 +100,21 @@ export async function validateCommand(opts: ValidateOptions): Promise<void> {
         detail: workspace.ok ? "SOUL.md + HEARTBEAT.md present" : "missing files",
       });
 
-      // Check 4: GitHub CLI installed
+      // Check 4: Claude Code CLI installed
+      const claudeCode = runSshCheck(
+        host,
+        `/home/${SSH_USER}/.local/bin/claude --version 2>/dev/null || echo 'not installed'`,
+        timeout
+      );
+      const claudeVersion = claudeCode.output.trim();
+      const claudeInstalled = claudeCode.ok && !claudeVersion.includes("not installed");
+      checks.push({
+        name: "Claude Code CLI",
+        passed: claudeInstalled,
+        detail: claudeInstalled ? claudeVersion : "not installed",
+      });
+
+      // Check 5: GitHub CLI installed
       const ghVersion = runSshCheck(
         host,
         `gh --version 2>/dev/null | head -n1 || echo 'not installed'`,
@@ -114,7 +128,7 @@ export async function validateCommand(opts: ValidateOptions): Promise<void> {
         detail: ghInstalled ? ghVersionStr : "not installed",
       });
 
-      // Check 5: GitHub CLI auth status (if installed)
+      // Check 6: GitHub CLI auth status (if installed)
       if (ghInstalled) {
         const ghAuth = runSshCheck(
           host,
@@ -132,6 +146,7 @@ export async function validateCommand(opts: ValidateOptions): Promise<void> {
     } else {
       checks.push({ name: "OpenClaw gateway", passed: false, detail: "skipped (no SSH)" });
       checks.push({ name: "Workspace files", passed: false, detail: "skipped (no SSH)" });
+      checks.push({ name: "Claude Code CLI", passed: false, detail: "skipped (no SSH)" });
       checks.push({ name: "GitHub CLI", passed: false, detail: "skipped (no SSH)" });
     }
 
