@@ -22,6 +22,7 @@ function deregisterTailscale(host: string): boolean {
   const result = capture("ssh", [
     "-o", "ConnectTimeout=10",
     "-o", "StrictHostKeyChecking=no",
+    "-o", "UserKnownHostsFile=/dev/null",
     "-o", "BatchMode=yes",
     `${SSH_USER}@${host}`,
     "sudo tailscale down && sudo tailscale logout",

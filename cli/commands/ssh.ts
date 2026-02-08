@@ -61,7 +61,7 @@ export async function sshCommand(agentNameOrAlias: string, commandArgs: string[]
   p.log.info(`Connecting to ${agent.displayName} (${sshHost})...`);
 
   // Build SSH command
-  const sshArgs = ["-o", "StrictHostKeyChecking=no", `${user}@${sshHost}`];
+  const sshArgs = ["-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", `${user}@${sshHost}`];
 
   if (commandArgs.length > 0) {
     sshArgs.push(commandArgs.join(" "));

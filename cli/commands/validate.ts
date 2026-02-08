@@ -29,6 +29,7 @@ function runSshCheck(
   const result = capture("ssh", [
     "-o", `ConnectTimeout=${timeout}`,
     "-o", "StrictHostKeyChecking=no",
+    "-o", "UserKnownHostsFile=/dev/null",
     "-o", "BatchMode=yes",
     `${SSH_USER}@${host}`,
     `"${command.replace(/"/g, '\\"')}"`,
