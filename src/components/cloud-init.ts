@@ -82,7 +82,7 @@ cd ~
 curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/home/ubuntu/.deno sh
 
 # Install Linear CLI
-/home/ubuntu/.deno/bin/deno install --allow-all --no-config -n linear jsr:@schpet/linear-cli
+/home/ubuntu/.deno/bin/deno install --global --allow-all --no-config -n linear jsr:@schpet/linear-cli
 
 # Add Deno to PATH in .bashrc if not already there
 if ! grep -q 'DENO_INSTALL' ~/.bashrc; then
@@ -161,6 +161,7 @@ echo "Starting OpenClaw agent provisioning..."
 echo "Updating system packages..."
 apt-get update
 apt-get upgrade -y
+apt-get install -y unzip
 
 # Install Docker
 echo "Installing Docker..."
