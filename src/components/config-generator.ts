@@ -203,10 +203,20 @@ config["gateway"]["auth"] = {
 }
 
 # Configure environment variables for child processes (including Claude Code)
-config["env"] = {
-    "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", "")
-}
-print("Configured environment variables")
+# Auto-detect credential type: OAuth token (oat) vs API key (api)
+anthropic_cred = os.environ.get("ANTHROPIC_API_KEY", "")
+if anthropic_cred.startswith("sk-ant-oat"):
+    # OAuth token from Claude Pro/Max subscription (use with CLAUDE_CODE_OAUTH_TOKEN)
+    config["env"] = {
+        "CLAUDE_CODE_OAUTH_TOKEN": anthropic_cred
+    }
+    print("Configured environment variables: CLAUDE_CODE_OAUTH_TOKEN (OAuth/subscription)")
+else:
+    # API key from Anthropic Console (use with ANTHROPIC_API_KEY)
+    config["env"] = {
+        "ANTHROPIC_API_KEY": anthropic_cred
+    }
+    print("Configured environment variables: ANTHROPIC_API_KEY (API key)")
 ${slackChannelConfig}${linearSkillConfig}${braveSearchConfig}
 with open(config_path, "w") as f:
     json.dump(config, f, indent=2)

@@ -12,6 +12,7 @@ import pc from "picocolors";
 
 interface ValidateOptions {
   timeout?: string;
+  testAuth?: boolean;
 }
 
 interface CheckResult {
@@ -114,7 +115,48 @@ export async function validateCommand(opts: ValidateOptions): Promise<void> {
         detail: claudeInstalled ? claudeVersion : "not installed",
       });
 
-      // Check 5: GitHub CLI installed
+      // Check 5: Claude Code auth (API key or OAuth token)
+      if (claudeInstalled) {
+        // Check for either ANTHROPIC_API_KEY (API) or CLAUDE_CODE_OAUTH_TOKEN (subscription)
+        const credCheck = runSshCheck(
+          host,
+          `grep -E '"(ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)"' /home/${SSH_USER}/.openclaw/openclaw.json | head -1`,
+          timeout
+        );
+        const hasApiKey = credCheck.output.includes("ANTHROPIC_API_KEY");
+        const hasOAuthToken = credCheck.output.includes("CLAUDE_CODE_OAUTH_TOKEN");
+        const credIsConfigured = credCheck.ok && (hasApiKey || hasOAuthToken);
+        const credType = hasOAuthToken ? "OAuth token" : "API key";
+
+        // If --test-auth flag is set, actually test the authentication
+        if (opts.testAuth && credIsConfigured) {
+          const envVar = hasOAuthToken ? "CLAUDE_CODE_OAUTH_TOKEN" : "ANTHROPIC_API_KEY";
+          // Create a test script that exports the variable and runs claude
+          const testScript = `
+export ${envVar}=$(jq -r '.env.${envVar}' /home/${SSH_USER}/.openclaw/openclaw.json)
+timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
+          `.trim();
+          const authTest = runSshCheck(
+            host,
+            testScript,
+            timeout + 15
+          );
+          const authWorks = authTest.ok && !authTest.output.includes("Invalid API key") && !authTest.output.includes("not authenticated");
+          checks.push({
+            name: "Claude Code auth",
+            passed: authWorks,
+            detail: authWorks ? `${credType} verified (live test)` : `${credType} test failed: ${authTest.output.substring(0, 50)}`,
+          });
+        } else {
+          checks.push({
+            name: "Claude Code auth",
+            passed: credIsConfigured,
+            detail: credIsConfigured ? `${credType} configured (use --test-auth to verify)` : "No credentials configured",
+          });
+        }
+      }
+
+      // Check 6: GitHub CLI installed
       const ghVersion = runSshCheck(
         host,
         `gh --version 2>/dev/null | head -n1 || echo 'not installed'`,
@@ -128,7 +170,7 @@ export async function validateCommand(opts: ValidateOptions): Promise<void> {
         detail: ghInstalled ? ghVersionStr : "not installed",
       });
 
-      // Check 6: GitHub CLI auth status (if installed)
+      // Check 7: GitHub CLI auth status (if installed)
       if (ghInstalled) {
         const ghAuth = runSshCheck(
           host,
@@ -147,7 +189,9 @@ export async function validateCommand(opts: ValidateOptions): Promise<void> {
       checks.push({ name: "OpenClaw gateway", passed: false, detail: "skipped (no SSH)" });
       checks.push({ name: "Workspace files", passed: false, detail: "skipped (no SSH)" });
       checks.push({ name: "Claude Code CLI", passed: false, detail: "skipped (no SSH)" });
+      checks.push({ name: "Claude Code auth", passed: false, detail: "skipped (no SSH)" });
       checks.push({ name: "GitHub CLI", passed: false, detail: "skipped (no SSH)" });
+      checks.push({ name: "GitHub CLI auth", passed: false, detail: "skipped (no SSH)" });
     }
 
     // Display check results

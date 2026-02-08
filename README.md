@@ -155,11 +155,26 @@ Via SSH:
 
 | Key | Where to Get | Used For |
 |-----|--------------|----------|
-| **Anthropic API Key** | [Anthropic Console](https://console.anthropic.com/) | Claude AI models (required) |
+| **Anthropic Credentials** | [API Key](https://console.anthropic.com/) or OAuth token (`claude setup-token`) | Claude AI models (required) |
 | **Tailscale Auth Key** | [Tailscale Admin → Keys](https://login.tailscale.com/admin/settings/keys) | VPN mesh connectivity (required) |
 | **Slack Bot Token** | [Slack API](https://api.slack.com/apps) → OAuth & Permissions | Agent communication (optional) |
 | **Slack Signing Secret** | [Slack API](https://api.slack.com/apps) → Basic Information | Webhook verification (optional) |
 | **Linear API Token** | [Linear Settings](https://linear.app/settings/api) | Issue tracking (optional) |
+
+#### Claude Code Authentication
+
+Agent Army supports **two authentication methods** for Claude Code:
+
+| Method | Token Format | Best For | Get It From |
+|--------|--------------|----------|-------------|
+| **API Key** | `sk-ant-api03-...` | Pay-as-you-go API usage | [Anthropic Console](https://console.anthropic.com/) |
+| **OAuth Token** | `sk-ant-oat01-...` | Pro/Max subscription (flat rate) | Run `claude setup-token` locally |
+
+The system **auto-detects** which type you provide:
+- **API keys** → Set as `ANTHROPIC_API_KEY` environment variable
+- **OAuth tokens** → Set as `CLAUDE_CODE_OAUTH_TOKEN` environment variable
+
+Both work identically - use whichever matches your billing preference!
 
 ### API Key Configuration
 

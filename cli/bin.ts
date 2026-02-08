@@ -58,6 +58,7 @@ program
   .command("validate")
   .description("Health check agents via Tailscale SSH")
   .option("-t, --timeout <seconds>", "SSH timeout in seconds", "30")
+  .option("--test-auth", "Test Claude Code authentication with a live API call (uses credits)")
   .action(async (opts) => {
     await validateCommand(opts);
   });

@@ -256,7 +256,16 @@ fi
 UBUNTU_SCRIPT
 
 # Set environment variables for ubuntu user
-echo 'export ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
+# Auto-detect credential type and export the correct variable
+if [[ "\${ANTHROPIC_API_KEY}" =~ ^sk-ant-oat ]]; then
+  # OAuth token from Claude Pro/Max subscription
+  echo 'export CLAUDE_CODE_OAUTH_TOKEN="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
+  echo "Detected OAuth token, exporting as CLAUDE_CODE_OAUTH_TOKEN"
+else
+  # API key from Anthropic Console
+  echo 'export ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
+  echo "Detected API key, exporting as ANTHROPIC_API_KEY"
+fi
 \${SLACK_BOT_TOKEN:+echo 'export SLACK_BOT_TOKEN="\${SLACK_BOT_TOKEN}"' >> /home/ubuntu/.bashrc}
 \${SLACK_APP_TOKEN:+echo 'export SLACK_APP_TOKEN="\${SLACK_APP_TOKEN}"' >> /home/ubuntu/.bashrc}
 \${LINEAR_API_KEY:+echo 'export LINEAR_API_KEY="\${LINEAR_API_KEY}"' >> /home/ubuntu/.bashrc}
