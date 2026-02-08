@@ -20,6 +20,11 @@ export interface SharedVpcArgs {
   subnetCidrBlock?: pulumi.Input<string>;
 
   /**
+   * Availability zone for the subnet (default: "us-east-1a")
+   */
+  availabilityZone?: pulumi.Input<string>;
+
+  /**
    * Additional tags to apply to all resources
    */
   tags?: pulumi.Input<Record<string, pulumi.Input<string>>>;
@@ -55,6 +60,7 @@ export class SharedVpc extends pulumi.ComponentResource {
     const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
     const cidrBlock = args.cidrBlock ?? "10.0.0.0/16";
     const subnetCidrBlock = args.subnetCidrBlock ?? "10.0.1.0/24";
+    const availabilityZone = args.availabilityZone ?? "us-east-1a";
     const baseTags = args.tags ?? {};
 
     // Create VPC
@@ -91,6 +97,7 @@ export class SharedVpc extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: subnetCidrBlock,
+        availabilityZone: availabilityZone,
         mapPublicIpOnLaunch: true,
         tags: pulumi.output(baseTags).apply((tags) => ({
           ...tags,

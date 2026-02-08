@@ -127,7 +127,7 @@ GH_AUTH_SCRIPT
   const claudeCodeInstallScript = `
 # Install Claude Code CLI for ubuntu user
 echo "Installing Claude Code CLI..."
-sudo -u ubuntu bash << 'CLAUDE_CODE_INSTALL_SCRIPT'
+sudo -u ubuntu bash << 'CLAUDE_CODE_INSTALL_SCRIPT' || echo "WARNING: Claude Code installation failed. Install manually with: curl -fsSL https://claude.ai/install.sh | bash"
 set -e
 cd ~
 
@@ -147,7 +147,7 @@ else
   exit 1
 fi
 CLAUDE_CODE_INSTALL_SCRIPT
-` + "|| echo \"WARNING: Claude Code installation failed. Install manually with: curl -fsSL https://claude.ai/install.sh | bash\"";
+`;
 
   // Generate workspace files injection script
   const workspaceFilesScript = generateWorkspaceFilesScript(config.workspaceFiles);
