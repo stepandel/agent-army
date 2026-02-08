@@ -239,12 +239,112 @@ export async function initCommand(): Promise<void> {
     exitWithError("No agents configured. At least one agent is required.");
   }
 
-  // Step 5: Show summary
+  // Step 5: Configure integrations (optional)
+  p.log.step("Configure integrations (optional)");
+
+  const selectedIntegrations = await p.multiselect({
+    message: "Select integrations to configure (press Enter to skip all)",
+    options: [
+      { value: "slack", label: "Slack", hint: "Bot + App tokens per agent" },
+      { value: "linear", label: "Linear", hint: "API key per agent" },
+      { value: "brave", label: "Brave Search", hint: "API key per agent" },
+    ],
+    required: false,
+  });
+  handleCancel(selectedIntegrations);
+
+  const integrations = selectedIntegrations as string[];
+
+  // Per-agent integration credentials
+  const integrationCredentials: Record<string, {
+    slackBotToken?: string;
+    slackAppToken?: string;
+    linearApiKey?: string;
+    braveSearchApiKey?: string;
+  }> = {};
+
+  for (const agent of agents) {
+    integrationCredentials[agent.role] = {};
+  }
+
+  if (integrations.includes("slack")) {
+    p.note(
+      KEY_INSTRUCTIONS.slackCredentials.steps.join("\n"),
+      KEY_INSTRUCTIONS.slackCredentials.title
+    );
+
+    for (const agent of agents) {
+      const botToken = await p.password({
+        message: `Slack Bot Token for ${agent.displayName} (${agent.role})`,
+        validate: (val) => {
+          if (!val.startsWith("xoxb-")) return "Must start with xoxb-";
+        },
+      });
+      handleCancel(botToken);
+
+      const appToken = await p.password({
+        message: `Slack App Token for ${agent.displayName} (${agent.role})`,
+        validate: (val) => {
+          if (!val.startsWith("xapp-")) return "Must start with xapp-";
+        },
+      });
+      handleCancel(appToken);
+
+      integrationCredentials[agent.role].slackBotToken = botToken as string;
+      integrationCredentials[agent.role].slackAppToken = appToken as string;
+    }
+  }
+
+  if (integrations.includes("linear")) {
+    p.note(
+      KEY_INSTRUCTIONS.linearApiKey.steps.join("\n"),
+      KEY_INSTRUCTIONS.linearApiKey.title
+    );
+
+    for (const agent of agents) {
+      const linearKey = await p.password({
+        message: `Linear API key for ${agent.displayName} (${agent.role})`,
+        validate: (val) => {
+          if (!val.startsWith("lin_api_")) return "Must start with lin_api_";
+        },
+      });
+      handleCancel(linearKey);
+
+      integrationCredentials[agent.role].linearApiKey = linearKey as string;
+    }
+  }
+
+  if (integrations.includes("brave")) {
+    p.note(
+      KEY_INSTRUCTIONS.braveSearchApiKey.steps.join("\n"),
+      KEY_INSTRUCTIONS.braveSearchApiKey.title
+    );
+
+    for (const agent of agents) {
+      const braveKey = await p.password({
+        message: `Brave Search API key for ${agent.displayName} (${agent.role})`,
+        validate: (val) => {
+          if (!val.startsWith("BSA")) return "Must start with BSA";
+        },
+      });
+      handleCancel(braveKey);
+
+      integrationCredentials[agent.role].braveSearchApiKey = braveKey as string;
+    }
+  }
+
+  // Step 6: Show summary
   const costPerAgent = COST_ESTIMATES[basicConfig.instanceType as string] ?? 30;
   const totalCost = agents.reduce((sum, a) => {
     const agentCost = COST_ESTIMATES[a.instanceType ?? (basicConfig.instanceType as string)] ?? costPerAgent;
     return sum + agentCost;
   }, 0);
+
+  const integrationNames = integrations.map(i => {
+    if (i === "slack") return "Slack";
+    if (i === "linear") return "Linear";
+    return "Brave Search";
+  });
 
   p.note(
     [
@@ -252,6 +352,7 @@ export async function initCommand(): Promise<void> {
       `Region:         ${basicConfig.region}`,
       `Instance type:  ${basicConfig.instanceType}`,
       `Owner:          ${basicConfig.ownerName}`,
+      `Integrations:   ${integrationNames.length > 0 ? integrationNames.join(", ") : "none"}`,
       ``,
       `Agents (${agents.length}):`,
       formatAgentList(agents),
@@ -261,7 +362,7 @@ export async function initCommand(): Promise<void> {
     "Deployment Summary"
   );
 
-  // Step 6: Confirm
+  // Step 7: Confirm
   const confirmed = await p.confirm({
     message: "Proceed with setup?",
   });
@@ -271,7 +372,7 @@ export async function initCommand(): Promise<void> {
     process.exit(0);
   }
 
-  // Step 7: Execute setup
+  // Step 8: Execute setup
   const s = p.spinner();
 
   // Select/create stack
@@ -295,6 +396,13 @@ export async function initCommand(): Promise<void> {
   }
   setConfig("instanceType", basicConfig.instanceType as string);
   setConfig("ownerName", basicConfig.ownerName as string);
+  // Set per-agent integration credentials
+  for (const [role, creds] of Object.entries(integrationCredentials)) {
+    if (creds.slackBotToken) setConfig(`${role}SlackBotToken`, creds.slackBotToken, true);
+    if (creds.slackAppToken) setConfig(`${role}SlackAppToken`, creds.slackAppToken, true);
+    if (creds.linearApiKey) setConfig(`${role}LinearApiKey`, creds.linearApiKey, true);
+    if (creds.braveSearchApiKey) setConfig(`${role}BraveSearchApiKey`, creds.braveSearchApiKey, true);
+  }
   s.stop("Configuration saved");
 
   // Write manifest

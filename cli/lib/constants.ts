@@ -117,4 +117,33 @@ export const KEY_INSTRUCTIONS = {
       "3. It looks like \"tailXXXXX.ts.net\" or a custom domain",
     ],
   },
+  slackCredentials: {
+    title: "Slack App Credentials",
+    steps: [
+      "To get Slack Bot and App tokens:",
+      "1. Go to https://api.slack.com/apps and create a new app",
+      "2. Enable Socket Mode — copy the App-Level Token (xapp-...)",
+      "3. Under \"OAuth & Permissions\", add scopes: chat:write, channels:history, channels:read",
+      "4. Install the app to your workspace — copy the Bot Token (xoxb-...)",
+      "5. Create a separate Slack app for each agent",
+    ],
+  },
+  linearApiKey: {
+    title: "Linear API Key",
+    steps: [
+      "To get a Linear API key:",
+      "1. Go to https://linear.app/settings/api",
+      "2. Click \"Create key\" under \"Personal API keys\"",
+      "3. Copy the key (starts with lin_api_)",
+    ],
+  },
+  braveSearchApiKey: {
+    title: "Brave Search API Key",
+    steps: [
+      "To get a Brave Search API key:",
+      "1. Go to https://brave.com/search/api/",
+      "2. Sign up for the free plan (2,000 queries/month)",
+      "3. Copy the API key (starts with BSA)",
+    ],
+  },
 } as const;
