@@ -135,7 +135,7 @@ export const KEY_INSTRUCTIONS = {
       "1. Invite you+agentname@domain.com to your Linear workspace",
       "   (plus-addressing forwards to your inbox — no new email needed)",
       "   Follow the link in the invite email to create the account and join the org",
-      "2. Go to Settings → API → \"Create key\"",
+      "2. Go to Settings → Security & Access → Personal API keys → \"New API key\"",
       "3. Copy the key (starts with lin_api_)",
     ],
   },
