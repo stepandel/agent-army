@@ -7,6 +7,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as tls from "@pulumi/tls";
 import * as crypto from "crypto";
+import * as zlib from "zlib";
 import { generateCloudInit, interpolateCloudInit, CloudInitConfig } from "./cloud-init";
 
 /**
@@ -470,7 +471,10 @@ export class OpenClawAgent extends pulumi.ComponentResource {
         subnetId: subnetId,
         vpcSecurityGroupIds: [securityGroupId],
         keyName: keyPair.keyName,
-        userData: userData,
+        userDataBase64: userData.apply((script) => {
+          const gzipped = zlib.gzipSync(Buffer.from(script));
+          return gzipped.toString("base64");
+        }),
         userDataReplaceOnChange: true,
         rootBlockDevice: {
           volumeSize: volumeSize,
