@@ -108,7 +108,7 @@ export async function validateCommand(opts: ValidateOptions): Promise<void> {
 
         const binaryPath = cliDef.binaryPath.replace("$HOME", `/home/${SSH_USER}`);
         const versionCmd = cliDef.installMethod === "npm"
-          ? `${cliDef.binaryPath} --version 2>/dev/null || echo 'not installed'`
+          ? `bash -lc 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; ${cliDef.binaryPath} --version 2>/dev/null || echo "not installed"'`
           : `${binaryPath} --version 2>/dev/null || echo 'not installed'`;
 
         const cliCheck = runSshCheck(host, versionCmd, timeout);
@@ -137,7 +137,7 @@ export async function validateCommand(opts: ValidateOptions): Promise<void> {
             // Always test authentication with a live API call
             const envVar = hasOAuthToken ? "CLAUDE_CODE_OAUTH_TOKEN" : "ANTHROPIC_API_KEY";
             const testScript = `
-export ${envVar}=$(jq -r '.env.${envVar}' /home/${SSH_USER}/.openclaw/openclaw.json)
+export ${envVar}=$(python3 -c "import json; print(json.load(open('/home/${SSH_USER}/.openclaw/openclaw.json')).get('env', {}).get('${envVar}', ''))")
 timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
             `.trim();
             const authTest = runSshCheck(

@@ -261,6 +261,25 @@ export async function initCommand(): Promise<void> {
     ? (selectedCodingClis as string[])
     : ["claude-code"]; // Default to claude-code if none selected
 
+  // Note about API keys for non-Anthropic CLIs
+  const nonAnthropicClis = codingClis.filter(cli => cli !== "claude-code");
+  if (nonAnthropicClis.length > 0) {
+    p.note(
+      [
+        "The following CLIs require API keys configured post-deployment:",
+        ...nonAnthropicClis.map(cli => {
+          if (cli === "codex") return "• Codex: Set OPENAI_API_KEY in agent's environment";
+          if (cli === "amp") return "• Amp: Set AMP_API_KEY in agent's environment";
+          if (cli === "opencode") return "• OpenCode: Set OPENCODE_API_KEY in agent's environment";
+          return `• ${cli}: Configure API key in agent's environment`;
+        }),
+        "",
+        "Add these to ~/.openclaw/openclaw.json under 'env' after deployment.",
+      ].join("\n"),
+      "API Keys Required"
+    );
+  }
+
   // Step 6: Configure integrations
   p.log.step("Configure integrations");
 

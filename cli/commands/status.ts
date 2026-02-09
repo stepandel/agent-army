@@ -22,7 +22,7 @@ function getCodingCliVersion(host: string, cliKey: string, timeout: number = 5):
 
   const binaryPath = cliDef.binaryPath.replace("$HOME", `/home/${SSH_USER}`);
   const versionCmd = cliDef.installMethod === "npm"
-    ? `${cliDef.binaryPath} --version 2>/dev/null || echo ''`
+    ? `bash -lc 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; ${cliDef.binaryPath} --version 2>/dev/null || echo ""'`
     : `${binaryPath} --version 2>/dev/null || echo ''`;
 
   const result = capture("ssh", [
