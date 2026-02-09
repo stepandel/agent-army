@@ -95,19 +95,21 @@ check_hetzner_credentials() {
         return 0
     fi
 
-    # Try to get from Pulumi config (if stack exists)
-    local hcloud_token
-    hcloud_token=$(pulumi config get hcloudToken 2>/dev/null || echo "")
-
-    if [ -n "$hcloud_token" ]; then
-        log_success "Hetzner Cloud token found (via Pulumi config)"
-        return 0
-    else
-        log_error "Hetzner Cloud token not configured"
-        log_info "Set via: pulumi config set --secret hcloudToken <token>"
-        log_info "Or via: export HCLOUD_TOKEN=<token>"
-        return 1
+    # Try to get from Pulumi config (if stack exists and is selected)
+    # Note: This may fail if no stack is selected yet, which is fine
+    if pulumi stack 2>/dev/null | grep -q "Current stack"; then
+        local hcloud_token
+        hcloud_token=$(pulumi config get hcloudToken 2>/dev/null || echo "")
+        if [ -n "$hcloud_token" ]; then
+            log_success "Hetzner Cloud token found (via Pulumi config)"
+            return 0
+        fi
     fi
+
+    log_error "Hetzner Cloud token not configured"
+    log_info "Set via: pulumi config set --secret hcloudToken <token>"
+    log_info "Or via: export HCLOUD_TOKEN=<token>"
+    return 1
 }
 
 detect_provider() {
@@ -226,7 +228,7 @@ case "$PROVIDER" in
         if command -v aws &> /dev/null && aws sts get-caller-identity &> /dev/null 2>&1; then
             log_info "AWS credentials detected"
             check_aws_credentials || PREREQS_OK=false
-        elif [ -n "${HCLOUD_TOKEN:-}" ]; then
+        elif [ -n "${HCLOUD_TOKEN:-}" ] || (pulumi stack 2>/dev/null | grep -q "Current stack" && pulumi config get hcloudToken 2>/dev/null | grep -q .); then
             log_info "Hetzner Cloud token detected"
             check_hetzner_credentials || PREREQS_OK=false
         else

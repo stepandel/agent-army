@@ -46,7 +46,7 @@ Based on the [Pulumi blog post: Deploy OpenClaw on AWS or Hetzner Securely with 
 
 | Feature | AWS | Hetzner Cloud |
 |---------|-----|---------------|
-| **3x Agents (monthly)** | ~$110-120 | ~€20-25 (~$22-27) |
+| **3x Agents (monthly)** | ~$110-120 | ~€16-20 (~$18-22) |
 | **Instance Type** | t3.medium (2 vCPU, 4GB) | CX21 (2 vCPU, 4GB) |
 | **Per-Instance Cost** | ~$33/month | ~€5.18/month |
 | **Storage (30GB)** | ~$2.40/month | Included |
