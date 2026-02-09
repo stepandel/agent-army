@@ -23,7 +23,12 @@ import { saveManifest } from "../lib/config";
 import { showBanner, handleCancel, exitWithError, formatCost, formatAgentList } from "../lib/ui";
 import { capture } from "../lib/exec";
 
-export async function initCommand(): Promise<void> {
+interface InitOptions {
+  deploy?: boolean;
+  yes?: boolean;
+}
+
+export async function initCommand(opts: InitOptions = {}): Promise<void> {
   showBanner();
 
   // Step 1: Check prerequisites
@@ -506,17 +511,18 @@ export async function initCommand(): Promise<void> {
   s.stop("Configuration saved");
 
   // Write manifest
-  s.start("Writing agent-army.json manifest...");
+  const configName = basicConfig.stackName as string;
+  s.start(`Writing config to ~/.agent-army/configs/${configName}.json...`);
   const manifest: ArmyManifest = {
-    stackName: basicConfig.stackName,
-    provider: basicConfig.provider,
-    region: basicConfig.region,
-    instanceType: basicConfig.instanceType,
-    ownerName: basicConfig.ownerName,
+    stackName: configName,
+    provider: basicConfig.provider as "aws" | "hetzner",
+    region: basicConfig.region as string,
+    instanceType: basicConfig.instanceType as string,
+    ownerName: basicConfig.ownerName as string,
     agents,
   };
-  saveManifest(manifest);
-  s.stop("Manifest written");
+  saveManifest(configName, manifest);
+  s.stop("Config saved");
 
   // Install dependencies if needed
   const result = capture("ls", ["node_modules"]);
@@ -531,5 +537,11 @@ export async function initCommand(): Promise<void> {
     }
   }
 
-  p.outro("Setup complete! Run `agent-army deploy` to deploy your agents.");
+  if (opts.deploy) {
+    p.log.success("Config saved! Starting deployment...\n");
+    const { deployCommand } = await import("./deploy.js");
+    await deployCommand({ config: configName, yes: opts.yes });
+  } else {
+    p.outro("Setup complete! Run `agent-army deploy` to deploy your agents.");
+  }
 }

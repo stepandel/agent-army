@@ -1,6 +1,6 @@
 # Agent Army 🦞
 
-Deploy a fleet of specialized [OpenClaw](https://openclaw.bot/) AI agents on AWS using Pulumi.
+Deploy a fleet of specialized [OpenClaw](https://openclaw.bot/) AI agents on **AWS** or **Hetzner Cloud** using Pulumi.
 
 Based on the [Pulumi blog post: Deploy OpenClaw on AWS or Hetzner Securely with Pulumi and Tailscale](https://www.pulumi.com/blog/deploy-openclaw-aws-hetzner/).
 
@@ -8,10 +8,10 @@ Based on the [Pulumi blog post: Deploy OpenClaw on AWS or Hetzner Securely with 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                              AWS VPC                                     │
+│                         AWS VPC / Hetzner Cloud                          │
 │                                                                          │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐          │
-│  │   EC2: agent-pm │  │  EC2: agent-eng │  │ EC2: agent-tester│          │
+│  │    agent-pm     │  │    agent-eng    │  │   agent-tester  │          │
 │  │   (Sage)        │  │   (Titus)       │  │    (Scout)       │          │
 │  │                 │  │                 │  │                  │          │
 │  │  • OpenClaw     │  │  • OpenClaw     │  │  • OpenClaw      │          │
@@ -37,22 +37,53 @@ Based on the [Pulumi blog post: Deploy OpenClaw on AWS or Hetzner Securely with 
 ```
 
 **Key Points:**
-- All 3 agents share a single VPC (cost optimization)
+- All 3 agents share networking (AWS VPC or Hetzner network)
 - Communication is via Tailscale mesh VPN (no public port exposure)
 - Each agent has role-specific workspace files from `presets/`
 - Cloud-init handles full automation (Docker, Node.js, OpenClaw, Tailscale)
 
+## Provider Comparison
+
+| Feature | AWS | Hetzner Cloud |
+|---------|-----|---------------|
+| **3x Agents (monthly)** | ~$110-120 | ~€16-20 (~$18-22) |
+| **Instance Type** | t3.medium (2 vCPU, 4GB) | CX21 (2 vCPU, 4GB) |
+| **Per-Instance Cost** | ~$33/month | ~€5.18/month |
+| **Storage (30GB)** | ~$2.40/month | Included |
+| **Data Transfer** | ~$5-10/month | 20TB included |
+| **Regions** | Global (25+ regions) | EU & US (5 locations) |
+| **Setup Complexity** | Moderate (VPC, IAM) | Simple (API token) |
+| **Best For** | Enterprise, global reach | Cost-conscious, EU-based |
+
+**Recommendation:** Use Hetzner for development and cost savings (~80% cheaper). Use AWS for production workloads requiring enterprise features or global distribution.
+
 ## Prerequisites
+
+### Common Requirements
 
 | Requirement | Description | Link |
 |-------------|-------------|------|
 | **Pulumi CLI** | Infrastructure as code tool | [Install Pulumi](https://www.pulumi.com/docs/iac/download-install/) |
 | **Pulumi Account** | For state management & secrets | [Sign Up](https://app.pulumi.com/signup) |
 | **Node.js 18+** | JavaScript runtime | [Download](https://nodejs.org/) |
-| **AWS CLI** | AWS credentials configuration | [Install AWS CLI](https://aws.amazon.com/cli/) |
-| **AWS Account** | For EC2 instances | [Create Account](https://aws.amazon.com/) |
 | **Tailscale** | Mesh VPN for secure access | [Download](https://tailscale.com/download) |
 | **Anthropic API Key** | For Claude AI | [Console](https://console.anthropic.com/) |
+
+### Provider-Specific Requirements
+
+#### AWS
+
+| Requirement | Description | Link |
+|-------------|-------------|------|
+| **AWS CLI** | AWS credentials configuration | [Install AWS CLI](https://aws.amazon.com/cli/) |
+| **AWS Account** | For EC2 instances | [Create Account](https://aws.amazon.com/) |
+
+#### Hetzner Cloud
+
+| Requirement | Description | Link |
+|-------------|-------------|------|
+| **Hetzner Account** | For cloud servers | [Create Account](https://console.hetzner.cloud/) |
+| **API Token** | Read & Write permissions | [Create Token](https://console.hetzner.cloud/) → Project → Security → API Tokens |
 
 ### AWS Credentials
 
@@ -69,6 +100,22 @@ export AWS_REGION="us-east-1"
 
 # Option 3: AWS SSO
 aws sso login --profile your-profile
+```
+
+### Hetzner Cloud Setup
+
+1. [Create a Hetzner Cloud account](https://console.hetzner.cloud/)
+2. Create a new project (or use existing)
+3. Go to **Security** → **API Tokens**
+4. Generate a new token with **Read & Write** permissions
+5. Add the token to your Pulumi ESC environment as `hcloudToken`
+
+```bash
+# Set Hetzner token in Pulumi config
+pulumi config set --secret hcloudToken "your-hetzner-api-token"
+
+# Or via environment variable
+export HCLOUD_TOKEN="your-hetzner-api-token"
 ```
 
 ### Tailscale Setup
@@ -202,49 +249,47 @@ All scripts support `-h` for help.
 
 ## Updating and Redeploying
 
-When you make changes to the codebase (cloud-init scripts, workspace files, environment variables, etc.), you can redeploy your agents to apply the changes.
+When you make changes to the codebase (cloud-init scripts, workspace files, environment variables, etc.), you need to redeploy your agents to apply the changes.
 
-### Using the CLI
+### Recommended Approach: Destroy Then Deploy
 
-```bash
-npx agent-army deploy
-```
-
-or with auto-confirm:
-
-```bash
-npx agent-army deploy -y
-```
-
-### How It Works
-
-Pulumi automatically detects changes that require instance replacement (like cloud-init script modifications) and will:
-1. Show you a preview of what will change
-2. Replace affected instances with new ones
-3. Preserve resources that haven't changed (VPC, security groups, etc.)
-
-**Note:** Instance replacement means your agents will get fresh EC2 instances. Any local data not in the workspace will be lost.
-
-### Preview Changes First
-
-To see what Pulumi will do without applying changes:
-
-```bash
-pulumi preview
-```
-
-This is useful to verify that instances will be replaced (not just updated) when you've modified cloud-init or other immutable properties.
-
-### Full Teardown and Rebuild
-
-If you prefer a complete teardown and rebuild:
+**Always use a full teardown and rebuild** to ensure clean state and avoid issues with orphaned Tailscale devices:
 
 ```bash
 npx agent-army destroy
 npx agent-army deploy
 ```
 
-This is equivalent to a regular deploy for cloud-init changes but gives you more control.
+or with auto-confirm:
+
+```bash
+npx agent-army destroy -y
+npx agent-army deploy -y
+```
+
+### Why Not Just `deploy`?
+
+While `pulumi up` (via `npx agent-army deploy`) can detect changes and replace instances, it has limitations:
+
+- **Tailscale cleanup**: Old Tailscale devices aren't automatically removed when instances are replaced, leading to hostname conflicts where new instances get `-1` suffixes
+- **Stale resources**: Replaced instances may leave behind orphaned resources
+- **Validation issues**: Health checks may connect to old offline devices instead of new ones
+
+The `destroy` → `deploy` workflow ensures:
+- ✅ Clean Tailscale device registration (no orphans)
+- ✅ Stable hostnames without suffixes
+- ✅ Complete resource cleanup
+- ✅ Fresh state for all components
+
+### Preview Changes Before Destroying
+
+To see what will be destroyed:
+
+```bash
+pulumi preview --target destroy
+```
+
+**Note:** Full redeployment means your agents will be completely rebuilt. Any local data not in workspace files will be lost.
 
 ## Per-Agent Customization
 
@@ -342,19 +387,39 @@ pulumi cancel
 
 ## Cost Estimate
 
-| Resource | Quantity | Instance Type | Monthly Cost (US-East-1) |
-|----------|----------|---------------|--------------------------|
+### AWS (US-East-1)
+
+| Resource | Quantity | Instance Type | Monthly Cost |
+|----------|----------|---------------|--------------|
 | EC2 Instances | 3 | t3.medium | $33 × 3 = **$99** |
 | EBS Storage | 3 × 30GB | gp3 | ~$2.40 × 3 = **$7.20** |
 | Data Transfer | Variable | - | ~**$5-10** |
 | **Total** | | | **~$110-120/month** |
 
-**Cost Optimization Tips:**
+### Hetzner Cloud (EU)
+
+| Resource | Quantity | Server Type | Monthly Cost |
+|----------|----------|-------------|--------------|
+| Cloud Servers | 3 | CX21 | €5.18 × 3 = **€15.54** |
+| Storage | Included | 40GB NVMe | **€0** |
+| Data Transfer | 20TB included | - | **€0** |
+| **Total** | | | **~€16-20/month (~$18-22)** |
+
+**Hetzner saves ~80% compared to AWS** with equivalent specs.
+
+### Cost Optimization Tips
+
+**AWS:**
 - Use Spot Instances for non-critical workloads
 - Schedule instances to stop during off-hours
 - Use smaller instances for testing (t3.small: ~$17/month each)
 
-**⚠️ Do not use t3.micro** - 1GB RAM is insufficient for OpenClaw + Docker.
+**Hetzner:**
+- CX11 (2 vCPU, 2GB): €3.29/month for lighter workloads
+- CX31 (2 vCPU, 8GB): €7.49/month for heavier workloads
+- Consider Nuremberg (nbg1) for lowest latency in EU
+
+**⚠️ Minimum requirements:** 4GB RAM recommended for OpenClaw + Docker. Avoid t3.micro (1GB) or CX11 (2GB) for production.
 
 ## Component API
 
