@@ -17,6 +17,10 @@ interface DestroyOptions {
 /**
  * Deregister an agent from Tailscale by SSHing in and running `tailscale logout`.
  * Returns true if successful, false otherwise.
+ *
+ * Note: We use `nohup ... &` to background the command because `tailscale down`
+ * immediately cuts the SSH connection (since SSH is via Tailscale), which would
+ * cause the session to hang before `logout` can execute.
  */
 function deregisterTailscale(host: string): boolean {
   const result = capture("ssh", [
@@ -25,7 +29,7 @@ function deregisterTailscale(host: string): boolean {
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "BatchMode=yes",
     `${SSH_USER}@${host}`,
-    "sudo tailscale down && sudo tailscale logout",
+    "nohup sh -c 'sleep 1 && sudo tailscale down && sudo tailscale logout' >/dev/null 2>&1 &",
   ]);
   return result.exitCode === 0;
 }
@@ -110,8 +114,8 @@ export async function destroyCommand(opts: DestroyOptions): Promise<void> {
         apiS.start("Cleaning up via Tailscale API...");
         const apiFailed: string[] = [];
 
-        // Get the tailnet name (org portion before .ts.net, or custom domain)
-        const tailnet = tailnetDnsName.replace(/\.ts\.net$/, "");
+        // Use the full tailnet DNS name for API calls (API expects "tailnet.ts.net")
+        const tailnet = tailnetDnsName;
         const devices = listTailscaleDevices(tailscaleApiKey, tailnet);
 
         if (devices) {
