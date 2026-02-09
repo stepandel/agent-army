@@ -200,6 +200,52 @@ Keys are managed via Pulumi ESC. See `esc/agent-army-secrets.yaml.example` for t
 
 All scripts support `-h` for help.
 
+## Updating and Redeploying
+
+When you make changes to the codebase (cloud-init scripts, workspace files, environment variables, etc.), you can redeploy your agents to apply the changes.
+
+### Using the CLI
+
+```bash
+npx agent-army deploy
+```
+
+or with auto-confirm:
+
+```bash
+npx agent-army deploy -y
+```
+
+### How It Works
+
+Pulumi automatically detects changes that require instance replacement (like cloud-init script modifications) and will:
+1. Show you a preview of what will change
+2. Replace affected instances with new ones
+3. Preserve resources that haven't changed (VPC, security groups, etc.)
+
+**Note:** Instance replacement means your agents will get fresh EC2 instances. Any local data not in the workspace will be lost.
+
+### Preview Changes First
+
+To see what Pulumi will do without applying changes:
+
+```bash
+pulumi preview
+```
+
+This is useful to verify that instances will be replaced (not just updated) when you've modified cloud-init or other immutable properties.
+
+### Full Teardown and Rebuild
+
+If you prefer a complete teardown and rebuild:
+
+```bash
+npx agent-army destroy
+npx agent-army deploy
+```
+
+This is equivalent to a regular deploy for cloud-init changes but gives you more control.
+
 ## Per-Agent Customization
 
 Each agent loads workspace files from `presets/`:
