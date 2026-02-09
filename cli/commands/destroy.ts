@@ -15,12 +15,13 @@ interface DestroyOptions {
 }
 
 /**
- * Deregister an agent from Tailscale by SSHing in and running `tailscale logout`.
- * Returns true if successful, false otherwise.
+ * DEPRECATED: SSH-based Tailscale deregistration is no longer used.
  *
- * Note: We use `nohup ... &` to background the command because `tailscale down`
- * immediately cuts the SSH connection (since SSH is via Tailscale), which would
- * cause the session to hang before `logout` can execute.
+ * We now clean up Tailscale devices AFTER Pulumi destroy completes, which is safer
+ * (preserves SSH access if destroy fails) and must use the Tailscale API since
+ * instances are already destroyed.
+ *
+ * This function is kept for reference but should not be called.
  */
 function deregisterTailscale(host: string): boolean {
   const result = capture("ssh", [
@@ -88,75 +89,7 @@ export async function destroyCommand(opts: DestroyOptions): Promise<void> {
     }
   }
 
-  // Deregister agents from Tailscale before destroying infrastructure
-  const tailnetDnsName = getConfig("tailnetDnsName");
-  const tailscaleApiKey = getConfig("tailscaleApiKey");
-
-  if (tailnetDnsName) {
-    // Use Tailscale API for cleanup (primary method - most reliable)
-    if (tailscaleApiKey) {
-      const s = p.spinner();
-      s.start("Removing agents from Tailscale via API...");
-      const apiFailed: string[] = [];
-
-      // Use the full tailnet DNS name for API calls (API expects "tailnet.ts.net")
-      const tailnet = tailnetDnsName;
-      const devices = listTailscaleDevices(tailscaleApiKey, tailnet);
-
-      if (devices) {
-        for (const agent of manifest.agents) {
-          const tsHost = tailscaleHostname(manifest.stackName, agent.name);
-          const device = devices.find((d) =>
-            d.hostname === tsHost || d.name.startsWith(`${tsHost}.`)
-          );
-          if (device) {
-            const deleted = deleteTailscaleDevice(tailscaleApiKey, device.id);
-            if (!deleted) apiFailed.push(agent.name);
-          } else {
-            // Device not found — may already be gone, which is fine
-          }
-        }
-
-        if (apiFailed.length === 0) {
-          s.stop("All agents removed from Tailscale");
-        } else {
-          s.stop("Some devices could not be removed");
-          p.log.warn(
-            `Could not remove: ${apiFailed.join(", ")}. Remove manually from https://login.tailscale.com/admin/machines`
-          );
-        }
-      } else {
-        s.stop("Failed to list Tailscale devices");
-        p.log.warn("Could not list Tailscale devices. Remove manually if needed.");
-      }
-    } else {
-      // No API key - try SSH method (less reliable)
-      const s = p.spinner();
-      s.start("Deregistering agents from Tailscale via SSH...");
-      const sshFailed: string[] = [];
-
-      for (const agent of manifest.agents) {
-        const tsHost = tailscaleHostname(manifest.stackName, agent.name);
-        const host = `${tsHost}.${tailnetDnsName}`;
-        const ok = deregisterTailscale(host);
-        if (!ok) sshFailed.push(agent.name);
-      }
-
-      if (sshFailed.length === 0) {
-        s.stop("All agents deregistered from Tailscale");
-      } else {
-        s.stop("Some agents could not be deregistered via SSH");
-        p.log.warn(
-          `Could not deregister: ${sshFailed.join(", ")}. Remove manually from https://login.tailscale.com/admin/machines`
-        );
-        p.log.message(
-          "  Tip: Set a Tailscale API key (`agent-army init`) for more reliable cleanup."
-        );
-      }
-    }
-  }
-
-  // Destroy
+  // Destroy infrastructure first (keep Tailscale access until after destroy completes)
   p.log.step("Running pulumi destroy...");
   console.log();
   const exitCode = await pulumiDestroy();
@@ -164,6 +97,51 @@ export async function destroyCommand(opts: DestroyOptions): Promise<void> {
 
   if (exitCode !== 0) {
     exitWithError("Destruction failed. Check the output above for details.");
+  }
+
+  // Clean up Tailscale devices after infrastructure is destroyed
+  const tailnetDnsName = getConfig("tailnetDnsName");
+  const tailscaleApiKey = getConfig("tailscaleApiKey");
+
+  if (tailnetDnsName && tailscaleApiKey) {
+    // Use Tailscale API for cleanup (only method that works after instances are destroyed)
+    const s = p.spinner();
+    s.start("Removing agents from Tailscale...");
+    const apiFailed: string[] = [];
+
+    // Use the full tailnet DNS name for API calls (API expects "tailnet.ts.net")
+    const tailnet = tailnetDnsName;
+    const devices = listTailscaleDevices(tailscaleApiKey, tailnet);
+
+    if (devices) {
+      for (const agent of manifest.agents) {
+        const tsHost = tailscaleHostname(manifest.stackName, agent.name);
+        const device = devices.find((d) =>
+          d.hostname === tsHost || d.name.startsWith(`${tsHost}.`)
+        );
+        if (device) {
+          const deleted = deleteTailscaleDevice(tailscaleApiKey, device.id);
+          if (!deleted) apiFailed.push(agent.name);
+        }
+        // If device not found, it's already gone - which is expected since instances were destroyed
+      }
+
+      if (apiFailed.length === 0) {
+        s.stop("Tailscale devices cleaned up");
+      } else {
+        s.stop("Some Tailscale devices could not be removed");
+        p.log.warn(
+          `Could not remove: ${apiFailed.join(", ")}. Remove manually from https://login.tailscale.com/admin/machines`
+        );
+      }
+    } else {
+      s.stop("Could not list Tailscale devices");
+      p.log.warn("Manual cleanup may be needed at https://login.tailscale.com/admin/machines");
+    }
+  } else if (tailnetDnsName && !tailscaleApiKey) {
+    p.log.warn("No Tailscale API key configured - devices must be removed manually.");
+    p.log.message("  Remove devices at: https://login.tailscale.com/admin/machines");
+    p.log.message("  Tip: Set a Tailscale API key (`agent-army init`) for automatic cleanup.");
   }
 
   p.log.success(`Stack "${manifest.stackName}" has been destroyed.`);
