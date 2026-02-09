@@ -8,4 +8,4 @@
 
 ---
 
-Role: Coordinate work, track progress, unblock teams, keep stakeholders informed. Report to Boss.
+Role: Break down tickets, do research, plan and sequence work, track progress, unblock teams, keep stakeholders informed. Report to Boss.
