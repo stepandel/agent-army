@@ -73,7 +73,7 @@ check_node_version() {
 
 check_aws_credentials() {
     log_info "Checking AWS credentials..."
-    
+
     if aws sts get-caller-identity &> /dev/null; then
         local account_id
         account_id=$(aws sts get-caller-identity --query Account --output text)
@@ -83,6 +83,65 @@ check_aws_credentials() {
         log_error "AWS credentials not configured or invalid"
         log_info "Configure with: aws configure"
         return 1
+    fi
+}
+
+check_hetzner_credentials() {
+    log_info "Checking Hetzner Cloud credentials..."
+
+    # Check for HCLOUD_TOKEN env var or Pulumi config
+    if [ -n "${HCLOUD_TOKEN:-}" ]; then
+        log_success "Hetzner Cloud token found (via HCLOUD_TOKEN)"
+        return 0
+    fi
+
+    # Try to get from Pulumi config (if stack exists and is selected)
+    # Note: This may fail if no stack is selected yet, which is fine
+    if pulumi stack 2>/dev/null | grep -q "Current stack"; then
+        local hcloud_token
+        hcloud_token=$(pulumi config get hcloudToken 2>/dev/null || echo "")
+        if [ -n "$hcloud_token" ]; then
+            log_success "Hetzner Cloud token found (via Pulumi config)"
+            return 0
+        fi
+    fi
+
+    log_error "Hetzner Cloud token not configured"
+    log_info "Set via: pulumi config set --secret hcloudToken <token>"
+    log_info "Or via: export HCLOUD_TOKEN=<token>"
+    return 1
+}
+
+detect_provider() {
+    # Detect which cloud provider is configured
+    # Priority: explicit config > available credentials
+
+    local provider
+    provider=$(pulumi config get provider 2>/dev/null || echo "")
+
+    if [ -n "$provider" ]; then
+        echo "$provider"
+        return
+    fi
+
+    # Auto-detect based on available credentials
+    local has_aws=false
+    local has_hetzner=false
+
+    if aws sts get-caller-identity &> /dev/null 2>&1; then
+        has_aws=true
+    fi
+
+    if [ -n "${HCLOUD_TOKEN:-}" ] || pulumi config get hcloudToken &>/dev/null 2>&1; then
+        has_hetzner=true
+    fi
+
+    if [ "$has_hetzner" = true ] && [ "$has_aws" = false ]; then
+        echo "hetzner"
+    elif [ "$has_aws" = true ]; then
+        echo "aws"
+    else
+        echo "unknown"
     fi
 }
 
@@ -140,13 +199,46 @@ PREREQS_OK=true
 
 check_command "pulumi" "Install from https://www.pulumi.com/docs/iac/download-install/" || PREREQS_OK=false
 check_node_version || PREREQS_OK=false
-check_command "aws" "Install from https://aws.amazon.com/cli/" || PREREQS_OK=false
 check_command "npm" "Install with Node.js from https://nodejs.org/" || PREREQS_OK=false
 
 echo ""
 
-check_aws_credentials || PREREQS_OK=false
 check_pulumi_logged_in || PREREQS_OK=false
+
+# Detect and validate provider-specific credentials
+echo ""
+log_info "Detecting cloud provider..."
+
+PROVIDER=$(detect_provider)
+
+case "$PROVIDER" in
+    aws)
+        log_info "Provider: AWS"
+        check_command "aws" "Install from https://aws.amazon.com/cli/" || PREREQS_OK=false
+        check_aws_credentials || PREREQS_OK=false
+        ;;
+    hetzner)
+        log_info "Provider: Hetzner Cloud"
+        check_hetzner_credentials || PREREQS_OK=false
+        ;;
+    *)
+        log_warn "Could not detect cloud provider"
+        log_info "Checking for available credentials..."
+        # Try AWS first, then Hetzner
+        if command -v aws &> /dev/null && aws sts get-caller-identity &> /dev/null 2>&1; then
+            log_info "AWS credentials detected"
+            check_aws_credentials || PREREQS_OK=false
+        elif [ -n "${HCLOUD_TOKEN:-}" ] || (pulumi stack 2>/dev/null | grep -q "Current stack" && pulumi config get hcloudToken 2>/dev/null | grep -q .); then
+            log_info "Hetzner Cloud token detected"
+            check_hetzner_credentials || PREREQS_OK=false
+        else
+            log_error "No cloud provider credentials found"
+            log_info "Configure AWS: aws configure"
+            log_info "Configure Hetzner: export HCLOUD_TOKEN=<token>"
+            PREREQS_OK=false
+        fi
+        ;;
+esac
 
 echo ""
 
@@ -175,8 +267,16 @@ echo ""
 
 # Confirmation prompt
 if [ "$SKIP_CONFIRM" = false ]; then
-    echo -e "${YELLOW}This will deploy 3 EC2 instances to AWS (t3.medium each).${NC}"
-    echo -e "${YELLOW}Estimated monthly cost: ~\$100 USD${NC}"
+    case "$PROVIDER" in
+        hetzner)
+            echo -e "${YELLOW}This will deploy 3 Hetzner Cloud servers (CX21 each).${NC}"
+            echo -e "${YELLOW}Estimated monthly cost: ~€16-20 EUR (~\$18-22 USD)${NC}"
+            ;;
+        *)
+            echo -e "${YELLOW}This will deploy 3 EC2 instances to AWS (t3.medium each).${NC}"
+            echo -e "${YELLOW}Estimated monthly cost: ~\$100 USD${NC}"
+            ;;
+    esac
     echo ""
     read -p "Continue with deployment? [y/N] " -n 1 -r
     echo ""

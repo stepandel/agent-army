@@ -65,51 +65,46 @@ export const COST_ESTIMATES: Record<string, number> = {
   "t3.large": 60,
 };
 
+/** Coding CLI definitions */
+export interface CodingCliDef {
+  displayName: string;
+  description: string;
+  binaryPath: string;
+  installMethod: "pip" | "npm" | "binary";
+}
+
+export const CODING_CLIS: Record<string, CodingCliDef> = {
+  "claude-code": {
+    displayName: "Claude Code",
+    description: "Anthropic's official CLI for Claude",
+    binaryPath: "$HOME/.local/bin/claude",
+    installMethod: "pip",
+  },
+  codex: {
+    displayName: "Codex",
+    description: "OpenAI's Codex CLI",
+    binaryPath: "codex",
+    installMethod: "npm",
+  },
+  amp: {
+    displayName: "Amp",
+    description: "Sourcegraph's Amp CLI",
+    binaryPath: "amp",
+    installMethod: "npm",
+  },
+  opencode: {
+    displayName: "OpenCode",
+    description: "Open-source coding assistant CLI",
+    binaryPath: "opencode",
+    installMethod: "npm",
+  },
+};
+
 /** Manifest filename */
 export const MANIFEST_FILE = "agent-army.json";
 
-/** Available coding CLIs */
-export const CODING_CLIS = {
-  "claude-code": {
-    name: "claude-code",
-    displayName: "Claude Code",
-    description: "Anthropic's AI coding assistant",
-    installMethod: "curl",
-    installCommand: "curl -fsSL https://claude.ai/install.sh | bash",
-    binaryPath: "$HOME/.local/bin/claude",
-    versionCommand: "claude --version",
-  },
-  codex: {
-    name: "codex",
-    displayName: "Codex",
-    description: "OpenAI's coding CLI",
-    installMethod: "npm",
-    installCommand: "npm install -g @openai/codex",
-    binaryPath: "codex",
-    versionCommand: "codex --version",
-  },
-  opencode: {
-    name: "opencode",
-    displayName: "OpenCode",
-    description: "Open-source AI coding assistant",
-    installMethod: "curl",
-    installCommand: "curl -fsSL https://opencode.ai/install.sh | bash",
-    binaryPath: "$HOME/.local/bin/opencode",
-    versionCommand: "opencode --version",
-  },
-  amp: {
-    name: "amp",
-    displayName: "Amp",
-    description: "Anthropic's Amp CLI",
-    installMethod: "npm",
-    installCommand: "npm install -g @anthropic/amp",
-    binaryPath: "amp",
-    versionCommand: "amp --version",
-  },
-} as const;
-
-/** Type for coding CLI keys */
-export type CodingCliKey = keyof typeof CODING_CLIS;
+/** Config directory under home (~/.agent-army/configs/) */
+export const CONFIG_DIR = ".agent-army/configs";
 
 /**
  * Build the Tailscale hostname for an agent.
