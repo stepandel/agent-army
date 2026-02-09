@@ -12,7 +12,7 @@ Based on the [Pulumi blog post: Deploy OpenClaw on AWS or Hetzner Securely with 
 │                                                                          │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐          │
 │  │    agent-pm     │  │    agent-eng    │  │   agent-tester  │          │
-│  │   (Sage)        │  │   (Titus)       │  │    (Scout)       │          │
+│  │   (Marcus)      │  │   (Titus)       │  │    (Scout)       │          │
 │  │                 │  │                 │  │                  │          │
 │  │  • OpenClaw     │  │  • OpenClaw     │  │  • OpenClaw      │          │
 │  │  • Docker       │  │  • Docker       │  │  • Docker        │          │
@@ -193,7 +193,7 @@ pulumi stack output pmTailscaleUrl --show-secrets
 Via SSH:
 
 ```bash
-./scripts/ssh.sh pm      # SSH to PM agent (Sage)
+./scripts/ssh.sh pm      # SSH to PM agent (Marcus)
 ./scripts/ssh.sh eng     # SSH to Eng agent (Titus)
 ./scripts/ssh.sh tester  # SSH to Tester agent (Scout)
 ```
@@ -314,12 +314,13 @@ Example: Making the PM agent focus on sprint planning:
 ```markdown
 # presets/pm/SOUL.md
 
-You are Sage, the Project Manager agent.
+You are Marcus, the Project Manager agent.
 
 ## Primary Responsibilities
-- Sprint planning and tracking
-- Stakeholder communication
-- Blockers and risk management
+- Break down tickets and do research
+- Plan and sequence work
+- Track progress and unblock teams
+- Keep stakeholders informed
 
 ## Communication Style
 - Clear, concise updates
@@ -462,7 +463,7 @@ The project includes an interactive CLI for the full agent lifecycle. See the **
 npx agent-army init        # Interactive setup wizard
 npx agent-army deploy      # Deploy agents
 npx agent-army status      # Show agent statuses
-npx agent-army ssh sage    # SSH to an agent
+npx agent-army ssh marcus  # SSH to an agent
 npx agent-army validate    # Health check agents
 npx agent-army destroy     # Tear down resources
 ```

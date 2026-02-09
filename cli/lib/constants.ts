@@ -6,11 +6,11 @@
 export const PRESETS = {
   pm: {
     name: "agent-pm",
-    displayName: "Sage",
+    displayName: "Marcus",
     role: "pm",
     preset: "pm" as const,
     volumeSize: 30,
-    description: "Project management, coordination, communication",
+    description: "Break down tickets, research, plan and sequence work, track progress, unblock teams",
   },
   eng: {
     name: "agent-eng",
@@ -32,7 +32,7 @@ export const PRESETS = {
 
 /** Map agent aliases to role keys */
 export const AGENT_ALIASES: Record<string, string> = {
-  sage: "pm",
+  marcus: "pm",
   titus: "eng",
   scout: "tester",
 };

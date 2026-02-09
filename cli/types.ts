@@ -6,7 +6,7 @@
 export interface AgentDefinition {
   /** Resource name (e.g., "agent-pm") */
   name: string;
-  /** Display name (e.g., "Sage") */
+  /** Display name (e.g., "Marcus") */
   displayName: string;
   /** Role identifier (e.g., "pm", "eng", "tester") */
   role: string;

@@ -20,7 +20,7 @@ declare -A AGENTS=(
     ["eng"]="agent-eng"
     ["tester"]="agent-tester"
     # Aliases
-    ["sage"]="agent-pm"
+    ["marcus"]="agent-pm"
     ["titus"]="agent-eng"
     ["scout"]="agent-tester"
 )
@@ -53,7 +53,7 @@ Examples:
     $(basename "$0") -s prod tester              # SSH to prod stack
 
 Agent Names:
-    pm      → Sage    (Project Manager)
+    pm      → Marcus  (Project Manager)
     eng     → Titus   (Lead Engineer)
     tester  → Scout   (QA Tester)
 EOF

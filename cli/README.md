@@ -102,7 +102,7 @@ The CLI ships with three preset agent configurations:
 
 | Alias | Role | Name | Description |
 |-------|------|------|-------------|
-| **Sage** | PM | `agent-pm` | Project management, coordination, communication |
+| **Marcus** | PM | `agent-pm` | Break down tickets, research, plan and sequence work, track progress, unblock teams |
 | **Titus** | Engineer | `agent-eng` | Lead engineering, coding, shipping |
 | **Scout** | Tester | `agent-tester` | Quality assurance, verification, bug hunting |
 
@@ -123,7 +123,7 @@ The `init` command generates an `agent-army.json` manifest in the project root:
   "agents": [
     {
       "name": "agent-pm",
-      "displayName": "Sage",
+      "displayName": "Marcus",
       "role": "pm",
       "preset": "pm",
       "volumeSize": 30
