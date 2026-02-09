@@ -62,7 +62,7 @@ export interface HetznerOpenClawAgentArgs {
    * If not provided, SSH rule is not added (Tailscale is primary access)
    * Example: ["1.2.3.4/32", "10.0.0.0/8"]
    */
-  allowedSshIps?: string[];
+  allowedSshIps?: pulumi.Input<string[]>;
 
   /**
    * Browser control port (default: 18791)
@@ -214,17 +214,21 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
         })),
         // Only add SSH rule if allowedSshIps is explicitly provided
         // Tailscale is the primary access method; SSH is optional fallback
-        rules: args.allowedSshIps && args.allowedSshIps.length > 0
-          ? [
-              {
-                direction: "in",
-                protocol: "tcp",
-                port: "22",
-                sourceIps: args.allowedSshIps,
-                description: "SSH access (restricted)",
-              },
-            ]
-          : [],
+        rules: pulumi
+          .output(args.allowedSshIps ?? [])
+          .apply((ips) =>
+            ips.length > 0
+              ? [
+                  {
+                    direction: "in",
+                    protocol: "tcp",
+                    port: "22",
+                    sourceIps: ips,
+                    description: "SSH access (restricted)",
+                  },
+                ]
+              : []
+          ),
       },
       defaultResourceOptions
     );

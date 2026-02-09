@@ -15,7 +15,7 @@ importers:
         specifier: ^6.0.0
         version: 6.83.2(typescript@5.9.3)
       '@pulumi/hcloud':
-        specifier: ^1.0.0
+        specifier: ^1.32.0
         version: 1.32.0(typescript@5.9.3)
       '@pulumi/pulumi':
         specifier: ^3.0.0
