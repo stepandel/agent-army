@@ -41,7 +41,7 @@ function formatAgentList(
  */
 function getConfig(exec: ExecAdapter, key: string): string | null {
   const result = exec.capture("pulumi", ["config", "get", key]);
-  return result.exitCode === 0 ? result.stdout : null;
+  return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 
 /**
