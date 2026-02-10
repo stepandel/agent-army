@@ -18,18 +18,19 @@ export async function runDeployment(deploymentId: string): Promise<void> {
   };
 
   try {
-    // Update status to running
-    await prisma.deployment.update({
-      where: { id: deploymentId },
-      data: { status: "running", logs: "" },
-    });
-
     const deployment = await prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: { credential: true },
     });
 
     if (!deployment) throw new Error("Deployment not found");
+    if (!deployment.credential) throw new Error("Credential not found");
+
+    // Update status to running
+    await prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { status: "running", logs: "" },
+    });
 
     appendLog("Starting deployment...");
 

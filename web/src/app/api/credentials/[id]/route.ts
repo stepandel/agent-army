@@ -23,7 +23,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   if (label) updateData.label = label;
 
   if (creds) {
-    const primaryKey = typeof creds === "string" ? creds : Object.values(creds)[0] as string;
+    const primaryValue = typeof creds === "string" ? creds : Object.values(creds)[0];
+    const primaryKey = typeof primaryValue === "string" ? primaryValue : null;
     updateData.lastFour = primaryKey ? primaryKey.slice(-4) : "****";
 
     const credsJson = typeof creds === "string" ? creds : JSON.stringify(creds);

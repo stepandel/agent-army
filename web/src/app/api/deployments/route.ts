@@ -71,14 +71,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Create deployment record
-  const deployment = await prisma.deployment.create({
-    data: {
+  // Create or update deployment record
+  const deployment = await prisma.deployment.upsert({
+    where: {
+      userId_stackName: {
+        userId: token.id as string,
+        stackName: manifest.stackName,
+      },
+    },
+    create: {
       userId: token.id as string,
       credentialId,
       stackName: manifest.stackName,
       manifest: JSON.stringify(manifest),
       status: "queued",
+    },
+    update: {
+      credentialId,
+      manifest: JSON.stringify(manifest),
+      status: "queued",
+      errorMessage: null,
+      logs: "",
     },
     select: {
       id: true,

@@ -40,7 +40,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Determine last 4 chars from the primary credential value
-  const primaryKey = typeof creds === "string" ? creds : Object.values(creds)[0] as string;
+  const primaryValue = typeof creds === "string" ? creds : Object.values(creds)[0];
+    const primaryKey = typeof primaryValue === "string" ? primaryValue : null;
   const lastFour = primaryKey ? primaryKey.slice(-4) : "****";
 
   // Encrypt the credentials
