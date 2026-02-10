@@ -95,9 +95,7 @@ Add the prompt to the ticket description (not as a comment).
 
 ## Phase 5: Assign to Coding Agent
 
-After the ticket is fully prepped (has research, context, DoD, test cases, and Claude Code prompt), assign it to **Atlas** (the lead engineer coding agent).
-
-Atlas's Linear user ID: `2a03fa1b-5322-4ca9-9073-76fade211a95`
+After the ticket is fully prepped (has research, context, DoD, test cases, and Claude Code prompt), assign it to **Titus** (the lead engineer coding agent).
 
 Use the Linear API to assign:
 ```graphql
@@ -116,7 +114,7 @@ After all phases, report:
 5. **Definition of Done**: The checklist
 6. **Test Cases**: The scenarios
 7. **Claude Code prompt**: The final prompt
-8. **Assigned to**: Atlas ✅
+8. **Assigned to**: Titus ✅
 
 ## Notes
 - **Always append to the ticket description** — preserve existing content (screenshots, original context), never use comments.
