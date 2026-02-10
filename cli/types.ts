@@ -42,6 +42,8 @@ export interface ArmyManifest {
   /** GitHub repo URL for bootstrap integration checks */
   githubRepo?: string;
   agents: AgentDefinition[];
+  /** Coding CLIs to install (default: ["claude-code"]) */
+  codingClis?: string[];
 }
 
 /** Result of a single prerequisite check */
