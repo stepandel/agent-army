@@ -34,18 +34,16 @@ Agent Army provisions a team of autonomous AI agents that handle software engine
 
 Everything is done through the CLI.
 
-### 1. Install & Initialize
+### 1. Install
 
 ```bash
-git clone https://github.com/stepandel/agent-army.git
-cd agent-army
-pnpm install && pnpm build
+npm install -g @agent-army/cli
 ```
 
 ### 2. Run the Setup Wizard
 
 ```bash
-npx agent-army init
+agent-army init
 ```
 
 The wizard walks you through:
@@ -62,7 +60,7 @@ This generates an `agent-army.json` manifest and sets all Pulumi config values a
 ### 3. Deploy
 
 ```bash
-npx agent-army deploy
+agent-army deploy
 ```
 
 ### 4. Validate
@@ -70,41 +68,41 @@ npx agent-army deploy
 Wait 3-5 minutes for cloud-init to complete, then:
 
 ```bash
-npx agent-army validate
+agent-army validate
 ```
 
 ### 5. Access Your Agents
 
 ```bash
-npx agent-army ssh marcus    # SSH to PM agent
-npx agent-army ssh titus     # SSH to Engineer agent
-npx agent-army ssh scout     # SSH to QA agent
+agent-army ssh marcus    # SSH to PM agent
+agent-army ssh titus     # SSH to Engineer agent
+agent-army ssh scout     # SSH to QA agent
 ```
 
 ## CLI Reference
 
-The CLI is the primary interface for every operation. Run `npx agent-army --help` for the full list.
+The CLI is the primary interface for every operation. Run `agent-army --help` for the full list.
 
 | Command | Description |
 |---------|-------------|
-| `npx agent-army init` | Interactive setup wizard |
-| `npx agent-army deploy` | Deploy agents (`pulumi up` under the hood) |
-| `npx agent-army deploy -y` | Deploy without confirmation prompt |
-| `npx agent-army status` | Show agent statuses and outputs |
-| `npx agent-army status --json` | Status in JSON format |
-| `npx agent-army ssh <agent>` | SSH to an agent by name, role, or alias |
-| `npx agent-army ssh <agent> '<cmd>'` | Run a command on an agent remotely |
-| `npx agent-army validate` | Health check all agents via Tailscale |
-| `npx agent-army destroy` | Tear down all resources (with confirmation) |
-| `npx agent-army destroy -y` | Tear down without confirmation |
-| `npx agent-army list` | List saved configurations |
+| `agent-army init` | Interactive setup wizard |
+| `agent-army deploy` | Deploy agents (`pulumi up` under the hood) |
+| `agent-army deploy -y` | Deploy without confirmation prompt |
+| `agent-army status` | Show agent statuses and outputs |
+| `agent-army status --json` | Status in JSON format |
+| `agent-army ssh <agent>` | SSH to an agent by name, role, or alias |
+| `agent-army ssh <agent> '<cmd>'` | Run a command on an agent remotely |
+| `agent-army validate` | Health check all agents via Tailscale |
+| `agent-army destroy` | Tear down all resources (with confirmation) |
+| `agent-army destroy -y` | Tear down without confirmation |
+| `agent-army list` | List saved configurations |
 
 Agent resolution is flexible — all of these target the same agent:
 
 ```bash
-npx agent-army ssh marcus      # by alias
-npx agent-army ssh pm          # by role
-npx agent-army ssh agent-pm    # by resource name
+agent-army ssh marcus      # by alias
+agent-army ssh pm          # by role
+agent-army ssh agent-pm    # by resource name
 ```
 
 ## Preset Agents
@@ -128,7 +126,7 @@ presets/
 └── skills/         # Reusable skills (ticket prep, PR testing, review workflows)
 ```
 
-You can also define fully custom agents during `npx agent-army init`.
+You can also define fully custom agents during `agent-army init`.
 
 ### Customizing Agent Behavior
 
@@ -179,14 +177,13 @@ All agents share a single VPC/network for cost optimization.
 
 ## Dependencies
 
-You need the following installed on your **local machine** before running `npx agent-army init`. The init wizard checks for these and will tell you what's missing.
+You need the following installed on your **local machine** before running `agent-army init`. The init wizard checks for these and will tell you what's missing.
 
 ### Required (all providers)
 
 | Dependency | Why | Install |
 |------------|-----|---------|
 | **Node.js 18+** | Runtime for CLI and Pulumi program | [nodejs.org](https://nodejs.org/) |
-| **pnpm** | Package manager (monorepo workspace) | `npm install -g pnpm` |
 | **Pulumi CLI** | Infrastructure provisioning | [pulumi.com/docs/iac/download-install](https://www.pulumi.com/docs/iac/download-install/) |
 | **Pulumi Account** | State management and encrypted secrets | [app.pulumi.com/signup](https://app.pulumi.com/signup) |
 | **Tailscale** | Secure mesh VPN to reach your agents | [tailscale.com/download](https://tailscale.com/download) |
@@ -243,14 +240,14 @@ The system auto-detects which type you provide and sets the correct environment 
 Always use a full teardown and rebuild to avoid stale Tailscale devices:
 
 ```bash
-npx agent-army destroy
-npx agent-army deploy
+agent-army destroy
+agent-army deploy
 ```
 
 Or with auto-confirm:
 
 ```bash
-npx agent-army destroy -y && npx agent-army deploy -y
+agent-army destroy -y && agent-army deploy -y
 ```
 
 A simple `deploy` after changes can leave orphaned Tailscale devices and hostname conflicts. The destroy-then-deploy workflow ensures clean state.
@@ -259,7 +256,7 @@ A simple `deploy` after changes can leave orphaned Tailscale devices and hostnam
 
 ### `agent-army.json`
 
-Generated by `npx agent-army init`. This manifest drives the entire deployment:
+Generated by `agent-army init`. This manifest drives the entire deployment:
 
 ```json
 {
@@ -337,15 +334,15 @@ agent-army/
 ### Agents not appearing in Tailscale
 
 1. Wait 3-5 minutes for cloud-init to complete
-2. Check logs: `npx agent-army ssh pm 'sudo cat /var/log/cloud-init-output.log | tail -100'`
+2. Check logs: `agent-army ssh pm 'sudo cat /var/log/cloud-init-output.log | tail -100'`
 3. Verify your Tailscale auth key is valid and reusable
 
 ### OpenClaw gateway not running
 
 ```bash
-npx agent-army ssh pm 'openclaw gateway status'
-npx agent-army ssh pm 'journalctl -u openclaw -n 50'
-npx agent-army ssh pm 'openclaw gateway restart'
+agent-army ssh pm 'openclaw gateway status'
+agent-army ssh pm 'journalctl -u openclaw -n 50'
+agent-army ssh pm 'openclaw gateway restart'
 ```
 
 ### SSH connection refused
@@ -363,7 +360,11 @@ pulumi cancel     # Force unlock if locked
 
 ## Development
 
+For contributing to Agent Army itself:
+
 ```bash
+git clone https://github.com/stepandel/agent-army.git
+cd agent-army
 pnpm install
 pnpm build
 pnpm run watch    # Watch mode
