@@ -36,8 +36,6 @@ For each agent:
 | **Issues** | Read and write | Reference issues, close via PR |
 | **Metadata** | Read | Required for all tokens |
 
-For Scout (QA), read-only access to Contents is sufficient if she only reviews PRs without pushing code.
-
 5. Click **"Generate token"**
 6. Copy the token — it starts with `ghp_` or `github_pat_`
 
@@ -91,7 +89,7 @@ gh pr view 42 --comments
 
 | Agent | How They Use GitHub |
 |-------|-------------------|
-| **Juno** (PM) | Monitors open PRs, checks CI status, reviews repo activity for progress tracking |
+| **Juno** (PM) | Reads code for research and context when breaking down tickets and planning work |
 | **Titus** (Engineer) | Clones repos, creates branches, writes code, opens PRs, responds to review comments, iterates until merged |
 | **Scout** (QA) | Reviews PR diffs, checks CI results, tests changes locally, approves or requests changes |
 
