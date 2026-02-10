@@ -143,8 +143,8 @@ export const MODEL_PROVIDERS = {
     envVar: "ANTHROPIC_API_KEY",
     keyPrefix: "sk-ant-",
     models: [
-      { value: "anthropic/claude-sonnet-4-5", label: "Claude Sonnet 4.5 (Recommended)" },
-      { value: "anthropic/claude-opus-4-6", label: "Claude Opus 4.6" },
+      { value: "anthropic/claude-opus-4-6", label: "Claude Opus 4.6 (Recommended)" },
+      { value: "anthropic/claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
       { value: "anthropic/claude-haiku-4-5", label: "Claude Haiku 4.5" },
     ],
   },

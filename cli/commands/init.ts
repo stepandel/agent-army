@@ -165,7 +165,7 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     options: Object.entries(MODEL_PROVIDERS).map(([key, provider]) => ({
       value: key as ModelProviderKey,
       label: provider.name,
-      hint: key === "anthropic" ? "Required for backward compatibility" : undefined,
+      hint: key === "anthropic" ? "Recommended" : undefined,
     })),
     required: true,
     initialValues: ["anthropic" as ModelProviderKey],
