@@ -1,0 +1,98 @@
+---
+title: "Linear"
+description: "Connect your agents to Linear for ticket tracking and backlog management"
+---
+
+# Linear Setup
+
+Linear is the primary way your agents coordinate work. Juno breaks down tickets, Titus picks them up for engineering, and Scout tracks verification — all through Linear.
+
+## What You Need
+
+A **Linear API key** for each agent. Each agent gets its own Linear account so you can see who did what.
+
+<Note>
+Linear integration is optional but strongly recommended. Without it, agents lose the ability to track and coordinate work through tickets.
+</Note>
+
+## Step 1: Create Agent Accounts
+
+Each agent needs its own Linear account so you can track who did what. A recommended approach is to use plus-addressing — no extra email addresses needed.
+
+1. Go to your Linear workspace settings
+2. Invite each agent using plus-addressing on your email:
+   - `you+juno@yourdomain.com` (PM)
+   - `you+titus@yourdomain.com` (Engineer)
+   - `you+scout@yourdomain.com` (QA Tester)
+3. Follow the invite links to create each account and join your workspace
+
+<Tip>
+Plus-addressing (e.g., `you+juno@gmail.com`) forwards to your inbox automatically. No new email accounts needed.
+</Tip>
+
+## Step 2: Generate API Keys
+
+For each agent account:
+
+1. Log into Linear as that agent
+2. Go to **Settings** > **Security & Access** > **Personal API keys**
+3. Click **"New API key"**
+4. Copy the key — it starts with `lin_api_`
+
+## Step 3: Provide Keys During Init
+
+The `agent-army init` wizard prompts you for each agent's Linear API key:
+
+```
+? Linear API key for Juno (pm) lin_api_XXXXXXXXXXXX
+? Linear API key for Titus (eng) lin_api_XXXXXXXXXXXX
+? Linear API key for Scout (tester) lin_api_XXXXXXXXXXXX
+```
+
+Keys are stored encrypted in Pulumi config as secrets (e.g., `pmLinearApiKey`, `engLinearApiKey`).
+
+## What Gets Installed
+
+On each agent's server, the deploy process automatically:
+
+1. Installs **Deno** and the **Linear CLI** (`@schpet/linear-cli`)
+2. Sets `LINEAR_API_KEY` as an environment variable
+3. Configures the Linear skill in OpenClaw
+
+## How Agents Use Linear
+
+Agents use the Linear CLI to manage tickets:
+
+```bash
+# List tickets assigned to the agent
+linear issue list --filter "assignee:me"
+
+# View ticket details
+linear issue view ENG-123
+
+# Update ticket status
+linear issue update ENG-123 --state "In Progress"
+
+# Create a sub-task
+linear issue create --title "Implement auth endpoint" --team ENG --parent ENG-100
+```
+
+### By Role
+
+| Agent | How They Use Linear |
+|-------|-------------------|
+| **Juno** (PM) | Breaks down tickets into sub-tasks, sequences work, assigns to Titus/Scout, tracks overall progress |
+| **Titus** (Engineer) | Picks up assigned tickets, updates status as work progresses, marks done when PR is merged |
+| **Scout** (QA) | Checks tickets for acceptance criteria, files bugs with reproduction steps, marks verified after fixes land |
+
+## Manifest Configuration
+
+Set your Linear team in the manifest so agents know which team to work with:
+
+```json
+{
+  "linearTeam": "ENG"
+}
+```
+
+This maps to the `{{LINEAR_TEAM}}` template variable in agent preset files.

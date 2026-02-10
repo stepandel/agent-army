@@ -1,0 +1,108 @@
+---
+title: "GitHub"
+description: "Connect your agents to GitHub for code, PRs, and CI"
+---
+
+# GitHub Setup
+
+GitHub is where your agents write code, open pull requests, and review changes. Titus uses it to ship PRs, Scout uses it to review them, and Juno monitors progress across the repo.
+
+## What You Need
+
+A **GitHub personal access token** for each agent. Fine-grained tokens are recommended so you can scope permissions to specific repositories.
+
+<Note>
+GitHub integration is optional but strongly recommended for engineering and QA agents. Without it, Titus can't open PRs and Scout can't review them.
+</Note>
+
+## Step 1: Generate a Token
+
+For each agent:
+
+1. Go to [github.com/settings/tokens?type=beta](https://github.com/settings/tokens?type=beta)
+2. Click **"Generate new token"**
+3. Configure the token:
+   - **Name**: e.g., `agent-army-titus`
+   - **Expiration**: Set as appropriate (no expiration for long-running agents)
+   - **Repository access**: Select the specific repos your agents should work with
+4. Set **permissions**:
+
+### Recommended Permissions
+
+| Permission | Access | Why |
+|-----------|--------|-----|
+| **Contents** | Read and write | Clone repos, push branches, read files |
+| **Pull requests** | Read and write | Create PRs, update descriptions, respond to reviews |
+| **Issues** | Read and write | Reference issues, close via PR |
+| **Metadata** | Read | Required for all tokens |
+
+For Scout (QA), read-only access to Contents is sufficient if she only reviews PRs without pushing code.
+
+5. Click **"Generate token"**
+6. Copy the token — it starts with `ghp_` or `github_pat_`
+
+<Tip>
+You can use the same token for all agents if you prefer simpler management. Separate tokens give you better audit trails per agent.
+</Tip>
+
+## Step 2: Provide Tokens During Init
+
+The `agent-army init` wizard prompts for each agent's GitHub token:
+
+```
+? GitHub token for Juno (pm) ghp_XXXXXXXXXXXX
+? GitHub token for Titus (eng) github_pat_XXXXXXXXXXXX
+? GitHub token for Scout (tester) ghp_XXXXXXXXXXXX
+```
+
+Tokens are stored encrypted in Pulumi config as secrets (e.g., `pmGithubToken`, `engGithubToken`).
+
+## What Gets Installed
+
+On each agent's server, the deploy process automatically:
+
+1. Installs the **GitHub CLI** (`gh`) from the official apt repository
+2. Authenticates `gh` with the provided token (`gh auth login --with-token`)
+3. Configures `git` to use `gh` for authentication (`gh auth setup-git`)
+4. Sets `GITHUB_TOKEN` as an environment variable
+
+## How Agents Use GitHub
+
+Agents use the `gh` CLI and `git` for all GitHub operations:
+
+```bash
+# Clone the repo
+git clone https://github.com/yourorg/yourrepo.git
+
+# Create a feature branch
+git checkout -b feat/add-auth-endpoint
+
+# Open a PR
+gh pr create --title "feat: add auth endpoint" --body "Closes ENG-123"
+
+# Check CI status
+gh pr checks 42
+
+# View PR review comments
+gh pr view 42 --comments
+```
+
+### By Role
+
+| Agent | How They Use GitHub |
+|-------|-------------------|
+| **Juno** (PM) | Monitors open PRs, checks CI status, reviews repo activity for progress tracking |
+| **Titus** (Engineer) | Clones repos, creates branches, writes code, opens PRs, responds to review comments, iterates until merged |
+| **Scout** (QA) | Reviews PR diffs, checks CI results, tests changes locally, approves or requests changes |
+
+## Manifest Configuration
+
+Set your GitHub repo in the manifest so agents know where to work:
+
+```json
+{
+  "githubRepo": "https://github.com/yourorg/yourrepo"
+}
+```
+
+This maps to the `{{GITHUB_REPO}}` template variable in agent preset files. During bootstrap, agents clone this repo and verify access.

@@ -37,6 +37,14 @@
       ]
     },
     {
+      "group": "Integrations",
+      "pages": [
+        "integrations/linear",
+        "integrations/github",
+        "integrations/slack"
+      ]
+    },
+    {
       "group": "Configuration",
       "pages": [
         "configuration/manifest",

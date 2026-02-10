@@ -1,0 +1,145 @@
+---
+title: "Slack"
+description: "Connect your agents to Slack for real-time communication"
+---
+
+# Slack Setup
+
+Slack lets you communicate with your agents directly — assign work, ask for status updates, or get notified about progress. Each agent gets its own Slack app so messages show up under the agent's name.
+
+## What You Need
+
+Each agent needs two tokens:
+
+- **Bot Token** (`xoxb-...`) — lets the agent read and send messages
+- **App Token** (`xapp-...`) — enables Socket Mode for real-time communication
+
+<Note>
+Slack integration is optional. Without it, agents can still work through Linear and GitHub but won't be able to communicate with you in real time.
+</Note>
+
+## Step 1: Create a Slack App
+
+Repeat this for each agent (Juno, Titus, Scout).
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Click **"Create New App"** > **"From a manifest"**
+3. Select your workspace
+4. Paste the manifest below (update the `name` and `display_name` for each agent)
+
+<Tip>
+The `agent-army init` wizard copies the manifest to your clipboard automatically when you reach the Slack setup step.
+</Tip>
+
+### Slack App Manifest
+
+```json
+{
+  "display_information": {
+    "name": "Juno (PM)",
+    "description": "Agent Army — Product Manager agent"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Juno",
+      "always_online": true
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "channels:history",
+        "channels:read",
+        "groups:history",
+        "groups:read",
+        "groups:write",
+        "im:history",
+        "im:read",
+        "im:write",
+        "mpim:history",
+        "mpim:read",
+        "mpim:write",
+        "users:read",
+        "app_mentions:read",
+        "reactions:read",
+        "reactions:write",
+        "pins:read",
+        "pins:write",
+        "emoji:read",
+        "commands",
+        "files:read",
+        "files:write"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "bot_events": [
+        "app_mention",
+        "message.channels",
+        "message.groups",
+        "message.im",
+        "message.mpim",
+        "reaction_added",
+        "reaction_removed",
+        "member_joined_channel",
+        "member_left_channel",
+        "channel_rename",
+        "pin_added",
+        "pin_removed"
+      ]
+    },
+    "socket_mode_enabled": true
+  }
+}
+```
+
+5. Click **"Create"**
+
+## Step 2: Get the Bot Token
+
+1. In your new app's settings, go to **OAuth & Permissions**
+2. Click **"Install to Workspace"** and approve
+3. Copy the **Bot User OAuth Token** — it starts with `xoxb-`
+
+## Step 3: Get the App Token
+
+1. Go to **Basic Information** > **App-Level Tokens**
+2. Click **"Generate Token and Scopes"**
+3. Name it (e.g., `socket-mode`)
+4. Add the scope: `connections:write`
+5. Click **"Generate"**
+6. Copy the token — it starts with `xapp-`
+
+## Step 4: Provide Tokens During Init
+
+The `agent-army init` wizard prompts for both tokens per agent:
+
+```
+? Slack Bot Token for Juno (pm) xoxb-XXXXXXXXXXXX
+? Slack App Token for Juno (pm) xapp-XXXXXXXXXXXX
+```
+
+Tokens are stored encrypted in Pulumi config as secrets (e.g., `pmSlackBotToken`, `pmSlackAppToken`).
+
+## How Agents Use Slack
+
+Agents connect to Slack via **Socket Mode** — no public URLs or webhook endpoints needed. They can:
+
+- Respond to DMs and mentions
+- Post updates to channels
+- React to messages
+- Read channel history for context
+
+### By Role
+
+| Agent | How They Use Slack |
+|-------|-------------------|
+| **Juno** (PM) | Reports progress, shares ticket breakdowns, responds to questions about priorities and status |
+| **Titus** (Engineer) | Shares PR links, asks for clarification on requirements, reports blockers |
+| **Scout** (QA) | Reports test results, shares bug details, confirms fixes |
+
+<Tip>
+Juno treats Slack as the primary communication channel. If you want to give instructions or check on progress, message Juno directly.
+</Tip>
