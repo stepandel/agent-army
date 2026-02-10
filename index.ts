@@ -68,7 +68,6 @@ const githubRepo = config.get("githubRepo") ?? "";
 // Pattern: <role>SlackBotToken, <role>SlackAppToken
 const agentSlackCredentials: Record<string, { botToken?: pulumi.Output<string>; appToken?: pulumi.Output<string> }> = {};
 const agentLinearCredentials: Record<string, pulumi.Output<string> | undefined> = {};
-const agentBraveSearchCredentials: Record<string, pulumi.Output<string> | undefined> = {};
 const agentGithubCredentials: Record<string, pulumi.Output<string> | undefined> = {};
 
 // Common roles to check for credentials
@@ -83,11 +82,6 @@ for (const role of commonRoles) {
   const linearToken = config.getSecret(`${role}LinearApiKey`);
   if (linearToken) {
     agentLinearCredentials[role] = linearToken;
-  }
-  
-  const braveKey = config.getSecret(`${role}BraveSearchApiKey`);
-  if (braveKey) {
-    agentBraveSearchCredentials[role] = braveKey;
   }
   
   const githubToken = config.getSecret(`${role}GithubToken`);
@@ -325,7 +319,6 @@ for (const agent of manifest.agents) {
   // Get per-agent credentials if available
   const slackCreds = agentSlackCredentials[agent.role];
   const linearApiKey = agentLinearCredentials[agent.role];
-  const braveSearchApiKey = agentBraveSearchCredentials[agent.role];
   const githubToken = agentGithubCredentials[agent.role];
 
   if (provider === "aws") {
@@ -358,9 +351,6 @@ for (const agent of manifest.agents) {
 
       // Linear API key (optional)
       linearApiKey,
-
-      // Brave Search API key (optional)
-      braveSearchApiKey,
 
       // GitHub token (optional)
       githubToken,
@@ -404,9 +394,6 @@ for (const agent of manifest.agents) {
 
       // Linear API key (optional)
       linearApiKey,
-
-      // Brave Search API key (optional)
-      braveSearchApiKey,
 
       // GitHub token (optional)
       githubToken,

@@ -63,13 +63,3 @@ config:
   agent-army:testerLinearApiKey:
     fn::secret: ${esc:testerLinearApiKey}
 
-  # =========================================================================
-  # Per-agent Brave Search API keys (optional)
-  # =========================================================================
-
-  agent-army:pmBraveSearchApiKey:
-    fn::secret: ${esc:pmBraveSearchApiKey}
-  agent-army:engBraveSearchApiKey:
-    fn::secret: ${esc:engBraveSearchApiKey}
-  agent-army:testerBraveSearchApiKey:
-    fn::secret: ${esc:testerBraveSearchApiKey}

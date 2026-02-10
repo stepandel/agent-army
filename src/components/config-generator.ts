@@ -38,8 +38,6 @@ export interface OpenClawConfigOptions {
   slack?: SlackConfigOptions;
   /** Linear configuration */
   linear?: LinearConfigOptions;
-  /** Brave Search API key */
-  braveSearchApiKey?: string;
 }
 
 export interface OpenClawConfig {
@@ -168,20 +166,6 @@ print("Configured Linear skill")
 `
     : "";
 
-  // Build Brave Search skill config section if API key provided
-  const braveSearchConfig = options.braveSearchApiKey
-    ? `
-# Configure Brave Search skill
-config.setdefault("skills", {})
-config["skills"].setdefault("entries", {})
-config["skills"]["entries"]["brave-search"] = {
-    "enabled": True,
-    "apiKey": os.environ.get("BRAVE_SEARCH_API_KEY", "")
-}
-print("Configured Brave Search skill")
-`
-    : "";
-
   return `
 import json
 import os
@@ -232,7 +216,7 @@ config["agents"]["defaults"]["heartbeat"] = {
     "session": "main"
 }
 print("Configured heartbeat: every 1m")
-${slackChannelConfig}${linearSkillConfig}${braveSearchConfig}
+${slackChannelConfig}${linearSkillConfig}
 with open(config_path, "w") as f:
     json.dump(config, f, indent=2)
 

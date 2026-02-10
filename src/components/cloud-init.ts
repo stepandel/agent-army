@@ -44,8 +44,6 @@ export interface CloudInitConfig {
   slack?: SlackConfigOptions;
   /** Linear configuration */
   linear?: LinearConfigOptions;
-  /** Brave Search API key */
-  braveSearchApiKey?: string;
   /** GitHub personal access token for gh CLI auth */
   githubToken?: string;
 }
@@ -68,7 +66,6 @@ export function generateCloudInit(config: CloudInitConfig): string {
     enableControlUi: true,
     slack: config.slack,
     linear: config.linear,
-    braveSearchApiKey: config.braveSearchApiKey,
   });
 
   // Deno + Linear CLI installation (only if Linear is configured)
@@ -249,7 +246,6 @@ fi
 \${SLACK_BOT_TOKEN:+echo 'export SLACK_BOT_TOKEN="\${SLACK_BOT_TOKEN}"' >> /home/ubuntu/.bashrc}
 \${SLACK_APP_TOKEN:+echo 'export SLACK_APP_TOKEN="\${SLACK_APP_TOKEN}"' >> /home/ubuntu/.bashrc}
 \${LINEAR_API_KEY:+echo 'export LINEAR_API_KEY="\${LINEAR_API_KEY}"' >> /home/ubuntu/.bashrc}
-\${BRAVE_SEARCH_API_KEY:+echo 'export BRAVE_SEARCH_API_KEY="\${BRAVE_SEARCH_API_KEY}"' >> /home/ubuntu/.bashrc}
 \${GITHUB_TOKEN:+echo 'export GITHUB_TOKEN="\${GITHUB_TOKEN}"' >> /home/ubuntu/.bashrc}
 ${additionalEnvVars}
 ${tailscaleSection}${denoInstallScript}${ghAuthScript}
@@ -296,7 +292,6 @@ sudo -H -u ubuntu \\
   SLACK_BOT_TOKEN="\${SLACK_BOT_TOKEN:-}" \\
   SLACK_APP_TOKEN="\${SLACK_APP_TOKEN:-}" \\
   LINEAR_API_KEY="\${LINEAR_API_KEY:-}" \\
-  BRAVE_SEARCH_API_KEY="\${BRAVE_SEARCH_API_KEY:-}" \\
   python3 << 'PYTHON_SCRIPT'
 ${configPatchScript}
 PYTHON_SCRIPT
@@ -368,7 +363,6 @@ export function interpolateCloudInit(
     slackBotToken?: string;
     slackAppToken?: string;
     linearApiKey?: string;
-    braveSearchApiKey?: string;
     githubToken?: string;
   }
 ): string {
@@ -384,8 +378,6 @@ export function interpolateCloudInit(
   result = result.replace(/\${SLACK_APP_TOKEN}/g, values.slackAppToken ?? "");
   result = result.replace(/\${LINEAR_API_KEY:-}/g, values.linearApiKey ?? "");
   result = result.replace(/\${LINEAR_API_KEY}/g, values.linearApiKey ?? "");
-  result = result.replace(/\${BRAVE_SEARCH_API_KEY:-}/g, values.braveSearchApiKey ?? "");
-  result = result.replace(/\${BRAVE_SEARCH_API_KEY}/g, values.braveSearchApiKey ?? "");
   result = result.replace(/\${GITHUB_TOKEN:-}/g, values.githubToken ?? "");
   result = result.replace(/\${GITHUB_TOKEN}/g, values.githubToken ?? "");
 

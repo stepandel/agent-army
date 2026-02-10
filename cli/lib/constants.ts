@@ -186,15 +186,6 @@ export const KEY_INSTRUCTIONS = {
       "3. Copy the key (starts with lin_api_)",
     ],
   },
-  braveSearchApiKey: {
-    title: "Brave Search API Key",
-    steps: [
-      "To get a Brave Search API key:",
-      "1. Go to https://brave.com/search/api/",
-      "2. Sign up for the free plan (2,000 queries/month)",
-      "3. Copy the API key (starts with BSA)",
-    ],
-  },
   githubToken: {
     title: "GitHub Token (optional)",
     steps: [

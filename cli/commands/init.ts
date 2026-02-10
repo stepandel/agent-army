@@ -369,16 +369,6 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
   // Slack and Linear are always required
   const integrations: string[] = ["slack", "linear"];
 
-  // Brave Search is optional
-  const addBrave = await p.confirm({
-    message: "Configure Brave Search? (optional)",
-    initialValue: false,
-  });
-  handleCancel(addBrave);
-  if (addBrave) {
-    integrations.push("brave");
-  }
-
   // GitHub is optional
   const addGithub = await p.confirm({
     message: "Configure GitHub CLI? (optional)",
@@ -394,7 +384,6 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     slackBotToken?: string;
     slackAppToken?: string;
     linearApiKey?: string;
-    braveSearchApiKey?: string;
     githubToken?: string;
   }> = {};
 
@@ -462,25 +451,6 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     }
   }
 
-  if (integrations.includes("brave")) {
-    p.note(
-      KEY_INSTRUCTIONS.braveSearchApiKey.steps.join("\n"),
-      KEY_INSTRUCTIONS.braveSearchApiKey.title
-    );
-
-    for (const agent of agents) {
-      const braveKey = await p.password({
-        message: `Brave Search API key for ${agent.displayName} (${agent.role})`,
-        validate: (val) => {
-          if (!val.startsWith("BSA")) return "Must start with BSA";
-        },
-      });
-      handleCancel(braveKey);
-
-      integrationCredentials[agent.role].braveSearchApiKey = braveKey as string;
-    }
-  }
-
   if (integrations.includes("github")) {
     p.note(
       KEY_INSTRUCTIONS.githubToken.steps.join("\n"),
@@ -517,7 +487,6 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
   const integrationNames = integrations.map(i => {
     if (i === "slack") return "Slack";
     if (i === "linear") return "Linear";
-    if (i === "brave") return "Brave Search";
     if (i === "github") return "GitHub CLI";
     return i;
   });
@@ -600,7 +569,6 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     if (creds.slackBotToken) setConfig(`${role}SlackBotToken`, creds.slackBotToken, true);
     if (creds.slackAppToken) setConfig(`${role}SlackAppToken`, creds.slackAppToken, true);
     if (creds.linearApiKey) setConfig(`${role}LinearApiKey`, creds.linearApiKey, true);
-    if (creds.braveSearchApiKey) setConfig(`${role}BraveSearchApiKey`, creds.braveSearchApiKey, true);
     if (creds.githubToken) setConfig(`${role}GithubToken`, creds.githubToken, true);
   }
   s.stop("Configuration saved");

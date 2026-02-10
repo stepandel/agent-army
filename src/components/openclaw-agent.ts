@@ -118,11 +118,6 @@ export interface OpenClawAgentArgs {
   linearApiKey?: pulumi.Input<string>;
 
   /**
-   * Brave Search API key for web search
-   */
-  braveSearchApiKey?: pulumi.Input<string>;
-
-  /**
    * GitHub personal access token for gh CLI authentication
    * Must start with ghp_ or github_pat_
    */
@@ -421,9 +416,6 @@ export class OpenClawAgent extends pulumi.ComponentResource {
     const linearApiKeyOutput = args.linearApiKey
       ? pulumi.output(args.linearApiKey)
       : pulumi.output("");
-    const braveSearchApiKeyOutput = args.braveSearchApiKey
-      ? pulumi.output(args.braveSearchApiKey)
-      : pulumi.output("");
     const githubTokenOutput = args.githubToken
       ? pulumi.output(args.githubToken)
       : pulumi.output("");
@@ -436,7 +428,6 @@ export class OpenClawAgent extends pulumi.ComponentResource {
       slackBotTokenOutput,
       slackAppTokenOutput,
       linearApiKeyOutput,
-      braveSearchApiKeyOutput,
       githubTokenOutput,
     ]).apply(([
       tsAuthKey,
@@ -445,7 +436,6 @@ export class OpenClawAgent extends pulumi.ComponentResource {
       slackBotToken,
       slackAppToken,
       linearApiKey,
-      braveSearchApiKey,
       githubToken,
     ]) => {
         // Include stack name in Tailscale hostname to avoid conflicts across deployments
@@ -469,8 +459,6 @@ export class OpenClawAgent extends pulumi.ComponentResource {
             : undefined,
           // Linear config (only if API key provided)
           linear: linearApiKey ? { apiKey: linearApiKey } : undefined,
-          // Brave Search API key
-          braveSearchApiKey: braveSearchApiKey || undefined,
           // GitHub token for gh CLI auth
           githubToken: githubToken || undefined,
         };
@@ -483,7 +471,6 @@ export class OpenClawAgent extends pulumi.ComponentResource {
           slackBotToken: slackBotToken || undefined,
           slackAppToken: slackAppToken || undefined,
           linearApiKey: linearApiKey || undefined,
-          braveSearchApiKey: braveSearchApiKey || undefined,
           githubToken: githubToken || undefined,
         });
       });

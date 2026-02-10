@@ -105,11 +105,6 @@ export interface HetznerOpenClawAgentArgs {
   linearApiKey?: pulumi.Input<string>;
 
   /**
-   * Brave Search API key for web search
-   */
-  braveSearchApiKey?: pulumi.Input<string>;
-
-  /**
    * GitHub personal access token for gh CLI authentication
    * Must start with ghp_ or github_pat_
    */
@@ -243,9 +238,6 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
     const linearApiKeyOutput = args.linearApiKey
       ? pulumi.output(args.linearApiKey)
       : pulumi.output("");
-    const braveSearchApiKeyOutput = args.braveSearchApiKey
-      ? pulumi.output(args.braveSearchApiKey)
-      : pulumi.output("");
     const githubTokenOutput = args.githubToken
       ? pulumi.output(args.githubToken)
       : pulumi.output("");
@@ -265,7 +257,6 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
         slackBotTokenOutput,
         slackAppTokenOutput,
         linearApiKeyOutput,
-        braveSearchApiKeyOutput,
         githubTokenOutput,
       ])
       .apply(
@@ -276,7 +267,6 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
           slackBotToken,
           slackAppToken,
           linearApiKey,
-          braveSearchApiKey,
           githubToken,
         ]) =>
           pulumi
@@ -305,8 +295,6 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
                 : undefined,
             // Linear config (only if API key provided)
             linear: linearApiKey ? { apiKey: linearApiKey } : undefined,
-            // Brave Search API key
-            braveSearchApiKey: braveSearchApiKey || undefined,
             // GitHub token for gh CLI auth
             githubToken: githubToken || undefined,
           };
@@ -319,7 +307,6 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
                 slackBotToken: slackBotToken || undefined,
                 slackAppToken: slackAppToken || undefined,
                 linearApiKey: linearApiKey || undefined,
-                braveSearchApiKey: braveSearchApiKey || undefined,
                 githubToken: githubToken || undefined,
               });
             })
