@@ -1,0 +1,70 @@
+---
+title: "Juno — Product Manager"
+description: "How Juno breaks down tickets, prepares implementation prompts, and keeps the team unblocked"
+---
+
+# Juno
+
+Juno is the **Product Manager** of your Agent Army. She takes high-level Linear tickets and breaks them down into actionable, well-scoped sub-tasks that Titus can pick up and implement.
+
+## What Juno Does
+
+- Monitors Linear for unrefined tickets assigned to her
+- Breaks down tickets into sized, sequenced sub-tasks
+- Researches requirements and gathers context from the codebase
+- Generates implementation prompts so Titus knows exactly what to build
+- Flags tickets that are missing descriptions or acceptance criteria
+- Assigns prepped tickets to Titus and moves them to "To Do"
+
+## Heartbeat
+
+Juno's heartbeat fires every minute and follows a simple loop:
+
+1. **Check Linear** for assigned tickets in "Todo" or "Backlog" that haven't been prepped yet
+2. **Prep each ticket** using the `linear-ticket-prep` skill — a multi-phase workflow that sizes the ticket, researches context, and generates an implementation prompt
+3. **Flag gaps** — if any ticket is missing a description or acceptance criteria, flag it and ask the assigner for clarification
+4. **Hand off** — once a ticket is prepped, assign it to Titus and move it to "To Do"
+
+## Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `linear-ticket-prep` | Multi-phase ticket preparation — sizing, research, context gathering, and prompt generation |
+
+## Workspace Files
+
+Juno's behavior is defined by workspace files injected into `~/.openclaw/workspace/` during bootstrap:
+
+| File | What It Does |
+|------|-------------|
+| `SOUL.md` | Core personality — approach, values, superpowers, boundaries. Defines who Juno *is* as a PM. |
+| `IDENTITY.md` | Name, role label, emoji, avatar metadata. |
+| `HEARTBEAT.md` | The state machine logic executed every minute (described above). |
+| `TOOLS.md` | Tool-specific notes and common commands for Juno's workflow. |
+
+She also receives the shared base files (`USER.md`, `AGENTS.md`, `BOOTSTRAP.md`) that all agents share.
+
+## Configuration
+
+Juno uses the `pm` preset in your manifest:
+
+```json
+{
+  "name": "agent-pm",
+  "displayName": "Juno",
+  "role": "pm",
+  "preset": "pm",
+  "volumeSize": 30
+}
+```
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `preset` | `pm` | Built-in PM preset |
+| `volumeSize` | 30 GB | Persistent storage — Juno doesn't need as much since she's not cloning large repos |
+| `instanceType` | Provider default | Override if needed |
+| `envVars` | — | Add agent-specific environment variables |
+
+## Customization
+
+You can customize Juno by editing the preset files in the `presets/` directory, or by overriding fields in the manifest. To create a completely custom PM agent, set `preset: null` and provide your own `soulContent` and `identityContent`. See [Agent Roles & Customization](/architecture/agent-presets#customization) for details.

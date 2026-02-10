@@ -1,0 +1,76 @@
+---
+title: "Titus — Engineer"
+description: "How Titus picks up tickets, writes code, opens PRs, and iterates on review feedback"
+---
+
+# Titus
+
+Titus is the **Engineer** of your Agent Army. He picks up prepped tickets from Linear, writes code using Claude Code, opens pull requests on GitHub, and iterates on review feedback until the work is merged.
+
+## What Titus Does
+
+- Picks up prioritized engineering tickets from Linear
+- Writes code using Claude Code on a dedicated server
+- Runs typechecks, builds, and tests before opening PRs
+- Opens pull requests on GitHub and assigns Scout for review
+- Responds to PR review comments and pushes fixes
+- Manages multiple tickets in parallel with a state machine
+- Alerts the owner on Slack when stuck or hitting repeated failures
+
+## Heartbeat
+
+Titus runs a state machine that tracks multiple tickets in parallel via `memory/agent-state.json`. His heartbeat fires every minute:
+
+1. **Circuit breaker** — if 3+ consecutive errors have occurred, notify the owner on Slack and stop. This prevents runaway failures.
+2. **Process active work** — loop through each item in `activeWork` and act based on its state:
+   - **`AGENT_RUNNING`** — Claude Code is implementing the ticket. If stuck for 3+ cycles, comment on Linear and alert the owner. If finished, transition to `BUILD_CHECK`.
+   - **`BUILD_CHECK`** — run typecheck, build, and e2e tests. On pass: create a PR, assign Scout for review, move the ticket to "In Review", transition to `AWAITING_REVIEW`. On fail (under 3 attempts): spawn Claude Code to fix, go back to `AGENT_RUNNING`. On fail (3+ attempts): create a draft PR with the failure summary.
+   - **`AWAITING_REVIEW`** — check if the PR is merged. If yes, rebase dependent branches and remove from active work. Otherwise, do nothing.
+   - **`IDLE_BLOCKED`** — waiting on a dependency. If the blocking ticket's PR is merged, rebase and transition to `AGENT_RUNNING`.
+3. **Pick up new work** — if fewer than 2 items are actively running, check Linear for the next prioritized ticket, add it to `activeWork`, and spawn Claude Code to start implementation.
+
+## Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `eng-ticket-workflow` | Structured ticket implementation workflow |
+| `eng-pr-tester` | PR testing workflow |
+| `pr-review-resolver` | PR review comment resolution |
+
+## Workspace Files
+
+Titus's behavior is defined by workspace files injected into `~/.openclaw/workspace/` during bootstrap:
+
+| File | What It Does |
+|------|-------------|
+| `SOUL.md` | Core personality — approach, values, superpowers, boundaries. Defines who Titus *is* as an engineer. |
+| `IDENTITY.md` | Name, role label, emoji, avatar metadata. |
+| `HEARTBEAT.md` | The state machine logic executed every minute (described above). |
+| `TOOLS.md` | Tool-specific notes and common commands for Titus's workflow. |
+
+He also receives the shared base files (`USER.md`, `AGENTS.md`, `BOOTSTRAP.md`) that all agents share.
+
+## Configuration
+
+Titus uses the `eng` preset in your manifest:
+
+```json
+{
+  "name": "agent-eng",
+  "displayName": "Titus",
+  "role": "eng",
+  "preset": "eng",
+  "volumeSize": 50
+}
+```
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `preset` | `eng` | Built-in engineer preset |
+| `volumeSize` | 50 GB | Larger volume — Titus clones repos and runs builds |
+| `instanceType` | Provider default | Override for compute-heavy workloads |
+| `envVars` | — | Add agent-specific environment variables |
+
+## Customization
+
+You can customize Titus by editing the preset files in the `presets/` directory, or by overriding fields in the manifest. To create a completely custom engineer agent, set `preset: null` and provide your own `soulContent` and `identityContent`. See [Agent Roles & Customization](/architecture/agent-presets#customization) for details.

@@ -1,0 +1,72 @@
+---
+title: "Scout — QA Tester"
+description: "How Scout reviews PRs, tests changes against acceptance criteria, and files bugs"
+---
+
+# Scout
+
+Scout is the **QA Tester** of your Agent Army. He reviews pull requests, tests changes against acceptance criteria from Linear tickets, files bugs when something doesn't pass, and can auto-fix simple build and test failures.
+
+## What Scout Does
+
+- Monitors GitHub for PRs ready for review
+- Reviews code changes against Linear ticket acceptance criteria
+- Runs builds and test suites to validate changes
+- Auto-fixes simple build or test failures and retries
+- Files bugs back to Linear with specific gaps when requirements aren't met
+- Labels PRs as `qa-passed`, `needs-work`, or `qa-failed`
+- Resolves PR review comments by parsing, applying fixes, and pushing
+
+## Heartbeat
+
+Scout's heartbeat fires every minute and covers two main jobs:
+
+1. **Resolve review comments** — scan all open PRs for unresolved review comments. For each one, use the `pr-review-resolver` skill to parse comments, apply fixes via Claude Code, and push.
+2. **Find PRs to test** — query Linear for tickets in "In Review" or "In Review by Agent" with a linked PR. Skip any ticket already tested at the same PR head commit.
+3. **Review against acceptance criteria** — for each untested ticket, check out the PR branch and review the diff against the Linear ticket's acceptance criteria. If requirements are unmet, comment on Linear with specific gaps and label `needs-work`.
+4. **Run build and tests** — auto-detect the package manager, run install, build, and test suites. On pass: comment on Linear with a checkmark and label `qa-passed`.
+5. **Auto-fix failures** — on build or test failure, invoke Claude Code with the error context to apply a minimal fix, commit, push, and re-run once. If still failing after retry, comment on Linear with the error summary and label `qa-failed`.
+
+## Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `pr-review-resolver` | Parse PR review comments, apply fixes via Claude Code, and push |
+
+## Workspace Files
+
+Scout's behavior is defined by workspace files injected into `~/.openclaw/workspace/` during bootstrap:
+
+| File | What It Does |
+|------|-------------|
+| `SOUL.md` | Core personality — approach, values, superpowers, boundaries. Defines who Scout *is* as a QA tester. |
+| `IDENTITY.md` | Name, role label, emoji, avatar metadata. |
+| `HEARTBEAT.md` | The state machine logic executed every minute (described above). |
+| `TOOLS.md` | Tool-specific notes and common commands for Scout's workflow. |
+
+He also receives the shared base files (`USER.md`, `AGENTS.md`, `BOOTSTRAP.md`) that all agents share.
+
+## Configuration
+
+Scout uses the `tester` preset in your manifest:
+
+```json
+{
+  "name": "agent-tester",
+  "displayName": "Scout",
+  "role": "tester",
+  "preset": "tester",
+  "volumeSize": 30
+}
+```
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `preset` | `tester` | Built-in QA tester preset |
+| `volumeSize` | 30 GB | Persistent storage — Scout checks out PR branches but doesn't need as much space |
+| `instanceType` | Provider default | Override if needed |
+| `envVars` | — | Add agent-specific environment variables |
+
+## Customization
+
+You can customize Scout by editing the preset files in the `presets/` directory, or by overriding fields in the manifest. To create a completely custom QA agent, set `preset: null` and provide your own `soulContent` and `identityContent`. See [Agent Roles & Customization](/architecture/agent-presets#customization) for details.

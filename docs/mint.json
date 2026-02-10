@@ -37,6 +37,14 @@
       ]
     },
     {
+      "group": "Agents",
+      "pages": [
+        "agents/juno",
+        "agents/titus",
+        "agents/scout"
+      ]
+    },
+    {
       "group": "Integrations",
       "pages": [
         "integrations/linear",
