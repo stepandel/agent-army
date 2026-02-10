@@ -44,6 +44,8 @@ You need credentials for at least one cloud provider.
 
 ### AWS
 
+Requires the AWS CLI installed and configured with credentials:
+
 ```bash
 # Install AWS CLI
 brew install awscli  # or: pip install awscli
@@ -56,15 +58,9 @@ Required permissions: EC2, EBS, VPC, Security Groups, IAM.
 
 ### Hetzner
 
-```bash
-# Install hcloud CLI
-brew install hcloud
+No CLI required — just an API token with Read & Write permissions. The `agent-army init` wizard will prompt you for it.
 
-# Set API token
-export HCLOUD_TOKEN="your-token-here"
-```
-
-Get your API token from the [Hetzner Cloud Console](https://console.hetzner.cloud/).
+Get your API token from the [Hetzner Cloud Console](https://console.hetzner.cloud/) under Project > Security > API Tokens.
 
 ## API Keys
 
