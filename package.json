@@ -1,5 +1,5 @@
 {
-  "name": "agent-army",
+  "name": "agent-army-infra",
   "version": "0.1.0",
   "description": "Reusable Pulumi components for deploying OpenClaw agents on AWS",
   "main": "dist/index.js",
@@ -20,7 +20,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "agent-army": "workspace:*",
     "@pulumi/aws": "^6.0.0",
     "@pulumi/hcloud": "^1.32.0",
     "@pulumi/pulumi": "^3.0.0",
