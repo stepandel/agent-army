@@ -60,10 +60,9 @@ export interface APIResponse {
 
 class APIExecAdapter implements ExecAdapter {
   capture(command: string, args: string[] = [], cwd?: string): ExecResult {
-    // In API context, we use the same exec approach but capture output
-    const { execSync } = require("child_process");
+    const { execFileSync } = require("child_process");
     try {
-      const result = execSync([command, ...args].join(" "), {
+      const result = execFileSync(command, args, {
         cwd,
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
@@ -86,13 +85,10 @@ class APIExecAdapter implements ExecAdapter {
   }
 
   commandExists(command: string): boolean {
-    const { execSync } = require("child_process");
-    try {
-      execSync(`command -v ${command}`, { stdio: "pipe" });
-      return true;
-    } catch {
-      return false;
-    }
+    const { spawnSync } = require("child_process");
+    const bin = process.platform === "win32" ? "where" : "which";
+    const result = spawnSync(bin, [command], { shell: false, stdio: "ignore" });
+    return result.status === 0;
   }
 }
 
