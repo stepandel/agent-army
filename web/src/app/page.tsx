@@ -153,9 +153,9 @@ export default function Home() {
           href="https://openclaw.ai"
           target="_blank"
           rel="noopener noreferrer"
-          className="animate-fade-in-up-1 inline-block text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors mb-8"
+          className="animate-fade-in-up-1 inline-flex items-center gap-1.5 text-base text-muted-foreground hover:text-foreground transition-colors mb-8"
         >
-          Powered by OpenClaw 🦞
+          Powered by <span className="font-semibold text-foreground/80">OpenClaw</span> 🦞
         </a>
 
         <p className="animate-fade-in-up-2 text-[clamp(1rem,2vw,1.25rem)] text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed">
