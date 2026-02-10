@@ -76,6 +76,43 @@ Reusable skill files provide specialized workflows:
 | `eng-pr-tester` | Engineer | PR testing workflow |
 | `pr-review-resolver` | Engineer | PR review comment resolution |
 
+## Heartbeat Logic
+
+The heartbeat is the core loop that drives each agent. It fires every minute as a checklist — the agent walks through it top to bottom, takes any actions needed, then waits for the next tick. On first boot, the heartbeat detects `BOOTSTRAP.md` and runs first-time setup instead of the normal checklist — once bootstrap completes, it deletes the file and the regular heartbeat takes over.
+
+The three agents have completely different heartbeats, each tailored to their role.
+
+### Juno (PM)
+
+Juno's heartbeat is the simplest — it's focused on ticket preparation:
+
+1. Check Linear for assigned tickets in "Todo" or "Backlog" that haven't been prepped yet
+2. For each unprepped ticket, run the `linear-ticket-prep` skill — a multi-phase workflow that sizes the ticket, researches context, and generates an implementation prompt
+3. If any ticket is missing a description or acceptance criteria, flag it and ask the assigner for clarification
+4. Once a ticket is prepped, assign it to Titus and move it to "To Do"
+
+### Titus (Eng)
+
+Titus runs a state machine that tracks multiple tickets in parallel via `memory/agent-state.json`:
+
+1. **Circuit breaker** — if 3+ consecutive errors have occurred, notify the owner on Slack and stop. This prevents runaway failures
+2. **Process active work** — loop through each item in `activeWork` and act based on its state:
+   - **`AGENT_RUNNING`** — Claude Code is implementing the ticket. If stuck for 3+ cycles, comment on Linear and alert the owner. If finished, transition to `BUILD_CHECK`
+   - **`BUILD_CHECK`** — run typecheck, build, and e2e tests. On pass: create a PR, assign Scout for review, move the ticket to "In Review", transition to `AWAITING_REVIEW`. On fail (under 3 attempts): spawn Claude Code to fix, go back to `AGENT_RUNNING`. On fail (3+ attempts): create a draft PR with the failure summary
+   - **`AWAITING_REVIEW`** — check if the PR is merged. If yes, rebase dependent branches and remove from active work. Otherwise, do nothing
+   - **`IDLE_BLOCKED`** — waiting on a dependency. If the blocking ticket's PR is merged, rebase and transition to `AGENT_RUNNING`
+3. **Pick up new work** — if fewer than 2 items are actively running, check Linear for the next prioritized ticket, add it to `activeWork`, and spawn Claude Code to start implementation
+
+### Scout (QA)
+
+Scout's heartbeat covers two jobs — resolving review comments and testing PRs:
+
+1. **Resolve review comments** — scan all open PRs for unresolved review comments. For each one, use the `pr-review-resolver` skill to parse comments, apply fixes via Claude Code, and push
+2. **Find PRs to test** — query Linear for tickets in "In Review" or "In Review by Agent" with a linked PR. Skip any ticket already tested at the same PR head commit
+3. **Review against acceptance criteria** — for each untested ticket, check out the PR branch and review the diff against the Linear ticket's acceptance criteria. If requirements are unmet, comment on Linear with specific gaps and label `needs-work`
+4. **Run build and tests** — auto-detect the package manager, run install, build, and test suites. On pass: comment on Linear with a checkmark and label `qa-passed`
+5. **Auto-fix failures** — on build or test failure, invoke Claude Code with the error context to apply a minimal fix, commit, push, and re-run once. If still failing after retry, comment on Linear with the error summary and label `qa-failed`
+
 ## Template Variables
 
 Workspace files with `.tpl` extensions support template variables that get replaced at deploy time:
