@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -103,15 +104,23 @@ const features = [
 ];
 
 export default function Home() {
+  const [showBanner, setShowBanner] = useState(true);
+
+  useEffect(() => {
+    const handleScroll = () => setShowBanner(window.scrollY < 50);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
     <div className="min-h-screen overflow-hidden">
       {/* Beta Banner */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black text-center px-4 py-2 text-sm font-semibold">
+      <div className={`fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black text-center px-4 py-2 text-sm font-semibold transition-transform duration-300 ${showBanner ? "translate-y-0" : "-translate-y-full"}`}>
         ⚠️ This is a beta product — use at your own risk.
       </div>
 
       {/* Nav */}
-      <nav className="fixed top-10 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 backdrop-blur-md bg-background/80 border-b border-border">
+      <nav className={`fixed left-0 right-0 z-50 flex items-center justify-between px-8 py-4 backdrop-blur-md bg-background/80 border-b border-border transition-[top] duration-300 ${showBanner ? "top-10" : "top-0"}`}>
         <a href="/" className="flex items-center gap-2.5">
           <span className="text-xl">🪖</span>
           <span className="text-base font-bold tracking-tight">Agent Army</span>
