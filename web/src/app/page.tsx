@@ -64,44 +64,6 @@ const steps = [
   },
 ];
 
-const features = [
-  {
-    icon: "🏗️",
-    title: "Infrastructure as Code",
-    description:
-      "Pulumi-powered deployments on AWS EC2 or Hetzner Cloud. Reproducible, version-controlled, and tear-downable.",
-  },
-  {
-    icon: "🔒",
-    title: "Zero-Trust Access",
-    description:
-      "Every agent is accessible only through Tailscale. No public ports, no exposed APIs. SSH optional.",
-  },
-  {
-    icon: "🔄",
-    title: "Autonomous Heartbeat",
-    description:
-      "Agents run a 1-minute heartbeat loop — checking for new work, updating status, and coordinating with each other.",
-  },
-  {
-    icon: "🔌",
-    title: "Deep Integrations",
-    description:
-      "Native Linear, Slack, and GitHub integration. Agents read tickets, post updates, create PRs, and respond to messages.",
-  },
-  {
-    icon: "🎭",
-    title: "Role-Based Presets",
-    description:
-      "Each agent ships with a tuned personality, tools, and workflow. Customize or create your own roles from scratch.",
-  },
-  {
-    icon: "💰",
-    title: "Cost Effective",
-    description:
-      "Shared VPC, small instance types, and spot-instance ready. Run a full 3-agent team for under $30/month on Hetzner.",
-  },
-];
 
 export default function Home() {
   const [showBanner, setShowBanner] = useState(true);
@@ -340,62 +302,6 @@ export default function Home() {
               </code>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* Features Grid */}
-      <section className="max-w-5xl mx-auto px-8 py-20">
-        <div className="text-center mb-14">
-          <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-bold tracking-tight mb-4">
-            Built for real workflows
-          </h2>
-          <p className="text-base text-muted-foreground max-w-md mx-auto">
-            Not a toy. Production-grade infrastructure for autonomous AI agents.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {features.map((feature) => (
-            <div
-              key={feature.title}
-              className="p-7 rounded-xl border border-border bg-card/30"
-            >
-              <div className="text-3xl mb-3.5">{feature.icon}</div>
-              <h3 className="text-base font-semibold text-foreground mb-2">
-                {feature.title}
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {feature.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="max-w-2xl mx-auto px-8 pt-20 pb-28 text-center">
-        <div className="p-16 rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/6 to-accent-purple/4">
-          <h2 className="text-[clamp(1.5rem,3vw,2.2rem)] font-bold tracking-tight mb-4">
-            Ready to deploy your team?
-          </h2>
-          <p className="text-base text-muted-foreground max-w-md mx-auto mb-8">
-            Get a PM, engineer, and QA tester running on your cloud in under 10
-            minutes. Open source, always.
-          </p>
-          <div className="flex justify-center gap-4 flex-wrap">
-            <Button asChild size="lg" className="shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)]">
-              <a
-                href="https://github.com/stepandel/agent-army"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                View on GitHub
-              </a>
-            </Button>
-            <Button asChild variant="outline" size="lg">
-              <a href="https://docs.agent-army.ai">Read the Docs</a>
-            </Button>
-          </div>
         </div>
       </section>
 
