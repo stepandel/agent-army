@@ -9,10 +9,10 @@ Agent Army ships with three agent presets that form a complete team for tackling
 
 ## Available Presets
 
-### Marcus — Product Manager (`pm`)
+### Juno — Product Manager (`pm`)
 
 - **Volume:** 30 GB
-- **What he does:** Picks up Linear tickets and breaks them into actionable sub-tasks. Researches requirements, sequences work across the team, updates ticket status, and keeps Titus and Scout unblocked. Communicates progress via Slack.
+- **What she does:** Picks up Linear tickets and breaks them into actionable sub-tasks. Researches requirements, sequences work across the team, updates ticket status, and keeps Titus and Scout unblocked. Communicates progress via Slack.
 - **Tools:** Linear, GitHub, Slack, web search
 - **Best for:** Ticket breakdown, backlog management, research, cross-agent coordination
 
@@ -37,7 +37,7 @@ Each agent is defined in the manifest as an `AgentDefinition`:
 ```typescript
 interface AgentDefinition {
   name: string;          // Resource name (e.g., "agent-pm")
-  displayName: string;   // Human name (e.g., "Marcus")
+  displayName: string;   // Human name (e.g., "Juno")
   role: string;          // Role identifier
   preset: string | null; // Preset name or null for custom
   volumeSize: number;    // Persistent storage in GB

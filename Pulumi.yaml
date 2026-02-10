@@ -6,7 +6,7 @@ runtime:
     packagemanager: pnpm
 
 # This project deploys 3 specialized AI agents on AWS:
-#   - Marcus (PM): Break down tickets, research, plan and sequence work, track progress, unblock teams
+#   - Juno (PM): Break down tickets, research, plan and sequence work, track progress, unblock teams
 #   - Titus (Eng): Lead engineering, coding, feature development
 #   - Scout (Tester): Quality assurance, verification, bug hunting
 #
