@@ -1,45 +1,21 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Check if the route is protected
-  const isApiRoute = pathname.startsWith("/api");
-  const isDashboardRoute = pathname.startsWith("/dashboard");
-  const isAuthRoute = pathname.startsWith("/api/auth");
-  const isHealthRoute = pathname.startsWith("/api/health");
-
-  // Protected API routes (except /api/auth/* and /api/health)
-  if (isApiRoute && !isAuthRoute && !isHealthRoute) {
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-    });
-
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  // Only the home page and health check are publicly accessible
+  // Everything else redirects to home
+  if (pathname === "/" || pathname === "/api/health") {
+    return NextResponse.next();
   }
 
-  // Protected dashboard routes
-  if (isDashboardRoute) {
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-    });
-
-    if (!token) {
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("callbackUrl", pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-
-  return NextResponse.next();
+  return NextResponse.redirect(new URL("/", request.url));
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/dashboard/:path*"],
+  matcher: [
+    // Match everything except static files and Next.js internals
+    "/((?!_next/static|_next/image|icon.svg|favicon.ico).*)",
+  ],
 };
