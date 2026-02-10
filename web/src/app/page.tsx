@@ -105,6 +105,11 @@ const features = [
 export default function Home() {
   return (
     <div className="min-h-screen overflow-hidden">
+      {/* Beta Banner */}
+      <div className="bg-yellow-500 text-black text-center px-4 py-2 text-sm font-semibold">
+        This is a beta product — use at your own risk.
+      </div>
+
       {/* Nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 backdrop-blur-md bg-background/80 border-b border-border">
         <a href="/" className="flex items-center gap-2.5">
