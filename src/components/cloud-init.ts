@@ -290,6 +290,7 @@ openclaw onboard --non-interactive --accept-risk \\
   --skip-daemon \\
   --skip-skills || echo "WARNING: OpenClaw onboarding failed. Run openclaw onboard manually."
 '
+${workspaceFilesScript}
 
 # Install daemon service with XDG_RUNTIME_DIR set
 echo "Installing OpenClaw daemon..."
@@ -313,7 +314,6 @@ sudo -H -u ubuntu \\
   python3 << 'PYTHON_SCRIPT'
 ${configPatchScript}
 PYTHON_SCRIPT
-${workspaceFilesScript}
 ${tailscaleServeSection}
 ${postSetupScript}
 echo "============================================"
