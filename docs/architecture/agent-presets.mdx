@@ -1,38 +1,99 @@
 ---
-title: "Agent Presets"
-description: "Pre-configured agent roles that work through your Linear tickets"
+title: "Agent Roles & Customization"
+description: "How agent presets work, how agents coordinate, and how to customize them"
 ---
 
-# Agent Presets
+# Agent Roles & Customization
 
-Agent Army ships with three agent presets that form a complete team for tackling your Linear backlog.
+Agent Army ships with three presets that form a complete team. Each preset defines the agent's personality, tools, and workflow through a set of workspace files.
 
-## Available Presets
+## Built-In Presets
 
-### Juno — Product Manager (`pm`)
+| Preset | Agent | Role | Volume |
+|--------|-------|------|--------|
+| `pm` | Juno | Product Manager — breaks down tickets, coordinates work, communicates via Slack | 30 GB |
+| `eng` | Titus | Engineer — writes code, opens PRs, iterates on review feedback | 50 GB |
+| `tester` | Scout | QA Tester — reviews PRs, tests changes, files bugs back to Linear | 30 GB |
 
-- **Volume:** 30 GB
-- **What she does:** Picks up Linear tickets and breaks them into actionable sub-tasks. Researches requirements, sequences work across the team, updates ticket status, and keeps Titus and Scout unblocked. Communicates progress via Slack.
-- **Tools:** Linear, GitHub, Slack, web search
-- **Best for:** Ticket breakdown, backlog management, research, cross-agent coordination
+For full role descriptions, see the [Introduction](/introduction).
 
-### Titus — Engineer (`eng`)
+## How Agents Coordinate
 
-- **Volume:** 50 GB
-- **What he does:** Picks up engineering tickets from Linear, writes code using Claude Code, creates branches and opens PRs on GitHub. Responds to review comments and iterates until the PR is approved. Updates Linear ticket status as work progresses.
-- **Tools:** Claude Code, GitHub, Linear, build tools, testing frameworks
-- **Best for:** Implementing features, fixing bugs, writing tests, shipping PRs
+Agents coordinate asynchronously through Linear and GitHub — there's no direct agent-to-agent communication:
 
-### Scout — QA Tester (`tester`)
+```
+Linear Ticket
+     │
+     ▼
+Juno (PM) ── breaks down into sub-tasks
+     │
+     ▼
+Titus (Eng) ── picks up engineering tickets, opens PRs
+     │
+     ▼
+Scout (QA) ── reviews PRs, tests changes, files bugs
+     │
+     ▼
+Titus (Eng) ── fixes bugs, iterates until approved
+```
 
-- **Volume:** 30 GB
-- **What she does:** Reviews PRs on GitHub, tests changes against the ticket's acceptance criteria (happy path, sad path, edge cases). Files bugs back to Linear with reproduction steps. Verifies fixes after they land.
-- **Tools:** GitHub, Linear, testing frameworks, browser automation
-- **Best for:** PR review, manual and automated testing, bug filing, fix verification
+Each agent runs a **heartbeat** every minute that checks for new work:
+- **Juno** checks Linear for unrefined tickets to break down
+- **Titus** checks Linear for assigned engineering tickets, then checks GitHub for PR review comments
+- **Scout** checks GitHub for PRs ready for review, then checks Linear for verification tasks
 
-## Configuration
+## Workspace Files
 
-Each agent is defined in the manifest as an `AgentDefinition`:
+Each agent's behavior is defined by workspace files injected into `~/.openclaw/workspace/` during bootstrap.
+
+### Per-Preset Files
+
+| File | What It Does |
+|------|-------------|
+| `SOUL.md` | Core personality — approach, values, superpowers, boundaries, vibe. This is who the agent *is*. |
+| `IDENTITY.md` | Name, role label, emoji, avatar. Short identification metadata. |
+| `HEARTBEAT.md` | State machine logic executed every minute. Defines what the agent checks for and how it transitions between states (idle → working → blocked → done). |
+| `TOOLS.md` | Tool-specific notes and common commands. Cheat sheet for the agent's toolchain. |
+
+### Shared Base Files
+
+These files are shared across all presets:
+
+| File | What It Does |
+|------|-------------|
+| `USER.md` | Owner information — name, timezone, working hours, custom notes. Personalized from template variables. |
+| `AGENTS.md` | Operational instructions shared by all agents — memory management, safety rules, group chat etiquette, heartbeat protocol. |
+| `BOOTSTRAP.md` | First-run checklist — verifies integrations (Linear, GitHub, Claude Code) work, then deletes itself. |
+
+### Skills
+
+Reusable skill files provide specialized workflows:
+
+| Skill | Used By | Purpose |
+|-------|---------|---------|
+| `linear-ticket-prep` | PM | Multi-phase ticket preparation — sizing, research, context gathering, prompt generation |
+| `eng-ticket-workflow` | Engineer | Structured ticket implementation workflow |
+| `eng-pr-tester` | Engineer | PR testing workflow |
+| `pr-review-resolver` | Engineer | PR review comment resolution |
+
+## Template Variables
+
+Workspace files with `.tpl` extensions support template variables that get replaced at deploy time:
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `{{OWNER_NAME}}` | Your name | `Boss` |
+| `{{TIMEZONE}}` | Your timezone | `PST (America/Los_Angeles)` |
+| `{{WORKING_HOURS}}` | Your working hours | `9am-6pm` |
+| `{{USER_NOTES}}` | Custom notes for agents | `No additional notes provided yet.` |
+| `{{LINEAR_TEAM}}` | Linear team identifier | `AGE` |
+| `{{GITHUB_REPO}}` | Target repository | `org/repo` |
+
+These are set during `agent-army init` and stored in the manifest.
+
+## Customization
+
+You can customize preset agents in the manifest:
 
 ```typescript
 interface AgentDefinition {
@@ -46,14 +107,17 @@ interface AgentDefinition {
 }
 ```
 
-## Customization
+### What You Can Change
 
-You can customize preset agents during init:
-
-- **Volume size** — Adjust persistent storage
-- **Instance type** — Override the default server size
-- **Environment variables** — Add agent-specific config
+- **Volume size** — Adjust persistent storage per agent (e.g., engineers may need more for large repos)
+- **Instance type** — Override the default server size (e.g., `t3.large` for compute-heavy agents)
+- **Environment variables** — Add agent-specific config via `envVars`
 
 ## Custom Agents
 
-Set `preset: null` and provide custom `soulContent` and `identityContent` to create agents with completely custom personalities and roles.
+To create an agent with a completely custom role, set `preset: null` and provide custom content:
+
+- **`soulContent`** — Your custom SOUL.md content defining the agent's personality and role
+- **`identityContent`** — Your custom IDENTITY.md content with name and metadata
+
+The agent still gets the shared base files (USER.md, AGENTS.md, BOOTSTRAP.md) and the full bootstrap stack (Docker, Node.js, Claude Code, etc.). You're customizing *who the agent is*, not how it's provisioned.

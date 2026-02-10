@@ -69,7 +69,7 @@
       "group": "Architecture",
       "pages": [
         "architecture/overview",
-        "architecture/pulumi-components",
+        "architecture/networking",
         "architecture/cloud-providers",
         "architecture/agent-presets"
       ]

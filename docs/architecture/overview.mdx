@@ -1,47 +1,209 @@
 ---
-title: "Architecture Overview"
-description: "How Agent Army provisions and manages your agent team"
+title: "How It Works"
+description: "End-to-end walkthrough of how Agent Army provisions and runs your agent team"
 ---
 
-# Architecture Overview
+# How It Works
 
-Agent Army uses [Pulumi](https://pulumi.com) to provision cloud infrastructure as code, deploying each agent on a dedicated server with persistent storage, secure networking, and all the tools needed to work through your Linear tickets.
+Agent Army uses [Pulumi](https://pulumi.com) to provision cloud infrastructure as code, deploying each agent on a dedicated Ubuntu server with persistent storage, secure networking, and all the tools needed to work through your Linear tickets.
 
-## High-Level Flow
+## Deploy Flow
 
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
-│     CLI     │────▶│ Pulumi Stack │────▶│ Cloud Provider  │
-│  (Commands) │     │ (TypeScript) │     │ (AWS / Hetzner) │
-└─────────────┘     └──────────────┘     └─────────────────┘
-       │                    │                      │
-       ▼                    ▼                      ▼
-  agent-army.json    Component Resources    Servers + Volumes
-  (Manifest)         (per agent)            + Networking
-```
-
-## Key Concepts
-
-### Manifest-Driven
-Everything starts with `agent-army.json` — the manifest file that defines your stack, provider, agents, and configuration. The CLI wizard generates this; Pulumi reads it.
-
-### Component Resources
-Each agent is provisioned as a Pulumi component resource (`OpenClawAgent` for AWS, `HetznerAgent` for Hetzner). Components encapsulate: server, volume, security group, and cloud-init bootstrap.
-
-### Secure Networking
-All agents join a Tailscale mesh VPN during bootstrap. SSH access goes through Tailscale — no public ports are exposed by default (security groups/firewalls restrict inbound traffic). Agent hostnames follow the pattern `<stack>-<agent-name>`.
-
-## Project Structure
+When you run `agent-army deploy`, here's what happens:
 
 ```
-agent-army/
-├── cli/                    # CLI tool (commands, config, prompts)
-│   ├── bin.ts              # Entry point, command definitions
-│   ├── commands/           # Command implementations
-│   ├── lib/                # Constants, utilities, prerequisites
-│   └── types.ts            # Manifest and agent types
-├── src/
-│   └── components/         # Pulumi component resources
-├── presets/                # Agent role definitions & skills
-└── docs/                   # This documentation
+agent-army.json         Pulumi Stack          Cloud Provider
+   (Manifest)    ────▶  (TypeScript)   ────▶  (AWS / Hetzner)
+                              │
+                              ▼
+                     Per-agent resources:
+                     • Server (Ubuntu 24.04)
+                     • Security group / firewall
+                     • SSH keypair
+                     • Gateway token
+                     • Cloud-init script
 ```
+
+1. **Load manifest** — The CLI reads your `agent-army.json` config and shows a deployment summary.
+2. **Select Pulumi stack** — Creates or selects a stack matching your config name.
+3. **Sync config** — Copies the manifest to the project root and sets provider-specific Pulumi config.
+4. **Provision resources** — Pulumi creates infrastructure for each agent: server, firewall, SSH key, and injects a cloud-init bootstrap script as user data.
+5. **Cloud-init runs** — On first boot, each server executes the bootstrap sequence (see below) to install tools, configure OpenClaw, and join the Tailscale mesh.
+6. **Show outputs** — The CLI displays each agent's Tailscale URL, public IP, and instance ID.
+
+## Cloud-Init Bootstrap Sequence
+
+Every agent server runs the same bootstrap script on first boot. The sequence takes a few minutes and handles everything from base packages to a running OpenClaw daemon.
+
+### 1. System Setup
+
+- Set non-interactive mode
+- `apt-get update && apt-get upgrade`
+- Install `unzip`
+- Create `ubuntu` user (Hetzner only — AWS AMIs already have one)
+
+### 2. Docker
+
+- Install via `get.docker.com`
+- Enable and start the Docker service
+- Add `ubuntu` to the `docker` group
+
+### 3. Node.js
+
+- Install NVM (v0.40.1)
+- Install Node.js 22
+- Set as default version
+- Install OpenClaw CLI globally via npm
+
+### 4. GitHub CLI
+
+- Install `gh` from the official apt repository
+- Authenticate with the provided GitHub token (`gh auth login`)
+- Configure git integration (`gh auth setup-git`)
+
+### 5. Claude Code
+
+- Install via `claude.ai/install.sh`
+- Added to `~/.local/bin`
+
+### 6. Tailscale
+
+- Install via `tailscale.com/install.sh`
+- Join the mesh: `tailscale up --authkey=<key> --ssh --hostname=<stack>-<agent-name>`
+- See [Networking & Security](/architecture/networking) for details
+
+### 7. Deno + Linear CLI (if Linear configured)
+
+- Install Deno to `~/.deno`
+- Install Linear CLI: `deno install --global jsr:@schpet/linear-cli`
+
+### 8. OpenClaw Onboard
+
+- Enable systemd linger for the `ubuntu` user
+- Run `openclaw onboard --non-interactive --accept-risk` (local mode, gateway on loopback)
+
+### 9. Workspace Files
+
+- Inject preset files into `~/.openclaw/workspace/` (SOUL.md, IDENTITY.md, HEARTBEAT.md, TOOLS.md, USER.md, etc.)
+- Files are gzipped and base64-encoded in the cloud-init script for efficiency
+
+### 10. OpenClaw Configuration
+
+- Patch `openclaw.json` with gateway, heartbeat, sandbox, and integration settings (see below)
+- Install the OpenClaw daemon service
+
+### 11. Tailscale Serve
+
+- Proxy the gateway port over HTTPS: `tailscale serve --bg 18789`
+- Creates a public URL on your tailnet for the OpenClaw web UI
+
+### 12. Post-Setup Commands
+
+- Run any custom commands from `postSetupCommands` in the manifest
+
+## What Gets Installed
+
+Each agent server ends up with:
+
+| Software | Version | Purpose |
+|----------|---------|---------|
+| Docker | Latest | Sandbox code execution |
+| Node.js | 22 | Runtime for OpenClaw |
+| OpenClaw | Latest (npm) | Agent framework — gateway, heartbeat, daemon |
+| Claude Code | Latest | AI coding assistant |
+| GitHub CLI (`gh`) | Latest | Git operations, PR management |
+| Tailscale | Latest | Mesh VPN, SSH, HTTPS proxy |
+| Deno + Linear CLI | Latest | Linear ticket management (if configured) |
+
+## OpenClaw Configuration
+
+After onboarding, the bootstrap script patches `openclaw.json` with your deployment settings:
+
+### Gateway
+
+- Binds to `127.0.0.1` (loopback only — not publicly accessible)
+- Trusted proxies: `["127.0.0.1"]`
+- Token-based authentication (auto-generated per agent)
+- Control UI enabled with `allowInsecureAuth: true` (safe behind Tailscale)
+
+### Heartbeat
+
+```json
+{
+  "every": "1m",
+  "session": "main"
+}
+```
+
+The heartbeat fires every minute, keeping agents active and processing their HEARTBEAT.md state machine logic.
+
+### Sandbox
+
+Docker-based sandbox is enabled by default (`enableSandbox: true`), providing isolated code execution.
+
+### Integrations
+
+**Slack** (if configured):
+- Socket mode with bot token and app token
+- DMs enabled with open policy
+- Group policy: open
+
+**Linear** (if configured):
+- Skill entry with API key
+- Linear CLI available via Deno
+
+### Environment Variables
+
+Credentials are auto-detected and set:
+- OAuth tokens (`sk-ant-oat*`) → `CLAUDE_CODE_OAUTH_TOKEN`
+- API keys → `ANTHROPIC_API_KEY`
+- Plus `LINEAR_API_KEY`, `GITHUB_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` as configured
+
+## Preset File Injection
+
+Each agent gets workspace files injected based on its preset (`pm`, `eng`, or `tester`):
+
+### Per-Preset Files
+
+| File | Purpose |
+|------|---------|
+| `SOUL.md` | Personality, approach, core truths, superpowers, boundaries |
+| `IDENTITY.md` | Name, role, emoji, avatar |
+| `HEARTBEAT.md` | Periodic task logic — state machine for checking tickets, PRs, etc. |
+| `TOOLS.md` | Tool-specific notes and common commands |
+
+### Shared Base Files
+
+| File | Purpose |
+|------|---------|
+| `USER.md` | Owner information (name, timezone, working hours, notes) |
+| `AGENTS.md` | Shared operational instructions — memory management, safety rules, group chat etiquette |
+| `BOOTSTRAP.md` | First-run integration checks (Linear, GitHub, Claude Code) with self-cleanup |
+
+### Template Variables
+
+Preset files support template variables that get replaced at deploy time:
+
+| Variable | Example |
+|----------|---------|
+| `{{OWNER_NAME}}` | `"Boss"` |
+| `{{TIMEZONE}}` | `"PST (America/Los_Angeles)"` |
+| `{{WORKING_HOURS}}` | `"9am-6pm"` |
+| `{{USER_NOTES}}` | `"No additional notes provided yet."` |
+| `{{LINEAR_TEAM}}` | `"AGE"` |
+| `{{GITHUB_REPO}}` | `"org/repo"` |
+
+## Provider-Specific Differences
+
+Both AWS and Hetzner follow the same bootstrap sequence, with a few differences:
+
+| Aspect | AWS | Hetzner |
+|--------|-----|---------|
+| Base image | Ubuntu 24.04 LTS (Canonical AMI) | `ubuntu-24.04` |
+| User creation | `ubuntu` user exists by default | Created during cloud-init |
+| Networking | VPC + subnet + internet gateway | Flat networking |
+| Firewall | Security group | Hetzner firewall |
+| Metadata security | IMDSv2 enforced | N/A |
+| Cloud-init delivery | Gzipped + base64 user data | Plain user data |
+
+See [Cloud Providers](/architecture/cloud-providers) for region, instance type, and cost details.
