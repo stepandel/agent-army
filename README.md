@@ -1,6 +1,6 @@
 # Agent Army 🦞
 
-Deploy a fleet of specialized [OpenClaw](https://openclaw.bot/) AI agents on AWS using Pulumi.
+Deploy a fleet of specialized [OpenClaw](https://openclaw.bot/) AI agents on **AWS** or **Hetzner Cloud** using Pulumi.
 
 Based on the [Pulumi blog post: Deploy OpenClaw on AWS or Hetzner Securely with Pulumi and Tailscale](https://www.pulumi.com/blog/deploy-openclaw-aws-hetzner/).
 
@@ -8,11 +8,11 @@ Based on the [Pulumi blog post: Deploy OpenClaw on AWS or Hetzner Securely with 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                              AWS VPC                                     │
+│                         AWS VPC / Hetzner Cloud                          │
 │                                                                          │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐          │
-│  │   EC2: agent-pm │  │  EC2: agent-eng │  │ EC2: agent-tester│          │
-│  │   (Sage)        │  │   (Atlas)       │  │    (Scout)       │          │
+│  │    agent-pm     │  │    agent-eng    │  │   agent-tester  │          │
+│  │   (Marcus)      │  │   (Titus)       │  │    (Scout)       │          │
 │  │                 │  │                 │  │                  │          │
 │  │  • OpenClaw     │  │  • OpenClaw     │  │  • OpenClaw      │          │
 │  │  • Docker       │  │  • Docker       │  │  • Docker        │          │
@@ -37,22 +37,53 @@ Based on the [Pulumi blog post: Deploy OpenClaw on AWS or Hetzner Securely with 
 ```
 
 **Key Points:**
-- All 3 agents share a single VPC (cost optimization)
+- All 3 agents share networking (AWS VPC or Hetzner network)
 - Communication is via Tailscale mesh VPN (no public port exposure)
 - Each agent has role-specific workspace files from `presets/`
 - Cloud-init handles full automation (Docker, Node.js, OpenClaw, Tailscale)
 
+## Provider Comparison
+
+| Feature | AWS | Hetzner Cloud |
+|---------|-----|---------------|
+| **3x Agents (monthly)** | ~$110-120 | ~€16-20 (~$18-22) |
+| **Instance Type** | t3.medium (2 vCPU, 4GB) | CX21 (2 vCPU, 4GB) |
+| **Per-Instance Cost** | ~$33/month | ~€5.18/month |
+| **Storage (30GB)** | ~$2.40/month | Included |
+| **Data Transfer** | ~$5-10/month | 20TB included |
+| **Regions** | Global (25+ regions) | EU & US (5 locations) |
+| **Setup Complexity** | Moderate (VPC, IAM) | Simple (API token) |
+| **Best For** | Enterprise, global reach | Cost-conscious, EU-based |
+
+**Recommendation:** Use Hetzner for development and cost savings (~80% cheaper). Use AWS for production workloads requiring enterprise features or global distribution.
+
 ## Prerequisites
+
+### Common Requirements
 
 | Requirement | Description | Link |
 |-------------|-------------|------|
 | **Pulumi CLI** | Infrastructure as code tool | [Install Pulumi](https://www.pulumi.com/docs/iac/download-install/) |
 | **Pulumi Account** | For state management & secrets | [Sign Up](https://app.pulumi.com/signup) |
 | **Node.js 18+** | JavaScript runtime | [Download](https://nodejs.org/) |
-| **AWS CLI** | AWS credentials configuration | [Install AWS CLI](https://aws.amazon.com/cli/) |
-| **AWS Account** | For EC2 instances | [Create Account](https://aws.amazon.com/) |
 | **Tailscale** | Mesh VPN for secure access | [Download](https://tailscale.com/download) |
 | **Anthropic API Key** | For Claude AI | [Console](https://console.anthropic.com/) |
+
+### Provider-Specific Requirements
+
+#### AWS
+
+| Requirement | Description | Link |
+|-------------|-------------|------|
+| **AWS CLI** | AWS credentials configuration | [Install AWS CLI](https://aws.amazon.com/cli/) |
+| **AWS Account** | For EC2 instances | [Create Account](https://aws.amazon.com/) |
+
+#### Hetzner Cloud
+
+| Requirement | Description | Link |
+|-------------|-------------|------|
+| **Hetzner Account** | For cloud servers | [Create Account](https://console.hetzner.cloud/) |
+| **API Token** | Read & Write permissions | [Create Token](https://console.hetzner.cloud/) → Project → Security → API Tokens |
 
 ### AWS Credentials
 
@@ -69,6 +100,22 @@ export AWS_REGION="us-east-1"
 
 # Option 3: AWS SSO
 aws sso login --profile your-profile
+```
+
+### Hetzner Cloud Setup
+
+1. [Create a Hetzner Cloud account](https://console.hetzner.cloud/)
+2. Create a new project (or use existing)
+3. Go to **Security** → **API Tokens**
+4. Generate a new token with **Read & Write** permissions
+5. Add the token to your Pulumi ESC environment as `hcloudToken`
+
+```bash
+# Set Hetzner token in Pulumi config
+pulumi config set --secret hcloudToken "your-hetzner-api-token"
+
+# Or via environment variable
+export HCLOUD_TOKEN="your-hetzner-api-token"
 ```
 
 ### Tailscale Setup
@@ -146,8 +193,8 @@ pulumi stack output pmTailscaleUrl --show-secrets
 Via SSH:
 
 ```bash
-./scripts/ssh.sh pm      # SSH to PM agent (Sage)
-./scripts/ssh.sh eng     # SSH to Eng agent (Atlas)
+./scripts/ssh.sh pm      # SSH to PM agent (Marcus)
+./scripts/ssh.sh eng     # SSH to Eng agent (Titus)
 ./scripts/ssh.sh tester  # SSH to Tester agent (Scout)
 ```
 
@@ -155,11 +202,26 @@ Via SSH:
 
 | Key | Where to Get | Used For |
 |-----|--------------|----------|
-| **Anthropic API Key** | [Anthropic Console](https://console.anthropic.com/) | Claude AI models (required) |
+| **Anthropic Credentials** | [API Key](https://console.anthropic.com/) or OAuth token (`claude setup-token`) | Claude AI models (required) |
 | **Tailscale Auth Key** | [Tailscale Admin → Keys](https://login.tailscale.com/admin/settings/keys) | VPN mesh connectivity (required) |
 | **Slack Bot Token** | [Slack API](https://api.slack.com/apps) → OAuth & Permissions | Agent communication (optional) |
 | **Slack Signing Secret** | [Slack API](https://api.slack.com/apps) → Basic Information | Webhook verification (optional) |
 | **Linear API Token** | [Linear Settings](https://linear.app/settings/api) | Issue tracking (optional) |
+
+#### Claude Code Authentication
+
+Agent Army supports **two authentication methods** for Claude Code:
+
+| Method | Token Format | Best For | Get It From |
+|--------|--------------|----------|-------------|
+| **API Key** | `sk-ant-api03-...` | Pay-as-you-go API usage | [Anthropic Console](https://console.anthropic.com/) |
+| **OAuth Token** | `sk-ant-oat01-...` | Pro/Max subscription (flat rate) | Run `claude setup-token` locally |
+
+The system **auto-detects** which type you provide:
+- **API keys** → Set as `ANTHROPIC_API_KEY` environment variable
+- **OAuth tokens** → Set as `CLAUDE_CODE_OAUTH_TOKEN` environment variable
+
+Both work identically - use whichever matches your billing preference!
 
 ### API Key Configuration
 
@@ -185,6 +247,50 @@ Keys are managed via Pulumi ESC. See `esc/agent-army-secrets.yaml.example` for t
 
 All scripts support `-h` for help.
 
+## Updating and Redeploying
+
+When you make changes to the codebase (cloud-init scripts, workspace files, environment variables, etc.), you need to redeploy your agents to apply the changes.
+
+### Recommended Approach: Destroy Then Deploy
+
+**Always use a full teardown and rebuild** to ensure clean state and avoid issues with orphaned Tailscale devices:
+
+```bash
+npx agent-army destroy
+npx agent-army deploy
+```
+
+or with auto-confirm:
+
+```bash
+npx agent-army destroy -y
+npx agent-army deploy -y
+```
+
+### Why Not Just `deploy`?
+
+While `pulumi up` (via `npx agent-army deploy`) can detect changes and replace instances, it has limitations:
+
+- **Tailscale cleanup**: Old Tailscale devices aren't automatically removed when instances are replaced, leading to hostname conflicts where new instances get `-1` suffixes
+- **Stale resources**: Replaced instances may leave behind orphaned resources
+- **Validation issues**: Health checks may connect to old offline devices instead of new ones
+
+The `destroy` → `deploy` workflow ensures:
+- ✅ Clean Tailscale device registration (no orphans)
+- ✅ Stable hostnames without suffixes
+- ✅ Complete resource cleanup
+- ✅ Fresh state for all components
+
+### Preview Changes Before Destroying
+
+To see what will be destroyed:
+
+```bash
+pulumi preview --target destroy
+```
+
+**Note:** Full redeployment means your agents will be completely rebuilt. Any local data not in workspace files will be lost.
+
 ## Per-Agent Customization
 
 Each agent loads workspace files from `presets/`:
@@ -208,12 +314,13 @@ Example: Making the PM agent focus on sprint planning:
 ```markdown
 # presets/pm/SOUL.md
 
-You are Sage, the Project Manager agent.
+You are Marcus, the Project Manager agent.
 
 ## Primary Responsibilities
-- Sprint planning and tracking
-- Stakeholder communication
-- Blockers and risk management
+- Break down tickets and do research
+- Plan and sequence work
+- Track progress and unblock teams
+- Keep stakeholders informed
 
 ## Communication Style
 - Clear, concise updates
@@ -281,19 +388,39 @@ pulumi cancel
 
 ## Cost Estimate
 
-| Resource | Quantity | Instance Type | Monthly Cost (US-East-1) |
-|----------|----------|---------------|--------------------------|
+### AWS (US-East-1)
+
+| Resource | Quantity | Instance Type | Monthly Cost |
+|----------|----------|---------------|--------------|
 | EC2 Instances | 3 | t3.medium | $33 × 3 = **$99** |
 | EBS Storage | 3 × 30GB | gp3 | ~$2.40 × 3 = **$7.20** |
 | Data Transfer | Variable | - | ~**$5-10** |
 | **Total** | | | **~$110-120/month** |
 
-**Cost Optimization Tips:**
+### Hetzner Cloud (EU)
+
+| Resource | Quantity | Server Type | Monthly Cost |
+|----------|----------|-------------|--------------|
+| Cloud Servers | 3 | CX21 | €5.18 × 3 = **€15.54** |
+| Storage | Included | 40GB NVMe | **€0** |
+| Data Transfer | 20TB included | - | **€0** |
+| **Total** | | | **~€16-20/month (~$18-22)** |
+
+**Hetzner saves ~80% compared to AWS** with equivalent specs.
+
+### Cost Optimization Tips
+
+**AWS:**
 - Use Spot Instances for non-critical workloads
 - Schedule instances to stop during off-hours
 - Use smaller instances for testing (t3.small: ~$17/month each)
 
-**⚠️ Do not use t3.micro** - 1GB RAM is insufficient for OpenClaw + Docker.
+**Hetzner:**
+- CX11 (2 vCPU, 2GB): €3.29/month for lighter workloads
+- CX31 (2 vCPU, 8GB): €7.49/month for heavier workloads
+- Consider Nuremberg (nbg1) for lowest latency in EU
+
+**⚠️ Minimum requirements:** 4GB RAM recommended for OpenClaw + Docker. Avoid t3.micro (1GB) or CX11 (2GB) for production.
 
 ## Component API
 
@@ -308,7 +435,7 @@ pulumi cancel
 | `vpcId` | `string` | - | Existing VPC ID |
 | `subnetId` | `string` | - | Existing subnet ID |
 | `securityGroupId` | `string` | - | Existing security group ID |
-| `model` | `string` | `anthropic/claude-sonnet-4` | AI model |
+| `model` | `string` | `anthropic/claude-sonnet-4-5` | AI model |
 | `enableSandbox` | `boolean` | `true` | Enable Docker sandbox |
 | `gatewayPort` | `number` | `18789` | Gateway port |
 | `browserPort` | `number` | `18791` | Browser control port |
@@ -336,7 +463,7 @@ The project includes an interactive CLI for the full agent lifecycle. See the **
 npx agent-army init        # Interactive setup wizard
 npx agent-army deploy      # Deploy agents
 npx agent-army status      # Show agent statuses
-npx agent-army ssh sage    # SSH to an agent
+npx agent-army ssh marcus  # SSH to an agent
 npx agent-army validate    # Health check agents
 npx agent-army destroy     # Tear down resources
 ```

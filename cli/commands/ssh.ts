@@ -3,21 +3,33 @@
  */
 
 import * as p from "@clack/prompts";
-import { loadManifest } from "../lib/config";
+import { loadManifest, resolveConfigName, checkAndMigrateLegacy } from "../lib/config";
 import { getConfig, selectOrCreateStack } from "../lib/pulumi";
-import { AGENT_ALIASES, SSH_USER } from "../lib/constants";
+import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "../lib/constants";
 import { showBanner, exitWithError } from "../lib/ui";
 import { spawn } from "child_process";
 
 interface SshOptions {
   user?: string;
+  config?: string;
 }
 
 export async function sshCommand(agentNameOrAlias: string, commandArgs: string[], opts: SshOptions): Promise<void> {
+  // Check for legacy config and offer migration
+  await checkAndMigrateLegacy();
+
+  // Resolve config name
+  let configName: string;
+  try {
+    configName = resolveConfigName(opts.config);
+  } catch (err) {
+    exitWithError((err as Error).message);
+  }
+
   // Load manifest
-  const manifest = loadManifest();
+  const manifest = loadManifest(configName);
   if (!manifest) {
-    exitWithError("No agent-army.json found. Run `agent-army init` first.");
+    exitWithError(`Config '${configName}' could not be loaded.`);
   }
 
   // Select stack
@@ -54,13 +66,14 @@ export async function sshCommand(agentNameOrAlias: string, commandArgs: string[]
     exitWithError("Could not determine tailnet DNS name from Pulumi config.");
   }
 
-  const sshHost = `${agent.name}.${tailnetDnsName}`;
+  const tsHost = tailscaleHostname(manifest.stackName, agent.name);
+  const sshHost = `${tsHost}.${tailnetDnsName}`;
   const user = opts.user ?? SSH_USER;
 
   p.log.info(`Connecting to ${agent.displayName} (${sshHost})...`);
 
   // Build SSH command
-  const sshArgs = ["-o", "StrictHostKeyChecking=no", `${user}@${sshHost}`];
+  const sshArgs = ["-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", `${user}@${sshHost}`];
 
   if (commandArgs.length > 0) {
     sshArgs.push(commandArgs.join(" "));

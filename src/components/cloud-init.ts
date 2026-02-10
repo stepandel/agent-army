@@ -6,7 +6,7 @@
 import { generateConfigPatchScript, SlackConfigOptions, LinearConfigOptions } from "./config-generator";
 
 export interface CloudInitConfig {
-  /** Anthropic API key */
+  /** Anthropic API key (for backward compatibility) */
   anthropicApiKey: string;
   /** Tailscale auth key */
   tailscaleAuthKey: string;
@@ -18,7 +18,7 @@ export interface CloudInitConfig {
   browserPort?: number;
   /** Enable Docker sandbox (default: true) */
   enableSandbox?: boolean;
-  /** AI model to use (default: anthropic/claude-sonnet-4) */
+  /** AI model to use (default: anthropic/claude-sonnet-4-5) */
   model?: string;
   /** Node.js version to install (default: 22) */
   nodeVersion?: number;
@@ -46,6 +46,8 @@ export interface CloudInitConfig {
   linear?: LinearConfigOptions;
   /** Brave Search API key */
   braveSearchApiKey?: string;
+  /** GitHub personal access token for gh CLI auth */
+  githubToken?: string;
 }
 
 /**
@@ -82,7 +84,7 @@ cd ~
 curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/home/ubuntu/.deno sh
 
 # Install Linear CLI
-/home/ubuntu/.deno/bin/deno install --allow-all --no-config -n linear jsr:@schpet/linear-cli
+/home/ubuntu/.deno/bin/deno install --global --allow-all --no-config -n linear jsr:@schpet/linear-cli
 
 # Add Deno to PATH in .bashrc if not already there
 if ! grep -q 'DENO_INSTALL' ~/.bashrc; then
@@ -93,6 +95,39 @@ DENO_INSTALL_SCRIPT
 echo "Deno and Linear CLI installed successfully"
 `
     : "";
+
+  // GitHub CLI installation (system-level via official apt repo)
+  const ghCliInstallScript = `
+# Install GitHub CLI
+echo "Installing GitHub CLI..."
+type -p curl >/dev/null || apt-get install -y curl
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+apt-get update
+apt-get install -y gh
+echo "GitHub CLI installed: $(gh --version | head -n1)"
+`;
+
+  // GitHub CLI authentication (only if token provided)
+  const ghAuthScript = config.githubToken
+    ? `
+# Authenticate GitHub CLI for ubuntu user
+echo "Authenticating GitHub CLI..."
+sudo -u ubuntu bash << 'GH_AUTH_SCRIPT'
+if echo "\${GITHUB_TOKEN}" | gh auth login --with-token 2>&1; then
+  gh auth setup-git
+  echo "✅ GitHub CLI authenticated successfully"
+else
+  echo "⚠️  GitHub CLI authentication failed (token may need additional scopes like 'read:org')"
+  echo "   You can authenticate manually later with: gh auth login"
+fi
+GH_AUTH_SCRIPT
+`
+    : "";
+
+  // Claude Code CLI installation script
+  const codingClisInstallScript = generateClaudeCodeInstallScript();
 
   // Generate workspace files injection script
   const workspaceFilesScript = generateWorkspaceFilesScript(config.workspaceFiles);
@@ -161,6 +196,7 @@ echo "Starting OpenClaw agent provisioning..."
 echo "Updating system packages..."
 apt-get update
 apt-get upgrade -y
+apt-get install -y unzip
 
 # Install Docker
 echo "Installing Docker..."
@@ -169,6 +205,7 @@ systemctl enable docker
 systemctl start docker
 ${createUserSection}
 usermod -aG docker ubuntu
+${ghCliInstallScript}
 
 # Install NVM and Node.js for ubuntu user
 echo "Installing Node.js $NODE_VERSION via NVM..."
@@ -199,13 +236,25 @@ fi
 UBUNTU_SCRIPT
 
 # Set environment variables for ubuntu user
-echo 'export ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
+# Auto-detect credential type and export the correct variable
+if [[ "\${ANTHROPIC_API_KEY}" =~ ^sk-ant-oat ]]; then
+  # OAuth token from Claude Pro/Max subscription
+  echo 'export CLAUDE_CODE_OAUTH_TOKEN="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
+  echo "Detected OAuth token, exporting as CLAUDE_CODE_OAUTH_TOKEN"
+else
+  # API key from Anthropic Console
+  echo 'export ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
+  echo "Detected API key, exporting as ANTHROPIC_API_KEY"
+fi
 \${SLACK_BOT_TOKEN:+echo 'export SLACK_BOT_TOKEN="\${SLACK_BOT_TOKEN}"' >> /home/ubuntu/.bashrc}
 \${SLACK_APP_TOKEN:+echo 'export SLACK_APP_TOKEN="\${SLACK_APP_TOKEN}"' >> /home/ubuntu/.bashrc}
 \${LINEAR_API_KEY:+echo 'export LINEAR_API_KEY="\${LINEAR_API_KEY}"' >> /home/ubuntu/.bashrc}
 \${BRAVE_SEARCH_API_KEY:+echo 'export BRAVE_SEARCH_API_KEY="\${BRAVE_SEARCH_API_KEY}"' >> /home/ubuntu/.bashrc}
+\${GITHUB_TOKEN:+echo 'export GITHUB_TOKEN="\${GITHUB_TOKEN}"' >> /home/ubuntu/.bashrc}
 ${additionalEnvVars}
-${tailscaleSection}${denoInstallScript}
+${tailscaleSection}${denoInstallScript}${ghAuthScript}
+${codingClisInstallScript}
+
 # Enable systemd linger for ubuntu user (required for user services to run at boot)
 loginctl enable-linger ubuntu
 
@@ -227,6 +276,7 @@ openclaw onboard --non-interactive --accept-risk \\
   --skip-daemon \\
   --skip-skills || echo "WARNING: OpenClaw onboarding failed. Run openclaw onboard manually."
 '
+${workspaceFilesScript}
 
 # Install daemon service with XDG_RUNTIME_DIR set
 echo "Installing OpenClaw daemon..."
@@ -242,6 +292,7 @@ openclaw daemon install || echo "WARNING: Daemon install failed. Run openclaw da
 echo "Configuring OpenClaw gateway..."
 sudo -H -u ubuntu \\
   GATEWAY_TOKEN="\${GATEWAY_TOKEN}" \\
+  ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY}" \\
   SLACK_BOT_TOKEN="\${SLACK_BOT_TOKEN:-}" \\
   SLACK_APP_TOKEN="\${SLACK_APP_TOKEN:-}" \\
   LINEAR_API_KEY="\${LINEAR_API_KEY:-}" \\
@@ -249,7 +300,6 @@ sudo -H -u ubuntu \\
   python3 << 'PYTHON_SCRIPT'
 ${configPatchScript}
 PYTHON_SCRIPT
-${workspaceFilesScript}
 ${tailscaleServeSection}
 ${postSetupScript}
 echo "============================================"
@@ -307,6 +357,7 @@ export function interpolateCloudInit(
     slackAppToken?: string;
     linearApiKey?: string;
     braveSearchApiKey?: string;
+    githubToken?: string;
   }
 ): string {
   let result = script
@@ -323,6 +374,39 @@ export function interpolateCloudInit(
   result = result.replace(/\${LINEAR_API_KEY}/g, values.linearApiKey ?? "");
   result = result.replace(/\${BRAVE_SEARCH_API_KEY:-}/g, values.braveSearchApiKey ?? "");
   result = result.replace(/\${BRAVE_SEARCH_API_KEY}/g, values.braveSearchApiKey ?? "");
+  result = result.replace(/\${GITHUB_TOKEN:-}/g, values.githubToken ?? "");
+  result = result.replace(/\${GITHUB_TOKEN}/g, values.githubToken ?? "");
 
   return result;
+}
+
+/**
+ * Generates bash script to install Claude Code CLI
+ */
+function generateClaudeCodeInstallScript(): string {
+  return `
+# Install Claude Code CLI for ubuntu user
+echo "Installing Claude Code..."
+sudo -u ubuntu bash << 'CLAUDE_CODE_INSTALL_SCRIPT' || echo "WARNING: Claude Code installation failed. Install manually with: curl -fsSL https://claude.ai/install.sh | bash"
+set -e
+cd ~
+
+# Install Claude Code via official installer
+curl -fsSL https://claude.ai/install.sh | bash
+
+# Add .local/bin to PATH in .bashrc if not already there
+if ! grep -q '.local/bin' ~/.bashrc; then
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+fi
+
+# Verify installation
+BINARY_PATH="$HOME/.local/bin/claude"
+if [ -x "$BINARY_PATH" ] || command -v claude &>/dev/null; then
+  echo "Claude Code installed successfully"
+else
+  echo "WARNING: Claude Code installation may have failed"
+  exit 1
+fi
+CLAUDE_CODE_INSTALL_SCRIPT
+`;
 }

@@ -6,7 +6,7 @@
 export interface AgentDefinition {
   /** Resource name (e.g., "agent-pm") */
   name: string;
-  /** Display name (e.g., "Sage") */
+  /** Display name (e.g., "Marcus") */
   displayName: string;
   /** Role identifier (e.g., "pm", "eng", "tester") */
   role: string;
@@ -27,9 +27,20 @@ export interface AgentDefinition {
 /** The agent-army.json manifest */
 export interface ArmyManifest {
   stackName: string;
+  provider: "aws" | "hetzner";
   region: string;
   instanceType: string;
   ownerName: string;
+  /** Owner timezone (e.g., "America/New_York") */
+  timezone?: string;
+  /** Owner working hours (e.g., "9am-6pm") */
+  workingHours?: string;
+  /** Additional notes about the owner for agents */
+  userNotes?: string;
+  /** Default Linear team identifier for bootstrap integration checks (e.g., "AGE") */
+  linearTeam?: string;
+  /** GitHub repo URL for bootstrap integration checks */
+  githubRepo?: string;
   agents: AgentDefinition[];
 }
 

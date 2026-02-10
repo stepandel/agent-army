@@ -7,6 +7,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as tls from "@pulumi/tls";
 import * as crypto from "crypto";
+import * as zlib from "zlib";
 import { generateCloudInit, interpolateCloudInit, CloudInitConfig } from "./cloud-init";
 
 /**
@@ -52,7 +53,7 @@ export interface OpenClawAgentArgs {
   securityGroupId?: pulumi.Input<string>;
 
   /**
-   * AI model to use (default: anthropic/claude-sonnet-4)
+   * AI model to use (default: anthropic/claude-sonnet-4-5)
    */
   model?: pulumi.Input<string>;
 
@@ -120,6 +121,13 @@ export interface OpenClawAgentArgs {
    * Brave Search API key for web search
    */
   braveSearchApiKey?: pulumi.Input<string>;
+
+  /**
+   * GitHub personal access token for gh CLI authentication
+   * Must start with ghp_ or github_pat_
+   */
+  githubToken?: pulumi.Input<string>;
+
 }
 
 /**
@@ -205,7 +213,7 @@ export class OpenClawAgent extends pulumi.ComponentResource {
     const gatewayPort = args.gatewayPort ?? 18789;
     const browserPort = args.browserPort ?? 18791;
     const volumeSize = args.volumeSize ?? 30;
-    const model = args.model ?? "anthropic/claude-sonnet-4";
+    const model = args.model ?? "anthropic/claude-sonnet-4-5";
     const enableSandbox = args.enableSandbox ?? true;
     const baseTags = args.tags ?? {};
 
@@ -390,73 +398,81 @@ export class OpenClawAgent extends pulumi.ComponentResource {
 
     // Generate cloud-init user data
     // Resolve optional tokens to outputs
-    const slackBotTokenOutput = args.slackBotToken 
-      ? pulumi.output(args.slackBotToken) 
+    const slackBotTokenOutput = args.slackBotToken
+      ? pulumi.output(args.slackBotToken)
       : pulumi.output("");
-    const slackAppTokenOutput = args.slackAppToken 
-      ? pulumi.output(args.slackAppToken) 
+    const slackAppTokenOutput = args.slackAppToken
+      ? pulumi.output(args.slackAppToken)
       : pulumi.output("");
-    const linearApiKeyOutput = args.linearApiKey 
-      ? pulumi.output(args.linearApiKey) 
+    const linearApiKeyOutput = args.linearApiKey
+      ? pulumi.output(args.linearApiKey)
       : pulumi.output("");
-    const braveSearchApiKeyOutput = args.braveSearchApiKey 
-      ? pulumi.output(args.braveSearchApiKey) 
+    const braveSearchApiKeyOutput = args.braveSearchApiKey
+      ? pulumi.output(args.braveSearchApiKey)
+      : pulumi.output("");
+    const githubTokenOutput = args.githubToken
+      ? pulumi.output(args.githubToken)
       : pulumi.output("");
 
-    const userData = pulumi
-      .all([
-        args.tailscaleAuthKey,
-        args.anthropicApiKey,
-        gatewayTokenValue,
-        slackBotTokenOutput,
-        slackAppTokenOutput,
-        linearApiKeyOutput,
-        braveSearchApiKeyOutput,
-      ])
-      .apply(
-        ([
-          tsAuthKey,
-          apiKey,
-          gwToken,
-          slackBotToken,
-          slackAppToken,
-          linearApiKey,
-          braveSearchApiKey,
-        ]) => {
-          const cloudInitConfig: CloudInitConfig = {
-            anthropicApiKey: apiKey,
-            tailscaleAuthKey: tsAuthKey,
-            gatewayToken: gwToken,
-            gatewayPort: gatewayPort as number,
-            browserPort: browserPort as number,
-            model: model as string,
-            enableSandbox: enableSandbox as boolean,
-            tailscaleHostname: name,
-            workspaceFiles: args.workspaceFiles,
-            envVars: args.envVars,
-            postSetupCommands: args.postSetupCommands,
-            // Slack config (only if both tokens provided)
-            slack: slackBotToken && slackAppToken
-              ? { botToken: slackBotToken, appToken: slackAppToken }
-              : undefined,
-            // Linear config (only if API key provided)
-            linear: linearApiKey ? { apiKey: linearApiKey } : undefined,
-            // Brave Search API key
-            braveSearchApiKey: braveSearchApiKey || undefined,
-          };
+    // Combine all string outputs
+    const userData = pulumi.all([
+      args.tailscaleAuthKey,
+      args.anthropicApiKey,
+      gatewayTokenValue,
+      slackBotTokenOutput,
+      slackAppTokenOutput,
+      linearApiKeyOutput,
+      braveSearchApiKeyOutput,
+      githubTokenOutput,
+    ]).apply(([
+      tsAuthKey,
+      apiKey,
+      gwToken,
+      slackBotToken,
+      slackAppToken,
+      linearApiKey,
+      braveSearchApiKey,
+      githubToken,
+    ]) => {
+        // Include stack name in Tailscale hostname to avoid conflicts across deployments
+        const tsHostname = `${pulumi.getStack()}-${name}`;
 
-          const script = generateCloudInit(cloudInitConfig);
-          return interpolateCloudInit(script, {
-            anthropicApiKey: apiKey,
-            tailscaleAuthKey: tsAuthKey,
-            gatewayToken: gwToken,
-            slackBotToken: slackBotToken || undefined,
-            slackAppToken: slackAppToken || undefined,
-            linearApiKey: linearApiKey || undefined,
-            braveSearchApiKey: braveSearchApiKey || undefined,
-          });
-        }
-      );
+        const cloudInitConfig: CloudInitConfig = {
+          anthropicApiKey: apiKey,
+          tailscaleAuthKey: tsAuthKey,
+          gatewayToken: gwToken,
+          gatewayPort: gatewayPort as number,
+          browserPort: browserPort as number,
+          model: model as string,
+          enableSandbox: enableSandbox as boolean,
+          tailscaleHostname: tsHostname,
+          workspaceFiles: args.workspaceFiles,
+          envVars: args.envVars,
+          postSetupCommands: args.postSetupCommands,
+          // Slack config (only if both tokens provided)
+          slack: slackBotToken && slackAppToken
+            ? { botToken: slackBotToken, appToken: slackAppToken }
+            : undefined,
+          // Linear config (only if API key provided)
+          linear: linearApiKey ? { apiKey: linearApiKey } : undefined,
+          // Brave Search API key
+          braveSearchApiKey: braveSearchApiKey || undefined,
+          // GitHub token for gh CLI auth
+          githubToken: githubToken || undefined,
+        };
+
+        const script = generateCloudInit(cloudInitConfig);
+        return interpolateCloudInit(script, {
+          anthropicApiKey: apiKey,
+          tailscaleAuthKey: tsAuthKey,
+          gatewayToken: gwToken,
+          slackBotToken: slackBotToken || undefined,
+          slackAppToken: slackAppToken || undefined,
+          linearApiKey: linearApiKey || undefined,
+          braveSearchApiKey: braveSearchApiKey || undefined,
+          githubToken: githubToken || undefined,
+        });
+      });
 
     // Create EC2 instance
     const instance = new aws.ec2.Instance(
@@ -467,7 +483,10 @@ export class OpenClawAgent extends pulumi.ComponentResource {
         subnetId: subnetId,
         vpcSecurityGroupIds: [securityGroupId],
         keyName: keyPair.keyName,
-        userData: userData,
+        userDataBase64: userData.apply((script) => {
+          const gzipped = zlib.gzipSync(Buffer.from(script));
+          return gzipped.toString("base64");
+        }),
         userDataReplaceOnChange: true,
         rootBlockDevice: {
           volumeSize: volumeSize,
@@ -492,8 +511,9 @@ export class OpenClawAgent extends pulumi.ComponentResource {
     this.sshPrivateKey = sshKey.privateKeyOpenssh;
     this.sshPublicKey = sshKey.publicKeyOpenssh;
     this.gatewayToken = gatewayTokenValue;
-    // Tailscale hostname is set to the agent name via --hostname flag in cloud-init
-    this.tailscaleUrl = pulumi.interpolate`https://${name}.${args.tailnetDnsName}/?token=${gatewayTokenValue}`;
+    // Tailscale hostname includes stack name to avoid conflicts (e.g., dev-agent-pm)
+    const tsHostname = `${pulumi.getStack()}-${name}`;
+    this.tailscaleUrl = pulumi.interpolate`https://${tsHostname}.${args.tailnetDnsName}/?token=${gatewayTokenValue}`;
 
     // Register outputs
     this.registerOutputs({

@@ -22,7 +22,7 @@ export interface OpenClawConfigOptions {
   browserPort?: number;
   /** Gateway authentication token */
   gatewayToken: string;
-  /** Default AI model (default: anthropic/claude-sonnet-4) */
+  /** Default AI model (default: anthropic/claude-sonnet-4-5) */
   model?: string;
   /** Enable Docker sandbox (default: true) */
   enableSandbox?: boolean;
@@ -201,6 +201,37 @@ config["gateway"]["auth"] = {
     "mode": "token",
     "token": os.environ["GATEWAY_TOKEN"]
 }
+
+# Configure environment variables for child processes (including Claude Code, Linear CLI)
+# Auto-detect credential type: OAuth token (oat) vs API key (api)
+anthropic_cred = os.environ.get("ANTHROPIC_API_KEY", "")
+if anthropic_cred.startswith("sk-ant-oat"):
+    # OAuth token from Claude Pro/Max subscription (use with CLAUDE_CODE_OAUTH_TOKEN)
+    config["env"] = {
+        "CLAUDE_CODE_OAUTH_TOKEN": anthropic_cred
+    }
+    print("Configured environment variables: CLAUDE_CODE_OAUTH_TOKEN (OAuth/subscription)")
+else:
+    # API key from Anthropic Console (use with ANTHROPIC_API_KEY)
+    config["env"] = {
+        "ANTHROPIC_API_KEY": anthropic_cred
+    }
+    print("Configured environment variables: ANTHROPIC_API_KEY (API key)")
+
+# Add LINEAR_API_KEY to env if configured (required by Linear CLI)
+linear_api_key = os.environ.get("LINEAR_API_KEY", "")
+if linear_api_key:
+    config["env"]["LINEAR_API_KEY"] = linear_api_key
+    print("Added LINEAR_API_KEY to environment variables")
+
+# Configure heartbeat (proactive mode)
+config.setdefault("agents", {})
+config["agents"].setdefault("defaults", {})
+config["agents"]["defaults"]["heartbeat"] = {
+    "every": "1m",
+    "session": "main"
+}
+print("Configured heartbeat: every 1m")
 ${slackChannelConfig}${linearSkillConfig}${braveSearchConfig}
 with open(config_path, "w") as f:
     json.dump(config, f, indent=2)

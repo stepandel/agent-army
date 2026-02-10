@@ -9,7 +9,7 @@ import { capture, stream } from "./exec";
  */
 export function currentStack(): string | null {
   const result = capture("pulumi", ["stack", "--show-name"]);
-  return result.exitCode === 0 ? result.stdout : null;
+  return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 
 /**
@@ -41,7 +41,7 @@ export function setConfig(key: string, value: string, secret: boolean = false): 
  */
 export function getConfig(key: string): string | null {
   const result = capture("pulumi", ["config", "get", key]);
-  return result.exitCode === 0 ? result.stdout : null;
+  return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 
 /**

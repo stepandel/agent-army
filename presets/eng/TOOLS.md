@@ -8,17 +8,24 @@
 
 Your primary coding agent. Spawn for complex tasks.
 
+**Important:**
+- **Requires PTY**: Always use `pty=true` when spawning (it will hang silently without it)
+- **One-shot prompts**: Use `-p` flag for quick tasks: `claude -p "your prompt"`
+
 ```bash
 # Start Claude Code session
 claude-code --task "Implement feature X" --context "ticket-123.md"
+
+# One-shot prompt (non-interactive)
+claude -p "Add error handling to auth.ts"
 ```
 
 ## Linear
 
 Ticket tracking.
 
-- CLI: `/home/stars/.deno/bin/linear`
-- Requires: `PATH="/home/stars/.deno/bin:$PATH"` prefix
+- CLI: `/home/ubuntu/.deno/bin/linear`
+- Requires: `PATH="/home/ubuntu/.deno/bin:$PATH"` prefix and `LINEAR_API_KEY` environment variable
 - Teams: (configure your team keys)
 
 ### Common Commands

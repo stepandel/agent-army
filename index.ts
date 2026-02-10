@@ -11,6 +11,7 @@
  */
 
 import * as pulumi from "@pulumi/pulumi";
+import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
 import { OpenClawAgent } from "./src";
@@ -34,9 +35,15 @@ interface ManifestAgent {
 
 interface Manifest {
   stackName: string;
+  provider?: "aws" | "hetzner";
   region: string;
   instanceType: string;
   ownerName: string;
+  timezone?: string;
+  workingHours?: string;
+  userNotes?: string;
+  linearTeam?: string;
+  githubRepo?: string;
   agents: ManifestAgent[];
 }
 
@@ -51,12 +58,18 @@ const tailscaleAuthKey = config.requireSecret("tailscaleAuthKey");
 const tailnetDnsName = config.require("tailnetDnsName");
 const instanceType = config.get("instanceType") ?? "t3.medium";
 const ownerName = config.get("ownerName") ?? "Boss";
+const timezone = config.get("timezone") ?? "PST (America/Los_Angeles)";
+const workingHours = config.get("workingHours") ?? "9am-6pm";
+const userNotes = config.get("userNotes") ?? "No additional notes provided yet.";
+const linearTeam = config.get("linearTeam") ?? "";
+const githubRepo = config.get("githubRepo") ?? "";
 
 // Per-agent Slack credentials from config/ESC
 // Pattern: <role>SlackBotToken, <role>SlackAppToken
 const agentSlackCredentials: Record<string, { botToken?: pulumi.Output<string>; appToken?: pulumi.Output<string> }> = {};
 const agentLinearCredentials: Record<string, pulumi.Output<string> | undefined> = {};
 const agentBraveSearchCredentials: Record<string, pulumi.Output<string> | undefined> = {};
+const agentGithubCredentials: Record<string, pulumi.Output<string> | undefined> = {};
 
 // Common roles to check for credentials
 const commonRoles = ["pm", "eng", "tester"];
@@ -75,6 +88,11 @@ for (const role of commonRoles) {
   const braveKey = config.getSecret(`${role}BraveSearchApiKey`);
   if (braveKey) {
     agentBraveSearchCredentials[role] = braveKey;
+  }
+  
+  const githubToken = config.getSecret(`${role}GithubToken`);
+  if (githubToken) {
+    agentGithubCredentials[role] = githubToken;
   }
 }
 
@@ -106,6 +124,22 @@ function loadPresetFiles(presetDir: string, baseDir: string = "base"): Record<st
       const filePath = path.join(rolePath, filename);
       if (fs.statSync(filePath).isFile()) {
         files[filename] = fs.readFileSync(filePath, "utf-8");
+      }
+    }
+  }
+
+  // Load shared skills from presets/skills/
+  const skillsPath = path.join(presetsPath, "skills");
+  if (fs.existsSync(skillsPath)) {
+    for (const skillDir of fs.readdirSync(skillsPath)) {
+      const skillDirPath = path.join(skillsPath, skillDir);
+      if (fs.statSync(skillDirPath).isDirectory()) {
+        for (const filename of fs.readdirSync(skillDirPath)) {
+          const filePath = path.join(skillDirPath, filename);
+          if (fs.statSync(filePath).isFile()) {
+            files[`skills/${skillDir}/${filename}`] = fs.readFileSync(filePath, "utf-8");
+          }
+        }
       }
     }
   }
@@ -150,6 +184,21 @@ if (!fs.existsSync(manifestPath)) {
 
 const manifest: Manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
 
+// Default provider to AWS for backwards compatibility with existing manifests
+const provider = manifest.provider ?? "aws";
+
+// Validate provider
+if (provider !== "aws" && provider !== "hetzner") {
+  throw new Error(`Unsupported provider: ${provider}. Supported providers are: aws, hetzner`);
+}
+
+// Hetzner support is not yet implemented
+if (provider === "hetzner") {
+  throw new Error(
+    "Hetzner provider is not yet implemented. Please use AWS for now."
+  );
+}
+
 // -----------------------------------------------------------------------------
 // Resource Tags
 // -----------------------------------------------------------------------------
@@ -161,10 +210,65 @@ const baseTags = {
 };
 
 // -----------------------------------------------------------------------------
+// Dynamic AZ Selection - Find an AZ that supports all instance types
+// -----------------------------------------------------------------------------
+
+// Collect all instance types we'll need
+const instanceTypes = [
+  instanceType, // default from config
+  ...manifest.agents.map(a => a.instanceType).filter(Boolean) as string[]
+];
+const uniqueInstanceTypes = [...new Set(instanceTypes)];
+
+// Query AWS to find which AZs support our instance types
+const availabilityZone = pulumi
+  .all(
+    uniqueInstanceTypes.map((instanceType) =>
+      aws.ec2.getInstanceTypeOfferings({
+        filters: [
+          {
+            name: "instance-type",
+            values: [instanceType],
+          },
+        ],
+        locationType: "availability-zone",
+      })
+    )
+  )
+  .apply((offeringsResults) => {
+    // Build a set of AZs for each instance type
+    const azSets = offeringsResults.map((result) =>
+      new Set(result.locations)
+    );
+
+    // Find intersection - AZs that support ALL instance types
+    const intersection = azSets[0];
+    for (let i = 1; i < azSets.length; i++) {
+      for (const az of intersection) {
+        if (!azSets[i].has(az)) {
+          intersection.delete(az);
+        }
+      }
+    }
+
+    // Pick the first available AZ alphabetically for consistency
+    const availableAzs = Array.from(intersection).sort();
+
+    if (availableAzs.length === 0) {
+      throw new Error(
+        `No availability zone found that supports all instance types: ${uniqueInstanceTypes.join(", ")}`
+      );
+    }
+
+    return availableAzs[0];
+  });
+
+// -----------------------------------------------------------------------------
 // Shared VPC (cost optimization - all agents share one VPC)
 // -----------------------------------------------------------------------------
 
 const sharedVpc = new SharedVpc("agent-army", {
+  availabilityZone: availabilityZone,
   tags: baseTags,
 });
 
@@ -172,6 +276,7 @@ const sharedVpc = new SharedVpc("agent-army", {
 export const vpcId = sharedVpc.vpcId;
 export const subnetId = sharedVpc.subnetId;
 export const securityGroupId = sharedVpc.securityGroupId;
+export const selectedAvailabilityZone = availabilityZone;
 
 // -----------------------------------------------------------------------------
 // Dynamic Agent Deployments
@@ -193,11 +298,21 @@ for (const agent of manifest.agents) {
     // Preset agent: load from presets directory
     workspaceFiles = processTemplates(loadPresetFiles(agent.preset), {
       OWNER_NAME: ownerName,
+      TIMEZONE: timezone,
+      WORKING_HOURS: workingHours,
+      USER_NOTES: userNotes,
+      LINEAR_TEAM: linearTeam,
+      GITHUB_REPO: githubRepo,
     });
   } else {
     // Custom agent: load base files + inline content from manifest
     workspaceFiles = processTemplates(loadPresetFiles("base", "base"), {
       OWNER_NAME: ownerName,
+      TIMEZONE: timezone,
+      WORKING_HOURS: workingHours,
+      USER_NOTES: userNotes,
+      LINEAR_TEAM: linearTeam,
+      GITHUB_REPO: githubRepo,
     });
     // Override base files with custom inline content if provided
     if (agent.soulContent) workspaceFiles["SOUL.md"] = agent.soulContent;
@@ -208,6 +323,7 @@ for (const agent of manifest.agents) {
   const slackCreds = agentSlackCredentials[agent.role];
   const linearApiKey = agentLinearCredentials[agent.role];
   const braveSearchApiKey = agentBraveSearchCredentials[agent.role];
+  const githubToken = agentGithubCredentials[agent.role];
 
   const agentResource = new OpenClawAgent(agent.name, {
     anthropicApiKey,
@@ -240,6 +356,9 @@ for (const agent of manifest.agents) {
 
     // Brave Search API key (optional)
     braveSearchApiKey,
+
+    // GitHub token (optional)
+    githubToken,
 
     tags: {
       ...baseTags,
