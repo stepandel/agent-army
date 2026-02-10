@@ -37,7 +37,7 @@ export interface ArmyManifest {
   workingHours?: string;
   /** Additional notes about the owner for agents */
   userNotes?: string;
-  /** Linear team key for bootstrap integration checks (e.g., "AGE") */
+  /** Default Linear team identifier for bootstrap integration checks (e.g., "AGE") */
   linearTeam?: string;
   /** GitHub repo URL for bootstrap integration checks */
   githubRepo?: string;

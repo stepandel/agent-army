@@ -22,7 +22,7 @@ export interface OpenClawConfigOptions {
   browserPort?: number;
   /** Gateway authentication token */
   gatewayToken: string;
-  /** Default AI model (default: anthropic/claude-sonnet-4) */
+  /** Default AI model (default: anthropic/claude-sonnet-4-5) */
   model?: string;
   /** Enable Docker sandbox (default: true) */
   enableSandbox?: boolean;

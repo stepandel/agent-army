@@ -435,7 +435,7 @@ pulumi cancel
 | `vpcId` | `string` | - | Existing VPC ID |
 | `subnetId` | `string` | - | Existing subnet ID |
 | `securityGroupId` | `string` | - | Existing security group ID |
-| `model` | `string` | `anthropic/claude-sonnet-4` | AI model |
+| `model` | `string` | `anthropic/claude-sonnet-4-5` | AI model |
 | `enableSandbox` | `boolean` | `true` | Enable Docker sandbox |
 | `gatewayPort` | `number` | `18789` | Gateway port |
 | `browserPort` | `number` | `18791` | Browser control port |

@@ -20,7 +20,7 @@ export interface CloudInitConfig {
   browserPort?: number;
   /** Enable Docker sandbox (default: true) */
   enableSandbox?: boolean;
-  /** AI model to use (default: anthropic/claude-sonnet-4) */
+  /** AI model to use (default: anthropic/claude-sonnet-4-5) */
   model?: string;
   /** Node.js version to install (default: 22) */
   nodeVersion?: number;

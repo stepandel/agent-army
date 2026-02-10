@@ -125,19 +125,19 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
 
   // Project-specific config for bootstrap
   const linearTeam = await p.text({
-    message: "Linear team key (used in bootstrap integration check)",
+    message: "Default Linear team id (used in bootstrap integration check)",
     placeholder: "e.g., ENG, AGE, PROJ",
     validate: (val) => {
-      if (!val) return "Linear team key is required";
+      if (!val) return "Default Linear team id is required";
     },
   });
   handleCancel(linearTeam);
 
   const githubRepo = await p.text({
-    message: "GitHub repo URL (used in bootstrap integration check)",
+    message: "Default GitHub repo URL (used in bootstrap integration check)",
     placeholder: "https://github.com/org/repo",
     validate: (val) => {
-      if (!val) return "GitHub repo URL is required";
+      if (!val) return "Default GitHub repo URL is required";
       if (!val.startsWith("https://github.com/")) return "Must be a GitHub HTTPS URL";
     },
   });
@@ -229,7 +229,7 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
       value: m.value,
       label: `${m.label} (${MODEL_PROVIDERS[m.provider].name})`,
     })),
-    initialValue: allModels[0]?.value ?? "anthropic/claude-sonnet-4",
+    initialValue: allModels[0]?.value ?? "anthropic/claude-sonnet-4-5",
   });
   handleCancel(defaultModel);
 

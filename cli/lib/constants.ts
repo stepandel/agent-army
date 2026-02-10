@@ -143,9 +143,9 @@ export const MODEL_PROVIDERS = {
     envVar: "ANTHROPIC_API_KEY",
     keyPrefix: "sk-ant-",
     models: [
-      { value: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4 (Recommended)" },
-      { value: "anthropic/claude-opus-4", label: "Claude Opus 4" },
-      { value: "anthropic/claude-haiku-3.5", label: "Claude Haiku 3.5" },
+      { value: "anthropic/claude-sonnet-4-5", label: "Claude Sonnet 4.5 (Recommended)" },
+      { value: "anthropic/claude-opus-4-6", label: "Claude Opus 4.6" },
+      { value: "anthropic/claude-haiku-4-5", label: "Claude Haiku 4.5" },
     ],
   },
   openai: {
@@ -153,10 +153,11 @@ export const MODEL_PROVIDERS = {
     envVar: "OPENAI_API_KEY",
     keyPrefix: "sk-",
     models: [
-      { value: "openai/gpt-4o", label: "GPT-4o (Recommended)" },
-      { value: "openai/gpt-4-turbo", label: "GPT-4 Turbo" },
-      { value: "openai/o1", label: "o1" },
-      { value: "openai/o3-mini", label: "o3-mini" },
+      { value: "openai/gpt-5.2", label: "GPT-5.2 (Recommended)" },
+      { value: "openai/gpt-5.2-pro", label: "GPT-5.2 Pro" },
+      { value: "openai/o3", label: "o3" },
+      { value: "openai/gpt-4.1", label: "GPT-4.1" },
+      { value: "openai/gpt-5-mini", label: "GPT-5 Mini" },
     ],
   },
   opencodezen: {
@@ -172,8 +173,8 @@ export const MODEL_PROVIDERS = {
     envVar: "GOOGLE_API_KEY",
     keyPrefix: "",
     models: [
-      { value: "google/gemini-2.0-flash", label: "Gemini 2.0 Flash (Recommended)" },
-      { value: "google/gemini-2.0-pro", label: "Gemini 2.0 Pro" },
+      { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro (Recommended)" },
+      { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
     ],
   },
 } as const;
