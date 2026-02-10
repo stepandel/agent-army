@@ -1,177 +1,68 @@
-# Agent Army 🦞
+# Agent Army
 
-Deploy a fleet of specialized [OpenClaw](https://openclaw.bot/) AI agents on **AWS** or **Hetzner Cloud** using Pulumi.
+Deploy a fleet of specialized [OpenClaw](https://openclaw.bot/) AI agents on **AWS** or **Hetzner Cloud** — managed entirely from your terminal.
 
-Based on the [Pulumi blog post: Deploy OpenClaw on AWS or Hetzner Securely with Pulumi and Tailscale](https://www.pulumi.com/blog/deploy-openclaw-aws-hetzner/).
+## What Is This?
 
-## Architecture
+Agent Army provisions a team of autonomous AI agents that handle software engineering tasks — project management, development, and QA — with persistent memory and role-specific behavior. Agents communicate over a secure Tailscale mesh VPN with no public port exposure.
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         AWS VPC / Hetzner Cloud                          │
-│                                                                          │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐          │
-│  │    agent-pm     │  │    agent-eng    │  │   agent-tester  │          │
-│  │   (Marcus)      │  │   (Titus)       │  │    (Scout)       │          │
-│  │                 │  │                 │  │                  │          │
-│  │  • OpenClaw     │  │  • OpenClaw     │  │  • OpenClaw      │          │
-│  │  • Docker       │  │  • Docker       │  │  • Docker        │          │
-│  │  • Tailscale    │  │  • Tailscale    │  │  • Tailscale     │          │
-│  │                 │  │                 │  │                  │          │
-│  │  Role: PM       │  │  Role: Engineer │  │  Role: QA        │          │
-│  └────────┬────────┘  └────────┬────────┘  └────────┬─────────┘          │
-│           │                    │                    │                    │
-└───────────┼────────────────────┼────────────────────┼────────────────────┘
-            │                    │                    │
-            └────────────────────┼────────────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │    Tailscale Mesh VPN   │
-                    │    (Encrypted P2P)      │
-                    └────────────┬────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │     Your Machine        │
-                    │   (Tailscale Client)    │
-                    └─────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                      AWS VPC / Hetzner Cloud                        │
+│                                                                     │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐            │
+│  │  Marcus (PM) │   │ Titus (Eng)  │   │ Scout (QA)   │            │
+│  │              │   │              │   │              │            │
+│  │  • OpenClaw  │   │  • OpenClaw  │   │  • OpenClaw  │            │
+│  │  • Docker    │   │  • Docker    │   │  • Docker    │            │
+│  │  • Tailscale │   │  • Tailscale │   │  • Tailscale │            │
+│  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘            │
+│         └──────────────────┼──────────────────┘                    │
+└────────────────────────────┼────────────────────────────────────────┘
+                             │
+                ┌────────────▼────────────┐
+                │   Tailscale Mesh VPN    │
+                │   (Encrypted P2P)       │
+                └────────────┬────────────┘
+                             │
+                ┌────────────▼────────────┐
+                │     Your Machine        │
+                └─────────────────────────┘
 ```
-
-**Key Points:**
-- All 3 agents share networking (AWS VPC or Hetzner network)
-- Communication is via Tailscale mesh VPN (no public port exposure)
-- Each agent has role-specific workspace files from `presets/`
-- Cloud-init handles full automation (Docker, Node.js, OpenClaw, Tailscale)
-
-## Provider Comparison
-
-| Feature | AWS | Hetzner Cloud |
-|---------|-----|---------------|
-| **3x Agents (monthly)** | ~$110-120 | ~€16-20 (~$18-22) |
-| **Instance Type** | t3.medium (2 vCPU, 4GB) | CX21 (2 vCPU, 4GB) |
-| **Per-Instance Cost** | ~$33/month | ~€5.18/month |
-| **Storage (30GB)** | ~$2.40/month | Included |
-| **Data Transfer** | ~$5-10/month | 20TB included |
-| **Regions** | Global (25+ regions) | EU & US (5 locations) |
-| **Setup Complexity** | Moderate (VPC, IAM) | Simple (API token) |
-| **Best For** | Enterprise, global reach | Cost-conscious, EU-based |
-
-**Recommendation:** Use Hetzner for development and cost savings (~80% cheaper). Use AWS for production workloads requiring enterprise features or global distribution.
-
-## Prerequisites
-
-### Common Requirements
-
-| Requirement | Description | Link |
-|-------------|-------------|------|
-| **Pulumi CLI** | Infrastructure as code tool | [Install Pulumi](https://www.pulumi.com/docs/iac/download-install/) |
-| **Pulumi Account** | For state management & secrets | [Sign Up](https://app.pulumi.com/signup) |
-| **Node.js 18+** | JavaScript runtime | [Download](https://nodejs.org/) |
-| **Tailscale** | Mesh VPN for secure access | [Download](https://tailscale.com/download) |
-| **Anthropic API Key** | For Claude AI | [Console](https://console.anthropic.com/) |
-
-### Provider-Specific Requirements
-
-#### AWS
-
-| Requirement | Description | Link |
-|-------------|-------------|------|
-| **AWS CLI** | AWS credentials configuration | [Install AWS CLI](https://aws.amazon.com/cli/) |
-| **AWS Account** | For EC2 instances | [Create Account](https://aws.amazon.com/) |
-
-#### Hetzner Cloud
-
-| Requirement | Description | Link |
-|-------------|-------------|------|
-| **Hetzner Account** | For cloud servers | [Create Account](https://console.hetzner.cloud/) |
-| **API Token** | Read & Write permissions | [Create Token](https://console.hetzner.cloud/) → Project → Security → API Tokens |
-
-### AWS Credentials
-
-Configure AWS credentials using one of these methods:
-
-```bash
-# Option 1: AWS CLI configuration
-aws configure
-
-# Option 2: Environment variables
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-export AWS_REGION="us-east-1"
-
-# Option 3: AWS SSO
-aws sso login --profile your-profile
-```
-
-### Hetzner Cloud Setup
-
-1. [Create a Hetzner Cloud account](https://console.hetzner.cloud/)
-2. Create a new project (or use existing)
-3. Go to **Security** → **API Tokens**
-4. Generate a new token with **Read & Write** permissions
-5. Add the token to your Pulumi ESC environment as `hcloudToken`
-
-```bash
-# Set Hetzner token in Pulumi config
-pulumi config set --secret hcloudToken "your-hetzner-api-token"
-
-# Or via environment variable
-export HCLOUD_TOKEN="your-hetzner-api-token"
-```
-
-### Tailscale Setup
-
-1. [Create a Tailscale account](https://login.tailscale.com/start)
-2. [Enable HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) (required for OpenClaw web UI)
-3. [Generate an auth key](https://login.tailscale.com/admin/settings/keys) (reusable, with tags)
-4. Note your tailnet DNS name (e.g., `tail12345.ts.net`)
 
 ## Quick Start
 
-### 1. Clone and Install
+Everything is done through the CLI.
+
+### 1. Install & Initialize
 
 ```bash
-git clone https://github.com/your-org/agent-army.git
+git clone https://github.com/stepandel/agent-army.git
 cd agent-army
-npm install
+pnpm install && pnpm build
 ```
 
-### 2. Configure Secrets
-
-Using [Pulumi ESC](https://www.pulumi.com/docs/esc/) (recommended):
+### 2. Run the Setup Wizard
 
 ```bash
-# Create the ESC environment
-pulumi env init your-org/agent-army-dev
-
-# Copy the example and edit with your values
-cp esc/agent-army-secrets.yaml.example esc/agent-army-secrets.yaml
-# Edit esc/agent-army-secrets.yaml with your API keys
-
-# Import to ESC
-pulumi env edit your-org/agent-army-dev < esc/agent-army-secrets.yaml
+npx agent-army init
 ```
 
-Or set config directly:
+The wizard walks you through:
+- **Prerequisites check** — verifies Pulumi, Node.js, cloud provider CLI, and Tailscale
+- **Cloud provider** — AWS or Hetzner Cloud
+- **Region & instance type** — with cost estimates shown inline
+- **Secrets** — Anthropic API key, Tailscale auth key (with instructions for each)
+- **Agent selection** — pick from presets, define custom agents, or mix both
+- **Optional integrations** — Slack, Linear, GitHub per agent
+- **Review & confirm** — see full config and estimated monthly cost
 
-```bash
-pulumi stack init dev
-pulumi config set --secret anthropicApiKey sk-ant-xxxxx
-pulumi config set --secret tailscaleAuthKey tskey-auth-xxxxx
-pulumi config set tailnetDnsName tail12345.ts.net
-pulumi config set ownerName "Your Name"
-```
+This generates an `agent-army.json` manifest and sets all Pulumi config values automatically.
 
 ### 3. Deploy
 
 ```bash
-./scripts/deploy.sh
-```
-
-Or manually:
-
-```bash
-pulumi stack select dev
-pulumi up
+npx agent-army deploy
 ```
 
 ### 4. Validate
@@ -179,321 +70,303 @@ pulumi up
 Wait 3-5 minutes for cloud-init to complete, then:
 
 ```bash
-./scripts/validate.sh
+npx agent-army validate
 ```
 
 ### 5. Access Your Agents
 
-Via Tailscale URL (web UI):
-
 ```bash
-pulumi stack output pmTailscaleUrl --show-secrets
+npx agent-army ssh marcus    # SSH to PM agent
+npx agent-army ssh titus     # SSH to Engineer agent
+npx agent-army ssh scout     # SSH to QA agent
 ```
 
-Via SSH:
+## CLI Reference
+
+The CLI is the primary interface for every operation. Run `npx agent-army --help` for the full list.
+
+| Command | Description |
+|---------|-------------|
+| `npx agent-army init` | Interactive setup wizard |
+| `npx agent-army deploy` | Deploy agents (`pulumi up` under the hood) |
+| `npx agent-army deploy -y` | Deploy without confirmation prompt |
+| `npx agent-army status` | Show agent statuses and outputs |
+| `npx agent-army status --json` | Status in JSON format |
+| `npx agent-army ssh <agent>` | SSH to an agent by name, role, or alias |
+| `npx agent-army ssh <agent> '<cmd>'` | Run a command on an agent remotely |
+| `npx agent-army validate` | Health check all agents via Tailscale |
+| `npx agent-army destroy` | Tear down all resources (with confirmation) |
+| `npx agent-army destroy -y` | Tear down without confirmation |
+| `npx agent-army list` | List saved configurations |
+
+Agent resolution is flexible — all of these target the same agent:
 
 ```bash
-./scripts/ssh.sh pm      # SSH to PM agent (Marcus)
-./scripts/ssh.sh eng     # SSH to Eng agent (Titus)
-./scripts/ssh.sh tester  # SSH to Tester agent (Scout)
+npx agent-army ssh marcus      # by alias
+npx agent-army ssh pm          # by role
+npx agent-army ssh agent-pm    # by resource name
 ```
+
+## Preset Agents
+
+Agent Army ships with three battle-tested agent presets:
+
+| Alias | Role | What It Does |
+|-------|------|-------------|
+| **Marcus** | PM | Breaks down tickets, researches requirements, plans & sequences work, tracks progress, unblocks teams |
+| **Titus** | Engineer | Picks up tickets, writes code via Claude Code, builds/tests, creates PRs, responds to reviews |
+| **Scout** | Tester | Reviews PRs, tests happy/sad/edge cases, files bugs, verifies fixes |
+
+Each agent is defined by workspace files in `presets/`:
+
+```
+presets/
+├── base/           # Shared across all agents (AGENTS.md, BOOTSTRAP.md, USER.md)
+├── pm/             # Marcus: SOUL.md, IDENTITY.md, HEARTBEAT.md, TOOLS.md
+├── eng/            # Titus: SOUL.md, IDENTITY.md, HEARTBEAT.md, TOOLS.md
+├── tester/         # Scout: SOUL.md, IDENTITY.md, HEARTBEAT.md, TOOLS.md
+└── skills/         # Reusable skills (ticket prep, PR testing, review workflows)
+```
+
+You can also define fully custom agents during `npx agent-army init`.
+
+### Customizing Agent Behavior
+
+| File | Purpose |
+|------|---------|
+| `SOUL.md` | Personality, role, approach, communication style |
+| `IDENTITY.md` | Name, role, emoji |
+| `HEARTBEAT.md` | Periodic tasks and state machine logic |
+| `TOOLS.md` | Tool reference (Linear, Slack, GitHub, local env) |
+
+Template variables are supported in preset files:
+
+| Variable | Description |
+|----------|-------------|
+| `{{OWNER_NAME}}` | Agent owner name |
+| `{{TIMEZONE}}` | Owner timezone |
+| `{{WORKING_HOURS}}` | Working hours for scheduling |
+| `{{USER_NOTES}}` | Custom notes for the agent |
+| `{{LINEAR_TEAM}}` | Default Linear team ID |
+| `{{GITHUB_REPO}}` | Default GitHub repository |
+
+## Cloud Providers
+
+### Provider Comparison
+
+| Feature | AWS | Hetzner Cloud |
+|---------|-----|---------------|
+| **3x Agents (monthly)** | ~$110-120 | ~$18-22 |
+| **Instance Type** | t3.medium (2 vCPU, 4GB) | CX22 (2 vCPU, 4GB) |
+| **Storage** | ~$2.40/month per 30GB | Included |
+| **Data Transfer** | ~$5-10/month | 20TB included |
+| **Regions** | Global (25+) | EU & US (5 locations) |
+| **Setup Complexity** | Moderate (VPC, IAM) | Simple (API token) |
+
+Use Hetzner for development and cost savings (~80% cheaper). Use AWS for production or global reach.
+
+### What Gets Provisioned
+
+Each agent gets:
+- Cloud instance (EC2 or Hetzner server) with Ubuntu 24.04 LTS
+- Docker (for OpenClaw sandbox)
+- Node.js v22, OpenClaw CLI, Claude Code CLI, GitHub CLI
+- Tailscale VPN (encrypted mesh, no public ports)
+- Workspace files injected from `presets/`
+- Optional: Linear CLI (via Deno), Slack integration
+
+All agents share a single VPC/network for cost optimization.
+
+## Dependencies
+
+You need the following installed on your **local machine** before running `npx agent-army init`. The init wizard checks for these and will tell you what's missing.
+
+### Required (all providers)
+
+| Dependency | Why | Install |
+|------------|-----|---------|
+| **Node.js 18+** | Runtime for CLI and Pulumi program | [nodejs.org](https://nodejs.org/) |
+| **pnpm** | Package manager (monorepo workspace) | `npm install -g pnpm` |
+| **Pulumi CLI** | Infrastructure provisioning | [pulumi.com/docs/iac/download-install](https://www.pulumi.com/docs/iac/download-install/) |
+| **Pulumi Account** | State management and encrypted secrets | [app.pulumi.com/signup](https://app.pulumi.com/signup) |
+| **Tailscale** | Secure mesh VPN to reach your agents | [tailscale.com/download](https://tailscale.com/download) |
+
+### Required (provider-specific)
+
+Pick one depending on where you want to deploy:
+
+| Provider | Dependency | Install |
+|----------|-----------|---------|
+| **AWS** | AWS CLI (configured with credentials) | [aws.amazon.com/cli](https://aws.amazon.com/cli/) — then run `aws configure` |
+| **Hetzner** | API token with Read & Write permissions | [console.hetzner.cloud](https://console.hetzner.cloud/) → Project → Security → API Tokens |
+
+### Tailscale Setup
+
+Tailscale requires a few one-time setup steps:
+
+1. [Create an account](https://login.tailscale.com/start)
+2. [Enable HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) (required for OpenClaw web UI)
+3. [Generate a reusable auth key](https://login.tailscale.com/admin/settings/keys) with tags
+4. Note your tailnet DNS name (e.g., `tail12345.ts.net`)
+
+### Installed on agents automatically
+
+These are provisioned on the cloud instances via cloud-init — you do **not** need them locally:
+
+- Docker, Node.js v22, OpenClaw CLI, Claude Code CLI, GitHub CLI
+- Deno + Linear CLI (if Linear integration is enabled)
+- Tailscale (agent-side)
 
 ## Required API Keys
 
-| Key | Where to Get | Used For |
-|-----|--------------|----------|
-| **Anthropic Credentials** | [API Key](https://console.anthropic.com/) or OAuth token (`claude setup-token`) | Claude AI models (required) |
-| **Tailscale Auth Key** | [Tailscale Admin → Keys](https://login.tailscale.com/admin/settings/keys) | VPN mesh connectivity (required) |
-| **Slack Bot Token** | [Slack API](https://api.slack.com/apps) → OAuth & Permissions | Agent communication (optional) |
-| **Slack Signing Secret** | [Slack API](https://api.slack.com/apps) → Basic Information | Webhook verification (optional) |
-| **Linear API Token** | [Linear Settings](https://linear.app/settings/api) | Issue tracking (optional) |
+| Key | Required | Where to Get |
+|-----|----------|--------------|
+| **Anthropic Credentials** | Yes | [API Key](https://console.anthropic.com/) or OAuth token (`claude setup-token`) |
+| **Tailscale Auth Key** | Yes | [Tailscale Admin](https://login.tailscale.com/admin/settings/keys) (reusable, with tags) |
+| **Slack Bot Token** | No | [Slack API](https://api.slack.com/apps) — per agent |
+| **Linear API Token** | No | [Linear Settings](https://linear.app/settings/api) — per agent |
+| **GitHub Token** | No | [GitHub Settings](https://github.com/settings/tokens) — per agent |
 
-#### Claude Code Authentication
+### Claude Code Authentication
 
-Agent Army supports **two authentication methods** for Claude Code:
+Two authentication methods are supported:
 
-| Method | Token Format | Best For | Get It From |
-|--------|--------------|----------|-------------|
-| **API Key** | `sk-ant-api03-...` | Pay-as-you-go API usage | [Anthropic Console](https://console.anthropic.com/) |
-| **OAuth Token** | `sk-ant-oat01-...` | Pro/Max subscription (flat rate) | Run `claude setup-token` locally |
+| Method | Token Format | Best For |
+|--------|-------------|----------|
+| **API Key** | `sk-ant-api03-...` | Pay-as-you-go API usage |
+| **OAuth Token** | `sk-ant-oat01-...` | Pro/Max subscription (flat rate) |
 
-The system **auto-detects** which type you provide:
-- **API keys** → Set as `ANTHROPIC_API_KEY` environment variable
-- **OAuth tokens** → Set as `CLAUDE_CODE_OAUTH_TOKEN` environment variable
+The system auto-detects which type you provide and sets the correct environment variable.
 
-Both work identically - use whichever matches your billing preference!
+## Updating & Redeploying
 
-### API Key Configuration
-
-Keys are managed via Pulumi ESC. See `esc/agent-army-secrets.yaml.example` for the full template.
-
-**Shared keys** (used by all agents):
-- `anthropicApiKey` - Required
-- `tailscaleAuthKey` - Required
-
-**Per-agent keys** (optional):
-- `pmSlackToken`, `pmSlackSigningSecret`, `pmLinearToken`
-- `engSlackToken`, `engSlackSigningSecret`, `engLinearToken`
-- `testerSlackToken`, `testerSlackSigningSecret`, `testerLinearToken`
-
-## Scripts
-
-| Script | Description |
-|--------|-------------|
-| `./scripts/deploy.sh` | Deploy stack with prereq checks |
-| `./scripts/validate.sh` | Health check all agents via Tailscale SSH |
-| `./scripts/destroy.sh` | Tear down stack with confirmation |
-| `./scripts/ssh.sh <agent>` | Quick SSH to agent (pm\|eng\|tester) |
-
-All scripts support `-h` for help.
-
-## Updating and Redeploying
-
-When you make changes to the codebase (cloud-init scripts, workspace files, environment variables, etc.), you need to redeploy your agents to apply the changes.
-
-### Recommended Approach: Destroy Then Deploy
-
-**Always use a full teardown and rebuild** to ensure clean state and avoid issues with orphaned Tailscale devices:
+Always use a full teardown and rebuild to avoid stale Tailscale devices:
 
 ```bash
 npx agent-army destroy
 npx agent-army deploy
 ```
 
-or with auto-confirm:
+Or with auto-confirm:
 
 ```bash
-npx agent-army destroy -y
-npx agent-army deploy -y
+npx agent-army destroy -y && npx agent-army deploy -y
 ```
 
-### Why Not Just `deploy`?
+A simple `deploy` after changes can leave orphaned Tailscale devices and hostname conflicts. The destroy-then-deploy workflow ensures clean state.
 
-While `pulumi up` (via `npx agent-army deploy`) can detect changes and replace instances, it has limitations:
+## Configuration
 
-- **Tailscale cleanup**: Old Tailscale devices aren't automatically removed when instances are replaced, leading to hostname conflicts where new instances get `-1` suffixes
-- **Stale resources**: Replaced instances may leave behind orphaned resources
-- **Validation issues**: Health checks may connect to old offline devices instead of new ones
+### `agent-army.json`
 
-The `destroy` → `deploy` workflow ensures:
-- ✅ Clean Tailscale device registration (no orphans)
-- ✅ Stable hostnames without suffixes
-- ✅ Complete resource cleanup
-- ✅ Fresh state for all components
+Generated by `npx agent-army init`. This manifest drives the entire deployment:
 
-### Preview Changes Before Destroying
+```json
+{
+  "stackName": "dev",
+  "provider": "aws",
+  "region": "us-east-1",
+  "instanceType": "t3.medium",
+  "ownerName": "Your Name",
+  "agents": [
+    {
+      "name": "agent-pm",
+      "displayName": "Marcus",
+      "role": "pm",
+      "preset": "pm",
+      "volumeSize": 30
+    }
+  ]
+}
+```
 
-To see what will be destroyed:
+### Pulumi Config
+
+Secrets are stored encrypted in Pulumi config, set automatically by the init wizard. You can also manage them directly:
 
 ```bash
-pulumi preview --target destroy
+pulumi config set --secret anthropicApiKey sk-ant-xxxxx
+pulumi config set --secret tailscaleAuthKey tskey-auth-xxxxx
+pulumi config set tailnetDnsName tail12345.ts.net
 ```
 
-**Note:** Full redeployment means your agents will be completely rebuilt. Any local data not in workspace files will be lost.
+### Pulumi ESC
 
-## Per-Agent Customization
+For more advanced secret management, use [Pulumi ESC](https://www.pulumi.com/docs/esc/). See `esc/agent-army-secrets.yaml.example` for the full template.
 
-Each agent loads workspace files from `presets/`:
+## Project Structure
 
 ```
-presets/
-├── base/           # Shared files (AGENTS.md, TOOLS.md, etc.)
-├── pm/             # PM-specific (SOUL.md, HEARTBEAT.md)
-├── eng/            # Eng-specific (SOUL.md, HEARTBEAT.md)
-└── tester/         # Tester-specific (SOUL.md, HEARTBEAT.md)
+agent-army/
+├── cli/                    # CLI tool (commands, prompts, config management)
+│   ├── bin.ts              # Entry point (Commander.js)
+│   ├── commands/           # init, deploy, status, ssh, validate, destroy, list
+│   ├── lib/                # Config, prerequisites, Pulumi ops, UI helpers
+│   └── types.ts            # TypeScript types
+├── src/                    # Reusable Pulumi components
+│   └── components/
+│       ├── openclaw-agent.ts    # AWS EC2 agent component
+│       ├── hetzner-agent.ts     # Hetzner Cloud agent component
+│       ├── cloud-init.ts        # Cloud-init script generation
+│       └── config-generator.ts  # OpenClaw config builder
+├── presets/                # Agent role definitions & shared skills
+│   ├── base/               # Shared files for all agents
+│   ├── pm/                 # Marcus (PM)
+│   ├── eng/                # Titus (Engineer)
+│   ├── tester/             # Scout (QA)
+│   └── skills/             # Reusable agent skills
+├── docs/                   # Mintlify documentation site
+├── esc/                    # Pulumi ESC secret templates
+├── scripts/                # Shell script helpers
+├── examples/               # Example deployments
+├── index.ts                # Main Pulumi stack program
+├── shared-vpc.ts           # Shared VPC component (AWS)
+└── Pulumi.yaml             # Pulumi project config
 ```
 
-### Customizing Agent Behavior
+## Security
 
-1. **Edit SOUL.md** - Define the agent's personality and role
-2. **Edit HEARTBEAT.md** - Define periodic tasks and checks
-3. **Edit TOOLS.md** - Add agent-specific tool configurations
-
-Example: Making the PM agent focus on sprint planning:
-
-```markdown
-# presets/pm/SOUL.md
-
-You are Marcus, the Project Manager agent.
-
-## Primary Responsibilities
-- Break down tickets and do research
-- Plan and sequence work
-- Track progress and unblock teams
-- Keep stakeholders informed
-
-## Communication Style
-- Clear, concise updates
-- Proactive status reports
-- ...
-```
-
-### Template Variables
-
-Use `{{VARIABLE}}` syntax in preset files. Currently supported:
-
-| Variable | Description |
-|----------|-------------|
-| `{{OWNER_NAME}}` | Name of the agent owner (from config) |
+- All agent ports bind to `127.0.0.1` — access is via **Tailscale only**
+- No public port exposure; Tailscale Serve proxies traffic
+- Token-based gateway authentication
+- Secrets encrypted via Pulumi config
+- SSH available as fallback for debugging
 
 ## Troubleshooting
 
 ### Agents not appearing in Tailscale
 
 1. Wait 3-5 minutes for cloud-init to complete
-2. Check cloud-init logs:
-   ```bash
-   ./scripts/ssh.sh pm 'sudo cat /var/log/cloud-init-output.log | tail -100'
-   ```
-3. Verify Tailscale auth key is valid and reusable
+2. Check logs: `npx agent-army ssh pm 'sudo cat /var/log/cloud-init-output.log | tail -100'`
+3. Verify your Tailscale auth key is valid and reusable
 
 ### OpenClaw gateway not running
 
 ```bash
-# Check service status
-./scripts/ssh.sh pm 'openclaw gateway status'
-
-# View gateway logs
-./scripts/ssh.sh pm 'journalctl -u openclaw -n 50'
-
-# Restart gateway
-./scripts/ssh.sh pm 'openclaw gateway restart'
-```
-
-### Workspace files missing
-
-```bash
-# List workspace contents
-./scripts/ssh.sh pm 'ls -la ~/.openclaw/workspace/'
-
-# Re-run cloud-init (regenerates workspace)
-./scripts/ssh.sh pm 'sudo cloud-init clean && sudo cloud-init init'
+npx agent-army ssh pm 'openclaw gateway status'
+npx agent-army ssh pm 'journalctl -u openclaw -n 50'
+npx agent-army ssh pm 'openclaw gateway restart'
 ```
 
 ### SSH connection refused
 
-1. Verify Tailscale is running on your machine: `tailscale status`
-2. Check if the agent appears in your tailnet
+1. Check Tailscale is running locally: `tailscale status`
+2. Verify the agent appears in your tailnet
 3. Ensure you're using the correct tailnet DNS name
 
 ### Pulumi state issues
 
 ```bash
-# Refresh state from actual infrastructure
-pulumi refresh
-
-# Force unlock (if locked)
-pulumi cancel
+pulumi refresh    # Refresh state from actual infrastructure
+pulumi cancel     # Force unlock if locked
 ```
-
-## Cost Estimate
-
-### AWS (US-East-1)
-
-| Resource | Quantity | Instance Type | Monthly Cost |
-|----------|----------|---------------|--------------|
-| EC2 Instances | 3 | t3.medium | $33 × 3 = **$99** |
-| EBS Storage | 3 × 30GB | gp3 | ~$2.40 × 3 = **$7.20** |
-| Data Transfer | Variable | - | ~**$5-10** |
-| **Total** | | | **~$110-120/month** |
-
-### Hetzner Cloud (EU)
-
-| Resource | Quantity | Server Type | Monthly Cost |
-|----------|----------|-------------|--------------|
-| Cloud Servers | 3 | CX21 | €5.18 × 3 = **€15.54** |
-| Storage | Included | 40GB NVMe | **€0** |
-| Data Transfer | 20TB included | - | **€0** |
-| **Total** | | | **~€16-20/month (~$18-22)** |
-
-**Hetzner saves ~80% compared to AWS** with equivalent specs.
-
-### Cost Optimization Tips
-
-**AWS:**
-- Use Spot Instances for non-critical workloads
-- Schedule instances to stop during off-hours
-- Use smaller instances for testing (t3.small: ~$17/month each)
-
-**Hetzner:**
-- CX11 (2 vCPU, 2GB): €3.29/month for lighter workloads
-- CX31 (2 vCPU, 8GB): €7.49/month for heavier workloads
-- Consider Nuremberg (nbg1) for lowest latency in EU
-
-**⚠️ Minimum requirements:** 4GB RAM recommended for OpenClaw + Docker. Avoid t3.micro (1GB) or CX11 (2GB) for production.
-
-## Component API
-
-### `OpenClawAgent`
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `anthropicApiKey` | `string` | **required** | Anthropic API key |
-| `tailscaleAuthKey` | `string` | **required** | Tailscale auth key |
-| `tailnetDnsName` | `string` | **required** | Tailnet DNS name |
-| `instanceType` | `string` | `t3.medium` | EC2 instance type |
-| `vpcId` | `string` | - | Existing VPC ID |
-| `subnetId` | `string` | - | Existing subnet ID |
-| `securityGroupId` | `string` | - | Existing security group ID |
-| `model` | `string` | `anthropic/claude-sonnet-4-5` | AI model |
-| `enableSandbox` | `boolean` | `true` | Enable Docker sandbox |
-| `gatewayPort` | `number` | `18789` | Gateway port |
-| `browserPort` | `number` | `18791` | Browser control port |
-| `volumeSize` | `number` | `30` | Root volume size (GB) |
-| `tags` | `Record<string, string>` | - | Resource tags |
-| `workspaceFiles` | `Record<string, string>` | - | Workspace files to inject |
-| `envVars` | `Record<string, string>` | - | Environment variables |
-| `postSetupCommands` | `string[]` | - | Post-setup shell commands |
-
-### Outputs
-
-| Output | Description |
-|--------|-------------|
-| `publicIp` | EC2 public IP |
-| `tailscaleUrl` | Tailscale URL with auth token |
-| `gatewayToken` | Gateway auth token |
-| `sshPrivateKey` | SSH private key (Ed25519) |
-| `instanceId` | EC2 instance ID |
-
-## CLI
-
-The project includes an interactive CLI for the full agent lifecycle. See the **[CLI documentation](./cli/README.md)** for details.
-
-```bash
-npx agent-army init        # Interactive setup wizard
-npx agent-army deploy      # Deploy agents
-npx agent-army status      # Show agent statuses
-npx agent-army ssh marcus  # SSH to an agent
-npx agent-army validate    # Health check agents
-npx agent-army destroy     # Tear down resources
-```
-
-## Examples
-
-See the [examples/](./examples/) directory:
-
-- **[single-agent](./examples/single-agent/)**: Basic single agent deployment
-- **[existing-vpc](./examples/existing-vpc/)**: Deploy into existing infrastructure
-
-## Security
-
-- Gateway and browser ports are **not exposed publicly**
-- Access is via **Tailscale only** (encrypted mesh VPN)
-- SSH remains as fallback for debugging
-- Token-based authentication for the gateway
-- Secrets managed via Pulumi ESC
 
 ## Development
 
 ```bash
-# Install dependencies
-npm install
-
-# Build
-npm run build
-
-# Watch mode
-npm run watch
+pnpm install
+pnpm build
+pnpm run watch    # Watch mode
 ```
 
 ## License
@@ -504,5 +377,6 @@ MIT
 
 - [OpenClaw Documentation](https://docs.openclaw.ai/)
 - [Pulumi AWS Provider](https://www.pulumi.com/registry/packages/aws/)
+- [Pulumi Hetzner Provider](https://www.pulumi.com/registry/packages/hcloud/)
 - [Pulumi ESC](https://www.pulumi.com/docs/esc/)
 - [Tailscale Documentation](https://tailscale.com/kb/)
