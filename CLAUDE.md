@@ -6,7 +6,7 @@ Agent Army deploys fleets of specialized AI agents (PM, Engineer, QA) on AWS or 
 
 ## Architecture
 
-```
+```text
 agent-army/
 ├── cli/                    # Published npm package (agent-army CLI)
 │   ├── bin.ts              # Entry point - Commander.js commands
