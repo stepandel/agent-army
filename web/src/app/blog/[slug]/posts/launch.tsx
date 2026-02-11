@@ -33,17 +33,17 @@ export default function LaunchPost() {
       </p>
       <ol className="list-decimal list-inside space-y-2 pl-1">
         <li>
-          <span className="font-semibold text-foreground">Research</span> — I prompt
+          <span className="font-semibold text-foreground">Research</span>: I prompt
           the agent to do deep research on the ticket topic, look over all the code in
           the repo, and propose an adequate solution
         </li>
         <li>
-          <span className="font-semibold text-foreground">Plan</span> — I ask it to
+          <span className="font-semibold text-foreground">Plan</span>: I ask it to
           summarize everything and drop the plan back into the Linear ticket as a
           comment (kind of like Plan mode in Claude Code)
         </li>
         <li>
-          <span className="font-semibold text-foreground">Execute</span> — I ask it to
+          <span className="font-semibold text-foreground">Execute</span>: I ask it to
           implement the proposed solution by breaking it down into digestible smaller
           sub-tickets, then code each one
         </li>
@@ -59,7 +59,7 @@ export default function LaunchPost() {
       </p>
       <ul className="list-disc list-inside space-y-2 pl-1">
         <li>
-          Agents stumble when instructions are too concrete and rigid — they need room
+          Agents stumble when instructions are too concrete and rigid. They need room
           to reason about the problem, not just follow a script
         </li>
         <li>
@@ -68,7 +68,7 @@ export default function LaunchPost() {
         </li>
         <li>
           Context windows fill up fast when one agent is doing research, planning, and
-          coding — quality degrades noticeably toward the end of long tasks
+          coding. Quality degrades noticeably toward the end of long tasks
         </li>
       </ul>
       <p>
@@ -82,7 +82,7 @@ export default function LaunchPost() {
         The insight: 3 agents &gt; 1 agent
       </h2>
       <p>
-        I found that having three separate agents — each with a clear role — is actually
+        I found that having three separate agents, each with a clear role, is actually
         better and faster than asking a single agent to do everything.
       </p>
       <p>So I split responsibilities, just like in a human team:</p>
@@ -142,7 +142,7 @@ export default function LaunchPost() {
         How they stay busy: Heartbeats
       </h2>
       <p>
-        Each agent runs a heartbeat — a loop that fires every 60 seconds and checks for
+        Each agent runs a heartbeat, a loop that fires every 60 seconds and checks for
         new work. This is the key difference from just prompting an agent once and
         walking away.
       </p>
@@ -155,7 +155,7 @@ export default function LaunchPost() {
         No polling from my side. No babysitting. I assign a ticket to the PM, and the
         pipeline kicks off automatically. Juno researches and plans. Titus picks it up
         and codes. Scout reviews the PR. If Scout finds issues, it either fixes them
-        directly or files a bug back to Linear — and the cycle continues.
+        directly or files a bug back to Linear, and the cycle continues.
       </p>
       <p>
         All context that&apos;s generally lost when agents switch tasks is persisted to
@@ -200,7 +200,7 @@ export default function LaunchPost() {
         skills, tweak heartbeats, and experiment with their context windows.
       </p>
       <p>
-        At first I did everything manually—SSHing into servers, editing config files,
+        At first I did everything manually. SSHing into servers, editing config files,
         restarting OpenClaw instances. It got old fast.
       </p>
       <p>
@@ -240,11 +240,11 @@ export default function LaunchPost() {
       <p>
         That&apos;s it. Three agents, each on their own cloud instance (AWS or Hetzner),
         connected via a Tailscale mesh VPN, pre-configured with OpenClaw, Claude Code,
-        Linear, GitHub, and Slack integrations. The first setup is the longest — and
+        Linear, GitHub, and Slack integrations. The first setup is the longest, and
         honestly, the most annoying part isn&apos;t the infrastructure. It&apos;s the
         accounts. OpenClaw agents behave like humans with computers, and they really need
-        their own accounts with proper permissions. GitHub is the worst offender — they
-        actively block agents from creating accounts. Slack is similar. I ended up
+        their own accounts with proper permissions. GitHub is the worst offender here.
+        They actively block agents from creating accounts. Slack is similar. I ended up
         manually creating GitHub and Slack accounts for each agent, which felt absurd.
         The whole setup would&apos;ve been 10x faster if agents could just sign up for
         email (with something like AgentMail) and create their own accounts. After that
@@ -328,7 +328,7 @@ export default function LaunchPost() {
         <span className="font-semibold text-foreground">$18–22/month</span>. On AWS
         with t3.medium instances, it&apos;s closer to{" "}
         <span className="font-semibold text-foreground">$110–120/month</span>. Plus
-        your Anthropic API usage — I have the Max plan and I&apos;m running very close
+        your Anthropic API usage. I have the Max plan and I&apos;m running very close
         to the limit.
       </p>
       <p>
@@ -361,12 +361,12 @@ export default function LaunchPost() {
       </p>
       <p>
         Install it, deploy my presets, or build your own team of agents. The presets are
-        a starting point — the real power is in customizing the SOUL.md, HEARTBEAT.md,
+        a starting point. The real power is in customizing the SOUL.md, HEARTBEAT.md,
         skills and plugins for your specific workflow.
       </p>
       <p>
         If you&apos;re spending time waiting for your Claude Code to finish work, go
-        drive through Big Sur instead — Juno, Titus, and Scout will hold down the fort.
+        drive through Big Sur instead. Juno, Titus, and Scout will hold down the fort.
       </p>
     </div>
   );
