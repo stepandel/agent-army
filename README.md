@@ -10,17 +10,17 @@ Deploy a fleet of specialized [OpenClaw](https://openclaw.bot/) AI agents on **A
 Agent Army provisions a team of autonomous AI agents that handle software engineering tasks — product management & research, development, and QA — with persistent memory and role-specific behavior. Agents communicate over a secure Tailscale mesh VPN with no public port exposure.
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
+┌─────────────────────────────────────────────────────────────────────┐
 │                      AWS VPC / Hetzner Cloud                        │
 │                                                                     │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐            │
-│  │  Juno (PM) │   │ Titus (Eng)  │   │ Scout (QA)   │            │
-│  │              │   │              │   │              │            │
-│  │  • OpenClaw  │   │  • OpenClaw  │   │  • OpenClaw  │            │
-│  │  • Docker    │   │  • Docker    │   │  • Docker    │            │
-│  │  • Tailscale │   │  • Tailscale │   │  • Tailscale │            │
-│  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘            │
-│         └──────────────────┼──────────────────┘                    │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐             │
+│  │  Juno (PM)   │   │ Titus (Eng)  │   │ Scout (QA)   │             │
+│  │              │   │              │   │              │             │
+│  │  • OpenClaw  │   │  • OpenClaw  │   │  • OpenClaw  │             │
+│  │  • Docker    │   │  • Docker    │   │  • Docker    │             │
+│  │  • Tailscale │   │  • Tailscale │   │  • Tailscale │             │
+│  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘             │
+│         └──────────────────┼──────────────────┘                     │
 └────────────────────────────┼────────────────────────────────────────┘
                              │
                 ┌────────────▼────────────┐
