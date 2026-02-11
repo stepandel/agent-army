@@ -89,6 +89,12 @@ export default function Home() {
         </a>
         <div className="flex items-center gap-6">
           <a
+            href="/blog"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Blog
+          </a>
+          <a
             href="https://docs.agent-army.ai"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
