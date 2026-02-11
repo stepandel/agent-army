@@ -1,0 +1,38 @@
+name: Publish CLI to npm
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    if: startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Set version from release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd cli && npm version "$VERSION" --no-git-tag-version
+
+      - run: pnpm --filter agent-army build
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        working-directory: cli/
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
