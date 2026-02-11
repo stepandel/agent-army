@@ -315,16 +315,7 @@ export default function LaunchPost() {
       {/* Try it */}
       <h2 className="text-xl font-bold text-foreground pt-4">Try it</h2>
       <p>
-        Agent Army is{" "}
-        <a
-          href="https://github.com/stepandel/agent-army/blob/main/LICENSE"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:underline"
-        >
-          MIT licensed
-        </a>
-        . The repo is at{" "}
+        Agent Army is MIT licensed. The repo is at{" "}
         <a
           href="https://github.com/stepandel/agent-army"
           target="_blank"
