@@ -7,6 +7,8 @@
  * init, deploy, status, ssh, validate, destroy
  */
 
+import * as fs from "fs";
+import * as path from "path";
 import { Command } from "commander";
 import { setupGracefulShutdown } from "./lib/process";
 import { initCommand } from "./commands/init";
@@ -20,12 +22,15 @@ import { listCommand } from "./commands/list";
 // Forward SIGINT/SIGTERM to child processes before exiting
 setupGracefulShutdown();
 
+// Read version from package.json so it stays in sync with npm publish
+const pkgJson = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8"));
+
 const program = new Command();
 
 program
   .name("agent-army")
   .description("Deploy and manage a fleet of OpenClaw AI agents on AWS")
-  .version("0.1.1");
+  .version(pkgJson.version);
 
 program
   .command("init")
