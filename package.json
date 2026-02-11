@@ -1,7 +1,6 @@
 {
   "name": "agent-army",
   "private": true,
-  "version": "0.1.0",
   "packageManager": "pnpm@10.29.2",
   "description": "Reusable Pulumi components for deploying OpenClaw agents on AWS",
   "main": "dist/index.js",
