@@ -5,7 +5,12 @@
  */
 
 import { pushTool, createCLIAdapter, type PushOptions } from "../tools";
+import { exitWithError } from "../lib/ui";
 
 export async function pushCommand(opts: PushOptions): Promise<void> {
-  await pushTool(createCLIAdapter(), opts);
+  try {
+    await pushTool(createCLIAdapter(), opts);
+  } catch (err) {
+    exitWithError(err instanceof Error ? err.message : String(err));
+  }
 }

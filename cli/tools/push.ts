@@ -146,8 +146,7 @@ export const pushTool: ToolImplementation<PushOptions> = async (
   // Ensure workspace is set up
   const wsResult = ensureWorkspace();
   if (!wsResult.ok) {
-    ui.log.error(wsResult.error ?? "Failed to set up workspace.");
-    process.exit(1);
+    throw new Error(wsResult.error ?? "Failed to set up workspace.");
   }
   const cwd = getWorkspaceDir();
 
@@ -156,28 +155,24 @@ export const pushTool: ToolImplementation<PushOptions> = async (
   try {
     configName = resolveConfigName(options.config);
   } catch (err) {
-    ui.log.error((err as Error).message);
-    process.exit(1);
+    throw new Error((err as Error).message);
   }
 
   const manifest = loadManifest(configName);
   if (!manifest) {
-    ui.log.error(`Config '${configName}' could not be loaded.`);
-    process.exit(1);
+    throw new Error(`Config '${configName}' could not be loaded.`);
   }
 
   // Select Pulumi stack to read tailnet config
   const stackResult = selectOrCreateStack(manifest.stackName, cwd);
   if (!stackResult.ok) {
-    ui.log.error(`Could not select Pulumi stack "${manifest.stackName}".`);
-    process.exit(1);
+    throw new Error(`Could not select Pulumi stack "${manifest.stackName}".`);
   }
 
   // Get tailnet DNS name
   const tailnetDnsName = getConfig("tailnetDnsName", cwd);
   if (!tailnetDnsName) {
-    ui.log.error("Could not determine tailnet DNS name from Pulumi config.");
-    process.exit(1);
+    throw new Error("Could not determine tailnet DNS name from Pulumi config.");
   }
 
   // Default behavior: if no flags are set, push skills + workspace
@@ -191,8 +186,7 @@ export const pushTool: ToolImplementation<PushOptions> = async (
   try {
     presetsDir = resolvePresetsDir();
   } catch (err) {
-    ui.log.error((err as Error).message);
-    process.exit(1);
+    throw new Error((err as Error).message);
   }
 
   // Determine target agents
@@ -206,7 +200,6 @@ export const pushTool: ToolImplementation<PushOptions> = async (
       ui.log.error(
         `Unknown agent: "${options.agent}"\nValid identifiers:\n  ${validNames}`
       );
-      process.exit(1);
     }
     targetAgents = [matched];
   }
@@ -377,6 +370,6 @@ export const pushTool: ToolImplementation<PushOptions> = async (
     ui.log.success(`Push completed successfully for ${targetAgents.length} agent(s).`);
   } else {
     ui.log.warn("Push completed with some failures. Check output above.");
-    process.exit(1);
+    throw new Error("Push completed with failures.");
   }
 };
