@@ -200,6 +200,7 @@ export const pushTool: ToolImplementation<PushOptions> = async (
       ui.log.error(
         `Unknown agent: "${options.agent}"\nValid identifiers:\n  ${validNames}`
       );
+      return;
     }
     targetAgents = [matched];
   }
