@@ -18,6 +18,8 @@ import { sshCommand } from "./commands/ssh";
 import { validateCommand } from "./commands/validate";
 import { destroyCommand } from "./commands/destroy";
 import { listCommand } from "./commands/list";
+import { updateCommand } from "./commands/update";
+import { checkForUpdates } from "./lib/update-check";
 
 // Forward SIGINT/SIGTERM to child processes before exiting
 setupGracefulShutdown();
@@ -95,4 +97,14 @@ program
     await listCommand(opts);
   });
 
+program
+  .command("update")
+  .description("Update agent-army CLI to the latest version")
+  .action(async (opts) => {
+    await updateCommand(opts);
+  });
+
 program.parse();
+
+// Fire-and-forget update check — never blocks exit
+checkForUpdates(pkgJson.version).catch(() => {});

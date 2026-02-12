@@ -1,0 +1,87 @@
+/**
+ * Update the agent-army CLI to the latest version
+ */
+
+import * as p from "@clack/prompts";
+import pc from "picocolors";
+import { stream } from "../lib/exec";
+
+interface UpdateOptions {
+  // reserved for future flags
+}
+
+export async function updateCommand(_opts: UpdateOptions): Promise<void> {
+  p.intro(pc.bgCyan(pc.black(" Agent Army — Update ")));
+
+  const s = p.spinner();
+  s.start("Checking npm for latest version…");
+
+  // Fetch latest version info
+  const { default: https } = await import("https");
+  const latest = await new Promise<string | null>((resolve) => {
+    const req = https.get(
+      "https://registry.npmjs.org/agent-army/latest",
+      { timeout: 5000 },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk: Buffer) => (data += chunk));
+        res.on("end", () => {
+          try {
+            resolve(JSON.parse(data).version ?? null);
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+    );
+    req.on("timeout", () => { req.destroy(); resolve(null); });
+    req.on("error", () => resolve(null));
+  });
+
+  if (!latest) {
+    s.stop("Failed to reach npm registry");
+    p.log.error("Could not check for updates. Check your internet connection.");
+    process.exit(1);
+  }
+
+  // Read current version
+  const fs = await import("fs");
+  const path = await import("path");
+  const pkgJson = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8")
+  );
+  const current: string = pkgJson.version;
+
+  s.stop(`Current: ${pc.dim(current)}  Latest: ${pc.green(latest)}`);
+
+  // Compare versions
+  const cParts = current.split(".").map(Number);
+  const lParts = latest.split(".").map(Number);
+  let isOutdated = false;
+  for (let i = 0; i < 3; i++) {
+    if ((lParts[i] ?? 0) > (cParts[i] ?? 0)) { isOutdated = true; break; }
+    if ((lParts[i] ?? 0) < (cParts[i] ?? 0)) break;
+  }
+
+  if (!isOutdated) {
+    p.log.success("You're already on the latest version!");
+    p.outro("Done");
+    return;
+  }
+
+  p.log.step(`Updating ${pc.dim(current)} → ${pc.green(latest)}`);
+  console.log();
+
+  const exitCode = await stream("npm", ["install", "-g", `agent-army@${latest}`]);
+
+  console.log();
+  if (exitCode === 0) {
+    p.log.success(`Updated to ${pc.green(latest)}`);
+  } else {
+    p.log.error("Update failed. You may need to run with sudo:");
+    p.log.message(`  sudo npm install -g agent-army@${latest}`);
+    process.exit(1);
+  }
+
+  p.outro("Done");
+}
