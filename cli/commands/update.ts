@@ -72,7 +72,26 @@ export async function updateCommand(_opts: UpdateOptions): Promise<void> {
   p.log.step(`Updating ${pc.dim(current)} → ${pc.green(latest)}`);
   console.log();
 
-  const exitCode = await stream("npm", ["install", "-g", `agent-army@${latest}`]);
+  // Retry logic: npm registry metadata can propagate before the tarball is
+  // available on the CDN, causing ETARGET errors on freshly-published versions.
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 10_000;
+  let exitCode = 1;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    exitCode = await stream("npm", ["install", "-g", `agent-army@${latest}`]);
+    if (exitCode === 0) break;
+
+    if (attempt < MAX_RETRIES) {
+      console.log();
+      p.log.warn(
+        `Install failed (attempt ${attempt}/${MAX_RETRIES}). ` +
+        `Retrying in ${RETRY_DELAY_MS / 1000}s — the new version may still be propagating…`
+      );
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      console.log();
+    }
+  }
 
   console.log();
   if (exitCode === 0) {
