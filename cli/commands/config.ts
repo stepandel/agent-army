@@ -83,6 +83,13 @@ function validateTopValue(
     if (!valid.includes(value)) {
       return `Invalid region '${value}' for provider '${provider}'. Valid options:\n  ${valid.join("\n  ")}`;
     }
+    // Cross-validate: check if current instanceType is valid for the new region
+    if (provider === "hetzner" && manifest.instanceType) {
+      const validTypes = allInstanceTypeValues(provider, value);
+      if (!validTypes.includes(manifest.instanceType)) {
+        return `Region '${value}' is not compatible with current instanceType '${manifest.instanceType}'.\nUpdate instanceType first, or set both:\n  agent-army config set instanceType <type>\n  agent-army config set region ${value}`;
+      }
+    }
   }
 
   if (key === "instanceType") {
@@ -255,5 +262,5 @@ export async function configSetCommand(
     console.log(pc.green(`✓ ${key}: ${String(oldValue ?? "(unset)")} → ${value}`));
   }
 
-  console.log(pc.dim("\nRun 'agent-army redeploy' to apply changes."));
+  console.log(pc.dim("\nRun 'agent-army redeploy' or 'agent-army destroy && agent-army deploy' to apply changes."));
 }
