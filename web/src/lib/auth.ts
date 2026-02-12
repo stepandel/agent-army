@@ -9,6 +9,13 @@ import bcrypt from "bcryptjs";
 export const authConfig = {
   adapter: PrismaAdapter(prisma),
   providers: [
+    // SECURITY: allowDangerousEmailAccountLinking auto-links OAuth accounts to
+    // existing users by email match. This is intentional — we trust Google and
+    // GitHub to verify email ownership. Without this, users who signed up with
+    // email/password can't later sign in via OAuth (and vice versa).
+    // Risk: if an untrusted provider is added, an attacker could hijack accounts
+    // by presenting an unverified email. Only enable for providers with strong
+    // email verification (Google, GitHub). Review before adding new providers.
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
