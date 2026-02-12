@@ -19,6 +19,7 @@ import { validateCommand } from "./commands/validate";
 import { destroyCommand } from "./commands/destroy";
 import { listCommand } from "./commands/list";
 import { updateCommand } from "./commands/update";
+import { configShowCommand, configSetCommand } from "./commands/config";
 import { checkForUpdates } from "./lib/update-check";
 
 // Forward SIGINT/SIGTERM to child processes before exiting
@@ -95,6 +96,28 @@ program
   .option("--json", "Output as JSON")
   .action(async (opts) => {
     await listCommand(opts);
+  });
+
+const configCmd = program
+  .command("config")
+  .description("View or modify config without re-running init");
+
+configCmd
+  .command("show")
+  .description("Display current config")
+  .option("--json", "Output as JSON")
+  .option("-c, --config <name>", "Config name (auto-detected if only one)")
+  .action(async (opts) => {
+    await configShowCommand(opts);
+  });
+
+configCmd
+  .command("set <key> <value>")
+  .description("Update a config value")
+  .option("-c, --config <name>", "Config name (auto-detected if only one)")
+  .option("-a, --agent <name>", "Target a specific agent")
+  .action(async (key: string, value: string, opts) => {
+    await configSetCommand(key, value, opts);
   });
 
 program
