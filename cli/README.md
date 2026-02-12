@@ -99,6 +99,41 @@ agent-army destroy -y          # Skip confirmations (dangerous!)
 agent-army destroy -c staging  # Destroy a specific config
 ```
 
+### `agent-army redeploy`
+
+Update agents in-place without destroying infrastructure. Runs `pulumi up --refresh` to sync cloud state and apply changes. If the stack doesn't exist, falls back to a fresh deploy.
+
+```bash
+agent-army redeploy             # With confirmation prompt
+agent-army redeploy -y          # Skip confirmation
+agent-army redeploy -c staging  # Redeploy a specific config
+```
+
+### `agent-army config show`
+
+Display current configuration in a human-readable format.
+
+```bash
+agent-army config show             # Pretty-printed output
+agent-army config show --json      # Full JSON output
+agent-army config show -c staging  # Show a specific config
+```
+
+### `agent-army config set <key> <value>`
+
+Update a config value with validation. No need to re-run `init`.
+
+Top-level keys: `region`, `instanceType`, `ownerName`, `timezone`, `workingHours`, `userNotes`, `linearTeam`, `githubRepo`
+
+Per-agent keys: `instanceType`, `volumeSize`, `displayName`
+
+```bash
+agent-army config set region us-west-2
+agent-army config set instanceType t3.large
+agent-army config set instanceType cx32 -a titus   # Per-agent override
+agent-army config set volumeSize 50 -a scout       # Per-agent volume
+```
+
 ### `agent-army list`
 
 List all saved configurations.
@@ -166,7 +201,9 @@ cli/
 ├── types.ts            # TypeScript type definitions
 ├── commands/
 │   ├── init.ts         # Interactive setup wizard
+│   ├── config.ts       # View and modify config
 │   ├── deploy.ts       # Deploy agents
+│   ├── redeploy.ts     # Update agents in-place
 │   ├── status.ts       # Show agent statuses
 │   ├── ssh.ts          # SSH to agents
 │   ├── validate.ts     # Health check agents
@@ -188,6 +225,7 @@ cli/
 └── tools/
     ├── deploy.ts       # Deploy tool logic
     ├── destroy.ts      # Destroy tool logic
+    ├── redeploy.ts     # Redeploy tool logic
     ├── status.ts       # Status tool logic
     └── validate.ts     # Validate tool logic
 ```

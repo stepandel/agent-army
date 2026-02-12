@@ -97,8 +97,14 @@ The CLI is the primary interface for every operation. Run `agent-army --help` fo
 | `agent-army ssh <agent> '<cmd>'` | Run a command on an agent remotely |
 | `agent-army validate` | Health check all agents via Tailscale |
 | `agent-army destroy` | Tear down all resources (with confirmation) |
+| `agent-army redeploy` | Update agents in-place (`pulumi up --refresh`) |
+| `agent-army redeploy -y` | Redeploy without confirmation prompt |
 | `agent-army destroy -y` | Tear down without confirmation |
 | `agent-army list` | List saved configurations |
+| `agent-army config show` | Display current config |
+| `agent-army config show --json` | Config in JSON format |
+| `agent-army config set <key> <value>` | Update a config value |
+| `agent-army config set <key> <value> -a <agent>` | Update a per-agent config value |
 
 Agent resolution is flexible — all of these target the same agent:
 
@@ -240,22 +246,41 @@ The system auto-detects which type you provide and sets the correct environment 
 
 ## Updating & Redeploying
 
-Always use a full teardown and rebuild to avoid stale Tailscale devices:
+For in-place updates that preserve Tailscale devices and existing infrastructure:
 
 ```bash
-agent-army destroy
-agent-army deploy
+agent-army redeploy
 ```
 
-Or with auto-confirm:
+This runs `pulumi up --refresh` to sync cloud state and apply changes. If the stack doesn't exist yet, it falls back to a fresh deploy automatically.
+
+For a clean rebuild (when in-place update can't recover):
 
 ```bash
 agent-army destroy -y && agent-army deploy -y
 ```
 
-A simple `deploy` after changes can leave orphaned Tailscale devices and hostname conflicts. The destroy-then-deploy workflow ensures clean state.
-
 ## Configuration
+
+### Viewing & Modifying Config
+
+View your current configuration without opening the manifest file:
+
+```bash
+agent-army config show              # Human-readable summary
+agent-army config show --json       # Full JSON output
+```
+
+Modify config values with validation (no need to re-run `init`):
+
+```bash
+agent-army config set region us-west-2
+agent-army config set instanceType t3.large
+agent-army config set instanceType cx32 -a titus   # Per-agent override
+agent-army config set volumeSize 50 -a scout       # Per-agent volume
+```
+
+Run `agent-army redeploy` after changing config to apply.
 
 ### `agent-army.json`
 
@@ -300,7 +325,7 @@ For more advanced secret management, use [Pulumi ESC](https://www.pulumi.com/doc
 agent-army/
 ├── cli/                    # CLI tool (commands, prompts, config management)
 │   ├── bin.ts              # Entry point (Commander.js)
-│   ├── commands/           # init, deploy, status, ssh, validate, destroy, list
+│   ├── commands/           # init, deploy, redeploy, status, ssh, validate, destroy, config, list
 │   ├── lib/                # Config, prerequisites, Pulumi ops, UI helpers
 │   └── types.ts            # TypeScript types
 ├── src/                    # Reusable Pulumi components
