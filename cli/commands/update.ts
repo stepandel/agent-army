@@ -44,11 +44,11 @@ export async function updateCommand(_opts: UpdateOptions): Promise<void> {
     process.exit(1);
   }
 
-  // Read current version
+  // Read current version (go up two levels: dist/commands/ → dist/ → cli/)
   const fs = await import("fs");
   const path = await import("path");
   const pkgJson = JSON.parse(
-    fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8")
+    fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf-8")
   );
   const current: string = pkgJson.version;
 
