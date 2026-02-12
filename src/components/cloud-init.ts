@@ -384,6 +384,19 @@ export function interpolateCloudInit(
 }
 
 /**
+ * Wraps a cloud-init script in a gzip+base64 self-extracting bootstrap.
+ * Hetzner limits user_data to 32KB; this typically achieves 60-70% compression.
+ */
+export function compressCloudInit(script: string): string {
+  const compressed = zlib.gzipSync(Buffer.from(script, "utf-8")).toString("base64");
+  return `#!/bin/bash
+base64 -d <<'COMPRESSED_PAYLOAD' | gunzip | bash
+${compressed}
+COMPRESSED_PAYLOAD
+`;
+}
+
+/**
  * Generates bash script to install Claude Code CLI and configure the default model
  */
 function generateClaudeCodeInstallScript(model?: string): string {

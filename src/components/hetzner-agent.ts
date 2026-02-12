@@ -7,7 +7,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as hcloud from "@pulumi/hcloud";
 import * as tls from "@pulumi/tls";
 import * as crypto from "crypto";
-import { generateCloudInit, interpolateCloudInit, CloudInitConfig } from "./cloud-init";
+import { generateCloudInit, interpolateCloudInit, compressCloudInit, CloudInitConfig } from "./cloud-init";
 
 /**
  * Arguments for creating a Hetzner OpenClaw Agent
@@ -300,7 +300,7 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
           };
 
               const script = generateCloudInit(cloudInitConfig);
-              return interpolateCloudInit(script, {
+              const interpolated = interpolateCloudInit(script, {
                 anthropicApiKey: apiKey,
                 tailscaleAuthKey: tsAuthKey,
                 gatewayToken: gwToken,
@@ -309,6 +309,8 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
                 linearApiKey: linearApiKey || undefined,
                 githubToken: githubToken || undefined,
               });
+              // Compress to stay within Hetzner's 32KB user_data limit
+              return compressCloudInit(interpolated);
             })
       );
 
