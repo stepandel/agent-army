@@ -429,8 +429,8 @@ fi
 
 # Configure default model
 mkdir -p ~/.claude
-echo '{"model":"${claudeModel}"}' > ~/.claude/settings.json
-echo "Claude Code default model set to ${claudeModel}"
+echo '{"model":"${claudeModel}","fastMode":true}' > ~/.claude/settings.json
+echo "Claude Code default model set to ${claudeModel} (fast mode)"
 CLAUDE_CODE_INSTALL_SCRIPT
 `;
 }
