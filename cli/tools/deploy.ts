@@ -4,12 +4,20 @@
  * Platform-agnostic implementation using RuntimeAdapter.
  */
 
-import type { RuntimeAdapter, ToolImplementation } from "../adapters";
+import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
 import { COST_ESTIMATES, HETZNER_COST_ESTIMATES } from "../lib/constants";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
-import { isTailscaleInstalled, isTailscaleRunning } from "../lib/tailscale";
+import { isTailscaleInstalled, isTailscaleRunning, cleanupTailscaleDevices } from "../lib/tailscale";
 import pc from "picocolors";
+
+/**
+ * Get Pulumi config value
+ */
+function getConfig(exec: ExecAdapter, key: string, cwd?: string): string | null {
+  const result = exec.capture("pulumi", ["config", "get", key], cwd);
+  return result.exitCode === 0 ? result.stdout.trim() : null;
+}
 
 export interface DeployOptions {
   /** Skip confirmation prompt */
@@ -119,6 +127,28 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
 
   // Sync instanceType from manifest to Pulumi config
   exec.capture("pulumi", ["config", "set", "instanceType", manifest.instanceType], cwd);
+
+  // Clean up stale Tailscale devices before deploying
+  // This prevents duplicates when Pulumi replaces servers (create-before-delete)
+  const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
+  const tailscaleApiKey = getConfig(exec, "tailscaleApiKey", cwd);
+
+  if (tailnetDnsName && tailscaleApiKey) {
+    const spinner = ui.spinner("Cleaning up stale Tailscale devices...");
+    const { cleaned, failed } = cleanupTailscaleDevices(
+      tailscaleApiKey, tailnetDnsName, manifest.stackName, manifest.agents
+    );
+    if (cleaned.length > 0) {
+      spinner.stop(`Removed ${cleaned.length} stale Tailscale device(s)`);
+    } else {
+      spinner.stop("No stale Tailscale devices found");
+    }
+    if (failed.length > 0) {
+      ui.log.warn(
+        `Could not remove some devices: ${failed.join(", ")}. Check https://login.tailscale.com/admin/machines`
+      );
+    }
+  }
 
   // Deploy
   ui.log.step("Running pulumi up...");

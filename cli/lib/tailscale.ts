@@ -139,6 +139,43 @@ export function listTailscaleDevices(
 }
 
 /**
+ * Remove stale Tailscale devices for a set of agents.
+ * Used before deploy/redeploy to prevent duplicate device entries
+ * when Pulumi replaces servers (create-before-delete).
+ *
+ * Returns counts of cleaned, failed, and not-found devices.
+ */
+export function cleanupTailscaleDevices(
+  apiKey: string,
+  tailnet: string,
+  stackName: string,
+  agents: { name: string }[],
+): { cleaned: string[]; failed: string[] } {
+  const cleaned: string[] = [];
+  const failed: string[] = [];
+
+  const devices = listTailscaleDevices(apiKey, tailnet);
+  if (!devices) return { cleaned, failed };
+
+  for (const agent of agents) {
+    const tsHost = `${stackName}-${agent.name}`;
+    const matching = devices.filter((d) =>
+      d.hostname === tsHost || d.name.startsWith(`${tsHost}.`)
+    );
+    for (const device of matching) {
+      const deleted = deleteTailscaleDevice(apiKey, device.id);
+      if (deleted) {
+        cleaned.push(`${agent.name} (${device.hostname})`);
+      } else {
+        failed.push(agent.name);
+      }
+    }
+  }
+
+  return { cleaned, failed };
+}
+
+/**
  * Delete a single Tailscale device by ID.
  * Retries up to 3 times with exponential backoff.
  * Returns true on success.

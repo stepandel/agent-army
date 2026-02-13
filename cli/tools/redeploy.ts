@@ -5,11 +5,19 @@
  * Unlike destroy+deploy, this reuses existing infrastructure (including Tailscale devices).
  */
 
-import type { RuntimeAdapter, ToolImplementation } from "../adapters";
+import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
-import { isTailscaleInstalled, isTailscaleRunning } from "../lib/tailscale";
+import { isTailscaleInstalled, isTailscaleRunning, cleanupTailscaleDevices } from "../lib/tailscale";
 import pc from "picocolors";
+
+/**
+ * Get Pulumi config value
+ */
+function getConfig(exec: ExecAdapter, key: string, cwd?: string): string | null {
+  const result = exec.capture("pulumi", ["config", "get", key], cwd);
+  return result.exitCode === 0 ? result.stdout.trim() : null;
+}
 
 export interface RedeployOptions {
   /** Skip confirmation prompt */
@@ -117,6 +125,28 @@ export const redeployTool: ToolImplementation<RedeployOptions> = async (
   if (configSetResult.exitCode !== 0) {
     ui.log.error(`Failed to set Pulumi config: ${configSetResult.stderr || "unknown error"}`);
     process.exit(1);
+  }
+
+  // Clean up stale Tailscale devices before deploying
+  // This prevents duplicates when Pulumi replaces servers (create-before-delete)
+  const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
+  const tailscaleApiKey = getConfig(exec, "tailscaleApiKey", cwd);
+
+  if (tailnetDnsName && tailscaleApiKey) {
+    const spinner = ui.spinner("Cleaning up stale Tailscale devices...");
+    const { cleaned, failed } = cleanupTailscaleDevices(
+      tailscaleApiKey, tailnetDnsName, manifest.stackName, manifest.agents
+    );
+    if (cleaned.length > 0) {
+      spinner.stop(`Removed ${cleaned.length} stale Tailscale device(s)`);
+    } else {
+      spinner.stop("No stale Tailscale devices found");
+    }
+    if (failed.length > 0) {
+      ui.log.warn(
+        `Could not remove some devices: ${failed.join(", ")}. Check https://login.tailscale.com/admin/machines`
+      );
+    }
   }
 
   // Run pulumi up with --refresh to read actual cloud state first

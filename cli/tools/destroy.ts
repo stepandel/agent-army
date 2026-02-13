@@ -6,8 +6,7 @@
 
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
-import { tailscaleHostname } from "../lib/constants";
-import { listTailscaleDevices, deleteTailscaleDevice } from "../lib/tailscale";
+import { cleanupTailscaleDevices } from "../lib/tailscale";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import pc from "picocolors";
 
@@ -145,34 +144,16 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
 
   if (tailnetDnsName && tailscaleApiKey) {
     const spinner = ui.spinner("Removing agents from Tailscale...");
-    const apiFailed: string[] = [];
-
-    const tailnet = tailnetDnsName;
-    const devices = listTailscaleDevices(tailscaleApiKey, tailnet);
-
-    if (devices) {
-      for (const agent of manifest.agents) {
-        const tsHost = tailscaleHostname(manifest.stackName, agent.name);
-        const device = devices.find((d) =>
-          d.hostname === tsHost || d.name.startsWith(`${tsHost}.`)
-        );
-        if (device) {
-          const deleted = deleteTailscaleDevice(tailscaleApiKey, device.id);
-          if (!deleted) apiFailed.push(agent.name);
-        }
-      }
-
-      if (apiFailed.length === 0) {
-        spinner.stop("Tailscale devices cleaned up");
-      } else {
-        spinner.stop("Some Tailscale devices could not be removed");
-        ui.log.warn(
-          `Could not remove: ${apiFailed.join(", ")}. Remove manually from https://login.tailscale.com/admin/machines`
-        );
-      }
+    const { cleaned, failed } = cleanupTailscaleDevices(
+      tailscaleApiKey, tailnetDnsName, manifest.stackName, manifest.agents
+    );
+    if (failed.length === 0) {
+      spinner.stop(cleaned.length > 0 ? "Tailscale devices cleaned up" : "No Tailscale devices found");
     } else {
-      spinner.stop("Could not list Tailscale devices");
-      ui.log.warn("Manual cleanup may be needed at https://login.tailscale.com/admin/machines");
+      spinner.stop("Some Tailscale devices could not be removed");
+      ui.log.warn(
+        `Could not remove: ${failed.join(", ")}. Remove manually from https://login.tailscale.com/admin/machines`
+      );
     }
   } else if (tailnetDnsName && !tailscaleApiKey) {
     ui.log.warn("No Tailscale API key configured - devices must be removed manually.");
