@@ -1,5 +1,6 @@
 "use client";
 
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -128,6 +129,45 @@ export default function SignupPage() {
           {isLoading ? "Creating account..." : "Sign Up"}
         </button>
       </form>
+      <div
+        style={{
+          marginTop: "20px",
+          paddingTop: "20px",
+          borderTop: "1px solid #ccc",
+          textAlign: "center",
+        }}
+      >
+        <p style={{ marginBottom: "10px", color: "#666" }}>Or continue with</p>
+        <button
+          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+          style={{
+            width: "100%",
+            padding: "10px",
+            marginBottom: "8px",
+            backgroundColor: "#fff",
+            color: "#333",
+            border: "1px solid #ccc",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          Sign up with Google
+        </button>
+        <button
+          onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
+          style={{
+            width: "100%",
+            padding: "10px",
+            backgroundColor: "#24292e",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          Sign up with GitHub
+        </button>
+      </div>
       <p style={{ marginTop: "15px", textAlign: "center" }}>
         Already have an account?{" "}
         <a href="/login" style={{ color: "#0070f3" }}>

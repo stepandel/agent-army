@@ -108,6 +108,45 @@ function LoginForm() {
           {isLoading ? "Logging in..." : "Login"}
         </button>
       </form>
+      <div
+        style={{
+          marginTop: "20px",
+          paddingTop: "20px",
+          borderTop: "1px solid #ccc",
+          textAlign: "center",
+        }}
+      >
+        <p style={{ marginBottom: "10px", color: "#666" }}>Or continue with</p>
+        <button
+          onClick={() => signIn("google", { callbackUrl })}
+          style={{
+            width: "100%",
+            padding: "10px",
+            marginBottom: "8px",
+            backgroundColor: "#fff",
+            color: "#333",
+            border: "1px solid #ccc",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          Sign in with Google
+        </button>
+        <button
+          onClick={() => signIn("github", { callbackUrl })}
+          style={{
+            width: "100%",
+            padding: "10px",
+            backgroundColor: "#24292e",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          Sign in with GitHub
+        </button>
+      </div>
       <p style={{ marginTop: "15px", textAlign: "center" }}>
         Don't have an account?{" "}
         <a href="/signup" style={{ color: "#0070f3" }}>
