@@ -22,7 +22,7 @@ Process a ticket that has arrived in your Linear queue. Your role is to manage t
 5. **Verify and ship** — When coding agent completes, run build/test checks in the project directory.
    - **Pass** → Create a PR, assign Scout as reviewer. Use `linear_issue_update` to move the ticket to "In Review" and assign Scout. Use `linear_comment_add` to post the PR link on the ticket.
    - **Fail (< 3 attempts)** → Spawn coding agent to fix the errors and re-run.
-   - **Fail (3+ attempts)** → Create a draft PR with a failure summary. Use `linear_comment_add` to post the draft PR link on the ticket.
+   - **Fail (3+ attempts)** → Create a draft PR with a failure summary. Use `linear_issue_update` to assign Scout. Use `linear_comment_add` to post the draft PR link on the ticket.
 
 ## Notes
 
