@@ -3,7 +3,18 @@
  *
  * Automates Slack app creation using the App Manifest API.
  * Reduces per-agent Slack onboarding from ~10 minutes to ~30 seconds.
+ *
+ * Prerequisites:
+ *   1. Go to https://api.slack.com/apps
+ *   2. Click "Your App Configuration Tokens" → "Generate Token"
+ *   3. Select your workspace and generate — copy the token (starts with xoxe-)
+ *   Note: Config tokens expire every 12 hours. Regenerate if needed.
+ *
+ * Usage:
+ *   agent-army slack-setup --config-token xoxe-... --agent-name "My Agent"
  */
+
+import { exitWithError } from "../lib/ui";
 
 const SLACK_API = "https://slack.com/api";
 
@@ -83,20 +94,32 @@ async function slackApi(
   token: string,
   body: Record<string, unknown>,
 ): Promise<{ ok: boolean; error?: string; [key: string]: unknown }> {
-  const res = await fetch(`${SLACK_API}/${endpoint}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Slack API HTTP ${res.status}: ${res.statusText}`);
+  let res: Response;
+  try {
+    res = await fetch(`${SLACK_API}/${endpoint}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    exitWithError(
+      `Network error calling Slack API (${endpoint}): ${err instanceof Error ? err.message : String(err)}\n` +
+      "   Check your internet connection and try again.",
+    );
   }
 
-  return res.json() as Promise<{ ok: boolean; error?: string; [key: string]: unknown }>;
+  if (!res.ok) {
+    exitWithError(`Slack API HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  try {
+    return await res.json() as { ok: boolean; error?: string; [key: string]: unknown };
+  } catch {
+    exitWithError(`Slack API returned invalid JSON from ${endpoint}. Try again later.`);
+  }
 }
 
 export interface SlackSetupOptions {
@@ -127,7 +150,7 @@ export async function slackSetupCommand(opts: SlackSetupOptions): Promise<void> 
     } else {
       console.error(`   ${validateResult.error ?? "Unknown error"}`);
     }
-    process.exit(1);
+    exitWithError("Manifest validation failed. See errors above.");
   }
   console.log("  ✓ Manifest valid");
 
@@ -140,12 +163,13 @@ export async function slackSetupCommand(opts: SlackSetupOptions): Promise<void> 
   if (!createResult.ok) {
     const error = createResult.error ?? "Unknown error";
     if (error === "invalid_auth" || error === "token_expired") {
-      console.error("\n❌ Config token is invalid or expired.");
-      console.error("   Regenerate at: https://api.slack.com/apps → Your App Configuration Tokens → Generate Token");
+      exitWithError(
+        "Config token is invalid or expired.\n" +
+        "   Regenerate at: https://api.slack.com/apps → Your App Configuration Tokens → Generate Token",
+      );
     } else {
-      console.error(`\n❌ App creation failed: ${error}`);
+      exitWithError(`App creation failed: ${error}`);
     }
-    process.exit(1);
   }
 
   const appId = (createResult as { app_id?: string }).app_id
