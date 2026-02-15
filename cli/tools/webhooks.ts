@@ -208,7 +208,7 @@ export const webhooksSetupTool: ToolImplementation<WebhooksSetupOptions> = async
     // Escape the secret for use inside jq
     const escapedSecret = secret.replace(/'/g, "'\\''");
     const jqCmd =
-      `jq '.plugins.entries[\\"openclaw-linear\\"].webhookSecret = \\\"${escapedSecret.replace(/\\/g, "\\\\").replace(/"/g, '\\\\\\"')}\\\"' ` +
+      `jq '.plugins.entries.linear.config.webhookSecret = \\\"${escapedSecret.replace(/\\/g, "\\\\").replace(/"/g, '\\\\\\"')}\\\"' ` +
       `/home/${SSH_USER}/.openclaw/openclaw.json > /tmp/openclaw-patched.json && ` +
       `mv /tmp/openclaw-patched.json /home/${SSH_USER}/.openclaw/openclaw.json`;
 

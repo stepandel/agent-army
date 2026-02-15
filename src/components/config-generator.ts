@@ -188,12 +188,14 @@ print("Configured Slack channel with Socket Mode")
 # Configure openclaw-linear plugin
 config.setdefault("plugins", {})
 config["plugins"].setdefault("entries", {})
-config["plugins"]["entries"]["openclaw-linear"] = {
+config["plugins"]["entries"]["linear"] = {
     "enabled": True,
-    "apiKey": os.environ.get("LINEAR_API_KEY", ""),
-    "webhookSecret": os.environ.get("LINEAR_WEBHOOK_SECRET", ""),
-    "agentMapping": ${agentMappingJson}${activeActionsJson ? `,
-    "activeActions": ${activeActionsJson}` : ""}
+    "config": {
+        "apiKey": os.environ.get("LINEAR_API_KEY", ""),
+        "webhookSecret": os.environ.get("LINEAR_WEBHOOK_SECRET", ""),
+        "agentMapping": ${agentMappingJson}${activeActionsJson ? `,
+        "activeActions": ${activeActionsJson}` : ""}
+    }
 }
 print("Configured openclaw-linear plugin")
 `;
