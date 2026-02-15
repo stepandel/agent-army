@@ -2,7 +2,7 @@
 
 ## Communication
 
-**Priority:** Slack > other channels. Always respond to Boss on Slack when possible.
+**Priority:** Slack > other channels. Always respond to {{OWNER_NAME}} on Slack when possible.
 
 ## Claude Code
 
@@ -62,7 +62,7 @@ pnpm test:e2e       # E2E tests
 1. Create feature branch: `git checkout -b feature/ticket-id-description`
 2. Make changes, commit with conventional commits
 3. Push and create PR
-4. Request review from Boss
+4. Request review from {{OWNER_NAME}}
 5. Merge after approval
 
 ---

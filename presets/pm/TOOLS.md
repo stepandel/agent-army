@@ -2,7 +2,7 @@
 
 ## Communication
 
-**Priority:** Slack > other channels. Always respond to Boss on Slack when possible.
+**Priority:** Slack > other channels. Always respond to {{OWNER_NAME}} on Slack when possible.
 
 ## Linear
 
@@ -23,7 +23,7 @@ Primary communication channel with team.
 
 - Check unread messages in team channels
 - Ping engineers about blockers
-- Report status to Boss
+- Report status to {{OWNER_NAME}}
 
 ## GitHub
 

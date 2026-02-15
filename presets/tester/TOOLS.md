@@ -2,7 +2,7 @@
 
 ## Communication
 
-**Priority:** Slack > other channels. Always respond to Boss on Slack when possible.
+**Priority:** Slack > other channels. Always respond to {{OWNER_NAME}} on Slack when possible.
 
 ## Linear
 
