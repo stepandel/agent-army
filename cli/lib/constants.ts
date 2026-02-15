@@ -206,17 +206,6 @@ export const KEY_INSTRUCTIONS = {
       "3. Copy the key (starts with lin_api_)",
     ],
   },
-  linearWebhookSecret: {
-    title: "Linear Webhook Signing Secret",
-    steps: [
-      "Create a webhook in Linear for each agent to receive issue events:",
-      "1. Go to Settings → API → Webhooks → \"New webhook\"",
-      "2. Set the URL to the agent's public webhook endpoint (shown after deploy)",
-      "3. Select the events you want to receive (e.g., Issues, Comments)",
-      "4. Copy the \"Signing secret\" shown after creating the webhook",
-      "5. Each agent needs its own webhook and signing secret",
-    ],
-  },
   linearUserUuid: {
     title: "Linear User UUID",
     steps: [

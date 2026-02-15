@@ -23,6 +23,7 @@ import { listCommand } from "./commands/list";
 import { updateCommand } from "./commands/update";
 import { configShowCommand, configSetCommand } from "./commands/config";
 import { redeployCommand } from "./commands/redeploy";
+import { webhooksSetupCommand } from "./commands/webhooks";
 import { checkForUpdates } from "./lib/update-check";
 
 // Forward SIGINT/SIGTERM to child processes before exiting
@@ -152,6 +153,18 @@ configCmd
   .option("-a, --agent <name>", "Target a specific agent")
   .action(async (key: string, value: string, opts) => {
     await configSetCommand(key, value, opts);
+  });
+
+const webhooksCmd = program
+  .command("webhooks")
+  .description("Manage agent webhooks");
+
+webhooksCmd
+  .command("setup")
+  .description("Configure Linear webhooks for deployed agents")
+  .option("-c, --config <name>", "Config name (auto-detected if only one)")
+  .action(async (opts) => {
+    await webhooksSetupCommand(opts);
   });
 
 program

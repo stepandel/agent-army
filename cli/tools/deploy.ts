@@ -187,6 +187,18 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
       }
 
       ui.note(lines.join("\n"), "Agent Details");
+
+      // Show webhook URLs if available
+      const webhookLines: string[] = [];
+      for (const agent of manifest.agents) {
+        const webhookUrl = outputs[`${agent.role}WebhookUrl`] as string | undefined;
+        if (webhookUrl) {
+          webhookLines.push(`  ${agent.displayName} (${agent.role}): ${webhookUrl}`);
+        }
+      }
+      if (webhookLines.length > 0) {
+        ui.note(webhookLines.join("\n"), "Webhook URLs");
+      }
     } catch (err) {
       ui.log.warn(`Could not parse stack outputs: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -206,6 +218,10 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
       `Tailscale is not running. Start it before validating agents.\n  Open the Tailscale app or run: ${pc.cyan("tailscale up")}`
     );
   }
+
+  ui.log.info(
+    `Run ${pc.cyan("agent-army webhooks setup")} to configure Linear webhooks for your agents.`
+  );
 
   ui.outro("Agents will be ready in 3-5 minutes. Run `agent-army validate` to check.");
 };

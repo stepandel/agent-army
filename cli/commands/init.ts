@@ -375,7 +375,6 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     slackBotToken?: string;
     slackAppToken?: string;
     linearApiKey?: string;
-    linearWebhookSecret?: string;
     linearUserUuid?: string;
     githubToken?: string;
   }> = {};
@@ -441,24 +440,6 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
       handleCancel(linearKey);
 
       integrationCredentials[agent.role].linearApiKey = linearKey as string;
-    }
-
-    // Per-agent Linear webhook signing secret
-    p.note(
-      KEY_INSTRUCTIONS.linearWebhookSecret.steps.join("\n"),
-      KEY_INSTRUCTIONS.linearWebhookSecret.title
-    );
-
-    for (const agent of agents) {
-      const webhookSecretInput = await p.password({
-        message: `Linear webhook signing secret for ${agent.displayName} (${agent.role})`,
-        validate: (val) => {
-          if (!val) return "Webhook signing secret is required";
-        },
-      });
-      handleCancel(webhookSecretInput);
-
-      integrationCredentials[agent.role].linearWebhookSecret = webhookSecretInput as string;
     }
 
     // Per-agent Linear user UUID (maps Linear user → agent)
@@ -608,7 +589,6 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     if (creds.slackBotToken) setConfig(`${role}SlackBotToken`, creds.slackBotToken, true, cwd);
     if (creds.slackAppToken) setConfig(`${role}SlackAppToken`, creds.slackAppToken, true, cwd);
     if (creds.linearApiKey) setConfig(`${role}LinearApiKey`, creds.linearApiKey, true, cwd);
-    if (creds.linearWebhookSecret) setConfig(`${role}LinearWebhookSecret`, creds.linearWebhookSecret, true, cwd);
     if (creds.linearUserUuid) setConfig(`${role}LinearUserUuid`, creds.linearUserUuid, false, cwd);
     if (creds.githubToken) setConfig(`${role}GithubToken`, creds.githubToken, true, cwd);
   }
