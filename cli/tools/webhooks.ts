@@ -18,7 +18,7 @@ export interface WebhooksSetupOptions {
  * Get stack outputs
  */
 function getStackOutputs(exec: ExecAdapter, cwd?: string): Record<string, unknown> | null {
-  const result = exec.capture("pulumi", ["stack", "output", "--json"], cwd);
+  const result = exec.capture("pulumi", ["stack", "output", "--json", "--show-secrets"], cwd);
   if (result.exitCode !== 0) return null;
   try {
     return JSON.parse(result.stdout);
