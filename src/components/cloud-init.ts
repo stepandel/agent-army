@@ -169,8 +169,8 @@ curl -fsSL https://tailscale.com/install.sh | sh
 tailscale up --authkey="\${TAILSCALE_AUTH_KEY}" --ssh${config.tailscaleHostname ? ` --hostname=${config.tailscaleHostname}` : ""} || echo "WARNING: Tailscale setup failed. Run 'sudo tailscale up' manually."
 `;
 
-  // Tailscale serve section
-  const tailscaleServeSection = config.skipTailscale
+  // Tailscale serve section (skip if funnel will be used — funnel is a superset of serve)
+  const tailscaleServeSection = config.skipTailscale || config.linear
     ? ""
     : `
 # Enable Tailscale HTTPS proxy (requires HTTPS to be enabled in Tailscale admin console)
