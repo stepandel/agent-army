@@ -171,6 +171,11 @@ print("Configured Slack channel with Socket Mode")
   const linearPluginConfig = options.linear
     ? (() => {
         const agentMapping: Record<string, string> = {};
+        if (!!options.linear.agentLinearUserUuid !== !!options.linear.agentId) {
+          throw new Error(
+            "linear.agentLinearUserUuid and linear.agentId must be provided together to build agentMapping."
+          );
+        }
         if (options.linear.agentLinearUserUuid && options.linear.agentId) {
           agentMapping[options.linear.agentLinearUserUuid] = options.linear.agentId;
         }

@@ -71,10 +71,10 @@ export function generateCloudInit(config: CloudInitConfig): string {
   const linearOptions: LinearConfigOptions | undefined = config.linear
     ? {
         ...config.linear,
-        webhookSecret: config.linearWebhookSecret,
-        agentId: config.linearAgentId,
-        agentLinearUserUuid: config.linearUserUuid,
-        activeActions: config.linearActiveActions,
+        webhookSecret: config.linearWebhookSecret ?? config.linear.webhookSecret,
+        agentId: config.linearAgentId ?? config.linear.agentId,
+        agentLinearUserUuid: config.linearUserUuid ?? config.linear.agentLinearUserUuid,
+        activeActions: config.linearActiveActions ?? config.linear.activeActions,
       }
     : undefined;
 

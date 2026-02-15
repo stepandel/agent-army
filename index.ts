@@ -84,6 +84,7 @@ const agentLinearUserUuids: Record<string, string | undefined> = {};
 const agentGithubCredentials: Record<string, pulumi.Output<string> | undefined> = {};
 
 // Common roles to check for credentials
+// Note: custom roles are handled below after manifest is loaded
 const commonRoles = ["pm", "eng", "tester"];
 for (const role of commonRoles) {
   const botToken = config.getSecret(`${role}SlackBotToken`);
@@ -199,6 +200,24 @@ if (!fs.existsSync(manifestPath)) {
 }
 
 const manifest: Manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+
+// Load credentials for any custom roles not in commonRoles
+for (const agent of manifest.agents) {
+  if (!commonRoles.includes(agent.role)) {
+    const role = agent.role;
+    const botToken = config.getSecret(`${role}SlackBotToken`);
+    const appToken = config.getSecret(`${role}SlackAppToken`);
+    if (botToken || appToken) {
+      agentSlackCredentials[role] = { botToken, appToken };
+    }
+    const linearToken = config.getSecret(`${role}LinearApiKey`);
+    if (linearToken) agentLinearCredentials[role] = linearToken;
+    const linearUserUuid = config.get(`${role}LinearUserUuid`);
+    if (linearUserUuid) agentLinearUserUuids[role] = linearUserUuid;
+    const githubToken = config.getSecret(`${role}GithubToken`);
+    if (githubToken) agentGithubCredentials[role] = githubToken;
+  }
+}
 
 // Default provider to AWS for backwards compatibility with existing manifests
 const provider = manifest.provider ?? "aws";

@@ -368,13 +368,13 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
     this.publicIp = server.ipv4Address;
     this.serverId = server.id;
     this.firewallId = firewall.id;
-    this.sshPrivateKey = sshKey.privateKeyOpenssh;
+    this.sshPrivateKey = pulumi.secret(sshKey.privateKeyOpenssh);
     this.sshPublicKey = sshKey.publicKeyOpenssh;
-    this.gatewayToken = gatewayTokenValue;
+    this.gatewayToken = pulumi.secret(gatewayTokenValue);
 
     // Tailscale hostname includes stack name to avoid conflicts (e.g., dev-agent-pm)
     const tsHostname = `${pulumi.getStack()}-${name}`;
-    this.tailscaleUrl = pulumi.interpolate`https://${tsHostname}.${args.tailnetDnsName}/?token=${gatewayTokenValue}`;
+    this.tailscaleUrl = pulumi.secret(pulumi.interpolate`https://${tsHostname}.${args.tailnetDnsName}/?token=${gatewayTokenValue}`);
 
     // Register outputs
     this.registerOutputs({
