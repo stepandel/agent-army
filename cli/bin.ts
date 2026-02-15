@@ -23,6 +23,7 @@ import { listCommand } from "./commands/list";
 import { updateCommand } from "./commands/update";
 import { configShowCommand, configSetCommand } from "./commands/config";
 import { redeployCommand } from "./commands/redeploy";
+import { slackSetupCommand } from "./commands/slack-setup";
 import { checkForUpdates } from "./lib/update-check";
 
 // Forward SIGINT/SIGTERM to child processes before exiting
@@ -159,6 +160,18 @@ program
   .description("Update agent-army CLI to the latest version")
   .action(async (opts) => {
     await updateCommand(opts);
+  });
+
+program
+  .command("slack-setup")
+  .description("Create a Slack app for an OpenClaw agent via App Manifests")
+  .requiredOption("-t, --config-token <token>", "Slack app configuration token")
+  .requiredOption("-n, --agent-name <name>", "Display name for the Slack bot")
+  .action(async (opts) => {
+    await slackSetupCommand({
+      configToken: opts.configToken,
+      agentName: opts.agentName,
+    });
   });
 
 // Fire-and-forget update check — must run before parse() because
