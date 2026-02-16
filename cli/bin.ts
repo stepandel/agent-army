@@ -22,6 +22,7 @@ import { destroyCommand } from "./commands/destroy";
 import { listCommand } from "./commands/list";
 import { updateCommand } from "./commands/update";
 import { configShowCommand, configSetCommand } from "./commands/config";
+import { secretsSetCommand, secretsListCommand } from "./commands/secrets";
 import { redeployCommand } from "./commands/redeploy";
 import { webhooksSetupCommand } from "./commands/webhooks";
 import { checkForUpdates } from "./lib/update-check";
@@ -153,6 +154,27 @@ configCmd
   .option("-a, --agent <name>", "Target a specific agent")
   .action(async (key: string, value: string, opts) => {
     await configSetCommand(key, value, opts);
+  });
+
+const secretsCmd = program
+  .command("secrets")
+  .description("View or update Pulumi secrets without re-running init");
+
+secretsCmd
+  .command("set <key> <value>")
+  .description("Set a secret (e.g. braveApiKey, anthropicApiKey)")
+  .option("-c, --config <name>", "Config name (auto-detected if only one)")
+  .option("-a, --agent <role>", "Agent role for per-agent secrets (e.g. eng, pm, tester)")
+  .action(async (key: string, value: string, opts) => {
+    await secretsSetCommand(key, value, opts);
+  });
+
+secretsCmd
+  .command("list")
+  .description("Show which secrets are configured (values redacted)")
+  .option("-c, --config <name>", "Config name (auto-detected if only one)")
+  .action(async (opts) => {
+    await secretsListCommand(opts);
   });
 
 const webhooksCmd = program
