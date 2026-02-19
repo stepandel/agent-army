@@ -5,6 +5,8 @@ description: "How identities work, how agents coordinate, and how to create your
 
 Agent Army uses an **identity system** to define agent behavior. Each identity is a self-contained directory with an `identity.yaml` manifest and workspace files — everything an agent needs to operate: personality, skills, model preferences, plugin configuration, and dependencies.
 
+For a complete field-by-field reference, see [Identity Manifest Reference](/configuration/identity). For a step-by-step creation guide, see [Creating Identities](/guides/creating-identities).
+
 ## Identity Structure
 
 ```
@@ -361,7 +363,7 @@ agents:
 
 ### Create a New Identity
 
-To create an agent with a completely custom role, create a new identity directory. See the [example identity](https://github.com/stepandel/agent-army/tree/main/examples/identity) for a minimal, annotated starting point, or the [Creating Identities](/docs/creating-identities.md) guide for a full reference.
+To create an agent with a completely custom role, create a new identity directory. See the [example identity](https://github.com/stepandel/agent-army/tree/main/examples/identity) for a minimal starting point, or the [Creating Identities](/guides/creating-identities) guide for a full walkthrough.
 
 <Tip>
 Start by copying the example identity and modifying it for your use case. The key files to customize are `SOUL.md` (personality), `HEARTBEAT.md` (periodic tasks), and any skills you want to bundle.

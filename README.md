@@ -123,7 +123,7 @@ These are standard identities hosted in a Git repo — the same format as any cu
 
 ### Creating Your Own Identity
 
-See the [`examples/identity/`](./examples/identity/) directory for a complete, minimal example (a "researcher" agent), and [`docs/creating-identities.md`](./docs/creating-identities.md) for the full authoring guide covering:
+See the [`examples/identity/`](./examples/identity/) directory for a complete, minimal example (a "researcher" agent), and the [Creating Identities](./docs/guides/creating-identities.mdx) guide for the full authoring reference covering:
 
 - Identity structure and required files
 - `identity.yaml` field reference
