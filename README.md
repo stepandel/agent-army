@@ -54,11 +54,11 @@ The wizard walks you through:
 - **Cloud provider** — AWS or Hetzner Cloud
 - **Region & instance type** — with cost estimates shown inline
 - **Secrets** — Anthropic API key, Tailscale auth key (with instructions for each)
-- **Agent selection** — pick from presets, define custom agents, or mix both
+- **Agent selection** — pick from built-in identities, define custom agents, or mix both
 - **Optional integrations** — Slack, Linear, GitHub per agent
 - **Review & confirm** — see full config and estimated monthly cost
 
-This generates an `agent-army.json` manifest and sets all Pulumi config values automatically.
+This generates an `agent-army.yaml` manifest and sets all Pulumi config values automatically.
 
 ### 3. Deploy
 
@@ -77,7 +77,7 @@ agent-army validate
 ### 5. Access Your Agents
 
 ```bash
-agent-army ssh juno    # SSH to PM agent
+agent-army ssh juno      # SSH to PM agent
 agent-army ssh titus     # SSH to Engineer agent
 agent-army ssh scout     # SSH to QA agent
 ```
@@ -114,30 +114,117 @@ agent-army ssh pm          # by role
 agent-army ssh agent-pm    # by resource name
 ```
 
-## Preset Agents
+## Identity System
 
-Agent Army ships with three battle-tested agent presets:
+Agent Army uses an **identity system** to define agent personas. Identities are self-contained packages that live in external Git repos (or local directories) and include everything an agent needs: personality, skills, model preferences, plugin configuration, and dependencies.
 
-| Alias | Role | What It Does |
-|-------|------|-------------|
-| **Juno** | PM | Breaks down tickets, researches requirements, plans & sequences work, tracks progress, unblocks teams |
-| **Titus** | Engineer | Picks up tickets, writes code via Claude Code, builds/tests, creates PRs, responds to reviews |
-| **Scout** | Tester | Reviews PRs, tests happy/sad/edge cases, files bugs, verifies fixes |
+### Built-in Identities
 
-Each agent is defined by workspace files in `presets/`:
+Agent Army ships with three built-in identities:
+
+| Alias | Role | Model | What It Does |
+|-------|------|-------|-------------|
+| **Juno** | PM | Claude Opus 4.6 | Breaks down tickets, researches requirements, plans & sequences work, tracks progress, unblocks teams |
+| **Titus** | Engineer | Claude Opus 4.6 | Picks up tickets, writes code via Claude Code, builds/tests, creates PRs, responds to reviews |
+| **Scout** | Tester | Claude Opus 4.6 | Reviews PRs, tests happy/sad/edge cases, files bugs, verifies fixes |
+
+### Identity Structure
+
+Each identity is a directory with an `identity.yaml` manifest and workspace files:
 
 ```
-presets/
-├── base/           # Shared across all agents (AGENTS.md, BOOTSTRAP.md, USER.md)
-├── pm/             # Juno: SOUL.md, IDENTITY.md, HEARTBEAT.md, TOOLS.md
-├── eng/            # Titus: SOUL.md, IDENTITY.md, HEARTBEAT.md, TOOLS.md
-├── tester/         # Scout: SOUL.md, IDENTITY.md, HEARTBEAT.md, TOOLS.md
-└── skills/         # Reusable skills (ticket prep, PR testing, review workflows)
+my-identity/
+├── identity.yaml       # Manifest: model, plugins, deps, skills, template vars
+├── SOUL.md             # Personality, role, approach, communication style
+├── IDENTITY.md         # Name, role, emoji
+├── HEARTBEAT.md        # Periodic tasks and state machine logic
+├── TOOLS.md            # Tool reference (Linear, Slack, GitHub, local env)
+├── AGENTS.md           # Multi-agent coordination instructions
+├── BOOTSTRAP.md        # First-run setup instructions
+├── USER.md             # Owner-specific info (templated)
+└── skills/             # Bundled skills
+    ├── my-skill/
+    │   └── SKILL.md
+    └── another-skill/
+        └── SKILL.md
 ```
 
-You can also define fully custom agents during `agent-army init`.
+### `identity.yaml`
 
-### Customizing Agent Behavior
+The identity manifest declares the agent's defaults:
+
+```yaml
+name: eng
+displayName: Titus
+role: eng
+emoji: building_construction
+description: Lead engineering, coding, shipping
+volumeSize: 50
+
+# AI model configuration (per-identity, not global)
+model: anthropic/claude-opus-4-6
+backupModel: anthropic/claude-sonnet-4-5
+codingAgent: claude-code        # or "codex", "amp", etc.
+
+# System dependencies installed on the agent
+deps:
+  - gh
+  - brave-search
+
+# OpenClaw plugins
+plugins:
+  - openclaw-linear
+  - slack
+
+# Per-plugin default configuration
+pluginDefaults:
+  openclaw-linear:
+    stateActions:
+      triage: remove
+      backlog: add
+      started: add
+      completed: remove
+  slack:
+    mode: socket
+    dm:
+      enabled: true
+      policy: open
+
+# Bundled skills (plain = private, "clawhub:" prefix = public)
+skills:
+  - eng-queue-handler
+  - eng-ticket-workflow
+  - eng-pr-tester
+  - pr-review-resolver
+
+# Template variables used in workspace files
+templateVars:
+  - OWNER_NAME
+  - TIMEZONE
+  - WORKING_HOURS
+  - USER_NOTES
+  - LINEAR_TEAM
+  - GITHUB_REPO
+```
+
+### Using Custom Identities
+
+Point an agent at any Git repo or local directory during `agent-army init`:
+
+```yaml
+# agent-army.yaml
+agents:
+  - name: agent-pm
+    displayName: Juno
+    role: pm
+    identity: "https://github.com/your-org/army-identities#pm"
+    identityVersion: "v1.0.0"   # optional: pin to a tag or commit
+    volumeSize: 30
+```
+
+Identities are cached locally at `~/.agent-army/identity-cache/` and re-fetched on deploy.
+
+### Workspace Files
 
 | File | Purpose |
 |------|---------|
@@ -145,8 +232,11 @@ You can also define fully custom agents during `agent-army init`.
 | `IDENTITY.md` | Name, role, emoji |
 | `HEARTBEAT.md` | Periodic tasks and state machine logic |
 | `TOOLS.md` | Tool reference (Linear, Slack, GitHub, local env) |
+| `AGENTS.md` | Multi-agent coordination instructions |
+| `BOOTSTRAP.md` | First-run setup instructions |
+| `USER.md` | Owner-specific info (uses template variables) |
 
-Template variables are supported in preset files:
+Template variables are supported in workspace files:
 
 | Variable | Description |
 |----------|-------------|
@@ -156,6 +246,38 @@ Template variables are supported in preset files:
 | `{{USER_NOTES}}` | Custom notes for the agent |
 | `{{LINEAR_TEAM}}` | Default Linear team ID |
 | `{{GITHUB_REPO}}` | Default GitHub repository |
+
+## Registries
+
+Agent Army uses registries to manage installable components. Each registry maps names to install scripts and configuration.
+
+### Coding Agent Registry
+
+Defines how coding agent CLIs are installed and configured on cloud instances. The `codingAgent` field in `identity.yaml` selects which entry to use.
+
+| Agent | CLI | Description |
+|-------|-----|-------------|
+| `claude-code` | `claude` | Claude Code CLI (default) |
+
+Each entry provides an install script, model configuration script, and OpenClaw `cliBackends` config. New coding agents (Codex, Amp, etc.) can be added by extending the registry.
+
+### Dep Registry
+
+System-level tools installed on agents. Declared via the `deps` field in `identity.yaml`.
+
+| Dep | What It Installs |
+|-----|-----------------|
+| `gh` | GitHub CLI (with token-based auth) |
+| `brave-search` | Brave Search API key (config-only, no binary) |
+
+### Plugin Registry
+
+OpenClaw plugins configured per-agent. Declared via the `plugins` field in `identity.yaml`.
+
+| Plugin | What It Does |
+|--------|-------------|
+| `openclaw-linear` | Linear issue tracking integration (with webhooks via Tailscale Funnel) |
+| `slack` | Slack bot integration (Socket Mode) |
 
 ## Cloud Providers
 
@@ -177,10 +299,11 @@ Use Hetzner for development and cost savings (~80% cheaper). Use AWS for product
 Each agent gets:
 - Cloud instance (EC2 or Hetzner server) with Ubuntu 24.04 LTS
 - Docker (for OpenClaw sandbox)
-- Node.js v22, OpenClaw CLI, Claude Code CLI, GitHub CLI
+- Node.js v22, OpenClaw CLI, coding agent CLI (from registry), GitHub CLI
 - Tailscale VPN (encrypted mesh, no public ports)
-- Workspace files injected from `presets/`
-- Optional: Linear CLI (via Deno), Slack integration
+- Workspace files and skills injected from its identity
+- AI model configured per-identity (with fallback support)
+- Plugins and deps installed per-identity
 
 All agents share a single VPC/network for cost optimization.
 
@@ -219,9 +342,10 @@ Tailscale requires a few one-time setup steps:
 
 These are provisioned on the cloud instances via cloud-init — you do **not** need them locally:
 
-- Docker, Node.js v22, OpenClaw CLI, Claude Code CLI, GitHub CLI
-- Deno + Linear CLI (if Linear integration is enabled)
+- Docker, Node.js v22, OpenClaw CLI, coding agent CLI (e.g., Claude Code)
 - Tailscale (agent-side)
+- GitHub CLI, Brave Search, and other deps (per-identity)
+- OpenClaw plugins: Linear, Slack (per-identity)
 
 ## Required API Keys
 
@@ -282,28 +406,38 @@ agent-army config set volumeSize 50 -a scout       # Per-agent volume
 
 Run `agent-army redeploy` after changing config to apply.
 
-### `agent-army.json`
+### `agent-army.yaml`
 
 Generated by `agent-army init`. This manifest drives the entire deployment:
 
-```json
-{
-  "stackName": "dev",
-  "provider": "aws",
-  "region": "us-east-1",
-  "instanceType": "t3.medium",
-  "ownerName": "Your Name",
-  "agents": [
-    {
-      "name": "agent-pm",
-      "displayName": "Juno",
-      "role": "pm",
-      "preset": "pm",
-      "volumeSize": 30
-    }
-  ]
-}
+```yaml
+stackName: dev
+provider: aws
+region: us-east-1
+instanceType: t3.medium
+ownerName: Your Name
+timezone: America/New_York
+workingHours: 9am-6pm
+agents:
+  - name: agent-pm
+    displayName: Juno
+    role: pm
+    identity: "https://github.com/your-org/army-identities#pm"
+    volumeSize: 30
+    plugins:
+      - openclaw-linear
+      - slack
+    deps:
+      - gh
+      - brave-search
+  - name: agent-eng
+    displayName: Titus
+    role: eng
+    identity: "https://github.com/your-org/army-identities#eng"
+    volumeSize: 50
 ```
+
+Model, backup model, and coding agent are configured in the identity (not the manifest). The manifest defines _which_ agents to deploy and _where_.
 
 ### Pulumi Config
 
@@ -327,23 +461,24 @@ agent-army/
 │   ├── bin.ts              # Entry point (Commander.js)
 │   ├── commands/           # init, deploy, redeploy, status, ssh, validate, destroy, config, list
 │   ├── lib/                # Config, prerequisites, Pulumi ops, UI helpers
-│   └── types.ts            # TypeScript types
+│   │   ├── coding-agent-registry.ts  # Coding agent CLI install/config registry
+│   │   ├── dep-registry.ts           # System dep install registry (gh, brave-search)
+│   │   ├── plugin-registry.ts        # OpenClaw plugin metadata registry
+│   │   ├── identity.ts               # Identity loader (Git repos, local paths)
+│   │   ├── skills.ts                 # Skill classifier (private vs public/clawhub)
+│   │   └── ...
+│   └── types.ts            # TypeScript types (ArmyManifest, IdentityManifest, etc.)
 ├── src/                    # Reusable Pulumi components
 │   └── components/
 │       ├── openclaw-agent.ts    # AWS EC2 agent component
 │       ├── hetzner-agent.ts     # Hetzner Cloud agent component
-│       ├── cloud-init.ts        # Cloud-init script generation
-│       └── config-generator.ts  # OpenClaw config builder
-├── presets/                # Agent role definitions & shared skills
-│   ├── base/               # Shared files for all agents
-│   ├── pm/                 # Juno (PM)
-│   ├── eng/                # Titus (Engineer)
-│   ├── tester/             # Scout (QA)
-│   └── skills/             # Reusable agent skills
+│       ├── cloud-init.ts        # Cloud-init script generation (registry-driven)
+│       └── config-generator.ts  # OpenClaw config builder (model fallbacks, cliBackends)
+├── identities/             # Built-in identity stubs (point to external repos)
 ├── docs/                   # Mintlify documentation site
 ├── esc/                    # Pulumi ESC secret templates
 ├── scripts/                # Shell script helpers
-├── examples/               # Example deployments
+├── web/                    # Next.js dashboard (agent-army-web)
 ├── index.ts                # Main Pulumi stack program
 ├── shared-vpc.ts           # Shared VPC component (AWS)
 └── Pulumi.yaml             # Pulumi project config
