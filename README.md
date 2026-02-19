@@ -1,4 +1,4 @@
-# Agent Army 🪖
+# Agent Army
 
 [![npm](https://img.shields.io/npm/v/agent-army)](https://www.npmjs.com/package/agent-army)
 [![license](https://img.shields.io/npm/l/agent-army)](./LICENSE)
@@ -7,14 +7,16 @@ Deploy a fleet of specialized [OpenClaw](https://openclaw.bot/) AI agents on **A
 
 ## What Is This?
 
-Agent Army provisions a team of autonomous AI agents that handle software engineering tasks — product management & research, development, and QA — with persistent memory and role-specific behavior. Agents communicate over a secure Tailscale mesh VPN with no public port exposure.
+Agent Army provisions autonomous AI agents with persistent memory, role-specific behavior, and secure networking. Each agent runs in a Docker sandbox with its own identity — personality, skills, tools, and model preferences — connected over a Tailscale mesh VPN with no public port exposure.
+
+You define _what_ your agents do. Agent Army handles _where_ and _how_ they run.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      AWS VPC / Hetzner Cloud                        │
 │                                                                     │
 │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐             │
-│  │  Juno (PM)   │   │ Titus (Eng)  │   │ Scout (QA)   │             │
+│  │  Agent A      │   │  Agent B     │   │  Agent C     │             │
 │  │              │   │              │   │              │             │
 │  │  • OpenClaw  │   │  • OpenClaw  │   │  • OpenClaw  │             │
 │  │  • Docker    │   │  • Docker    │   │  • Docker    │             │
@@ -33,9 +35,104 @@ Agent Army provisions a team of autonomous AI agents that handle software engine
                 └─────────────────────────┘
 ```
 
-## Quick Start
+## Identity System
 
-Everything is done through the CLI.
+Agents are defined by **identities** — composable, self-contained packages that include everything an agent needs to operate: personality, skills, model preferences, plugin configuration, and dependencies.
+
+### How Identities Work
+
+An identity is a directory with an `identity.yaml` manifest and workspace files:
+
+```
+my-identity/
+├── identity.yaml       # Manifest: model, plugins, deps, skills, template vars
+├── SOUL.md             # Personality, role, approach, communication style
+├── IDENTITY.md         # Name, role, emoji
+├── HEARTBEAT.md        # Periodic tasks and state machine logic
+├── TOOLS.md            # Tool reference (integrations, local env)
+├── AGENTS.md           # Multi-agent coordination instructions
+├── BOOTSTRAP.md        # First-run setup instructions
+├── USER.md             # Owner-specific info (templated)
+└── skills/             # Bundled skills
+    └── my-skill/
+        └── SKILL.md
+```
+
+Identities can live in a **Git repo**, a **monorepo subdirectory**, or a **local path**. Point any agent at any identity:
+
+```yaml
+# agent-army.yaml
+agents:
+  - name: agent-researcher
+    displayName: Atlas
+    role: researcher
+    identity: "https://github.com/your-org/your-identities#researcher"
+    identityVersion: "v1.0.0"   # optional: pin to a tag or commit
+    volumeSize: 20
+```
+
+### `identity.yaml`
+
+The identity manifest declares the agent's defaults:
+
+```yaml
+name: researcher
+displayName: Atlas
+role: researcher
+emoji: telescope
+description: Deep research, source analysis, report generation
+volumeSize: 20
+
+model: anthropic/claude-sonnet-4-5
+codingAgent: claude-code
+
+deps:
+  - brave-search
+
+plugins:
+  - slack
+
+pluginDefaults:
+  slack:
+    mode: socket
+    dm:
+      enabled: true
+      policy: open
+
+skills:
+  - research-report
+
+templateVars:
+  - OWNER_NAME
+  - TIMEZONE
+  - WORKING_HOURS
+  - USER_NOTES
+```
+
+### Built-in Identities
+
+Agent Army ships with three built-in identities to get you started:
+
+| Alias | Role | What It Does |
+|-------|------|-------------|
+| **Juno** | PM | Breaks down tickets, researches requirements, plans & sequences work, tracks progress |
+| **Titus** | Engineer | Picks up tickets, writes code via Claude Code, builds/tests, creates PRs |
+| **Scout** | Tester | Reviews PRs, tests happy/sad/edge cases, files bugs, verifies fixes |
+
+These are standard identities hosted in a Git repo — the same format as any custom identity you'd create.
+
+### Creating Your Own Identity
+
+See the [`examples/identity/`](./examples/identity/) directory for a complete, minimal example (a "researcher" agent), and [`docs/creating-identities.md`](./docs/creating-identities.md) for the full authoring guide covering:
+
+- Identity structure and required files
+- `identity.yaml` field reference
+- Workspace file conventions
+- Skill authoring (private and public)
+- Template variable substitution
+- Available registries (deps, plugins, coding agents)
+
+## Quick Start
 
 ### 1. Install
 
@@ -54,7 +151,7 @@ The wizard walks you through:
 - **Cloud provider** — AWS or Hetzner Cloud
 - **Region & instance type** — with cost estimates shown inline
 - **Secrets** — Anthropic API key, Tailscale auth key (with instructions for each)
-- **Agent selection** — pick from built-in identities, define custom agents, or mix both
+- **Agent selection** — pick from built-in identities, point to a Git repo or local directory, or mix both
 - **Optional integrations** — Slack, Linear, GitHub per agent
 - **Review & confirm** — see full config and estimated monthly cost
 
@@ -77,14 +174,12 @@ agent-army validate
 ### 5. Access Your Agents
 
 ```bash
-agent-army ssh juno      # SSH to PM agent
-agent-army ssh titus     # SSH to Engineer agent
-agent-army ssh scout     # SSH to QA agent
+agent-army ssh <agent-name>    # SSH by name, role, or alias
 ```
 
 ## CLI Reference
 
-The CLI is the primary interface for every operation. Run `agent-army --help` for the full list.
+Run `agent-army --help` for the full list.
 
 | Command | Description |
 |---------|-------------|
@@ -109,175 +204,10 @@ The CLI is the primary interface for every operation. Run `agent-army --help` fo
 Agent resolution is flexible — all of these target the same agent:
 
 ```bash
-agent-army ssh juno      # by alias
+agent-army ssh juno        # by alias
 agent-army ssh pm          # by role
 agent-army ssh agent-pm    # by resource name
 ```
-
-## Identity System
-
-Agent Army uses an **identity system** to define agent personas. Identities are self-contained packages that live in external Git repos (or local directories) and include everything an agent needs: personality, skills, model preferences, plugin configuration, and dependencies.
-
-### Built-in Identities
-
-Agent Army ships with three built-in identities:
-
-| Alias | Role | Model | What It Does |
-|-------|------|-------|-------------|
-| **Juno** | PM | Claude Opus 4.6 | Breaks down tickets, researches requirements, plans & sequences work, tracks progress, unblocks teams |
-| **Titus** | Engineer | Claude Opus 4.6 | Picks up tickets, writes code via Claude Code, builds/tests, creates PRs, responds to reviews |
-| **Scout** | Tester | Claude Opus 4.6 | Reviews PRs, tests happy/sad/edge cases, files bugs, verifies fixes |
-
-### Identity Structure
-
-Each identity is a directory with an `identity.yaml` manifest and workspace files:
-
-```
-my-identity/
-├── identity.yaml       # Manifest: model, plugins, deps, skills, template vars
-├── SOUL.md             # Personality, role, approach, communication style
-├── IDENTITY.md         # Name, role, emoji
-├── HEARTBEAT.md        # Periodic tasks and state machine logic
-├── TOOLS.md            # Tool reference (Linear, Slack, GitHub, local env)
-├── AGENTS.md           # Multi-agent coordination instructions
-├── BOOTSTRAP.md        # First-run setup instructions
-├── USER.md             # Owner-specific info (templated)
-└── skills/             # Bundled skills
-    ├── my-skill/
-    │   └── SKILL.md
-    └── another-skill/
-        └── SKILL.md
-```
-
-### `identity.yaml`
-
-The identity manifest declares the agent's defaults:
-
-```yaml
-name: eng
-displayName: Titus
-role: eng
-emoji: building_construction
-description: Lead engineering, coding, shipping
-volumeSize: 50
-
-# AI model configuration (per-identity, not global)
-model: anthropic/claude-opus-4-6
-backupModel: anthropic/claude-sonnet-4-5
-codingAgent: claude-code        # or "codex", "amp", etc.
-
-# System dependencies installed on the agent
-deps:
-  - gh
-  - brave-search
-
-# OpenClaw plugins
-plugins:
-  - openclaw-linear
-  - slack
-
-# Per-plugin default configuration
-pluginDefaults:
-  openclaw-linear:
-    stateActions:
-      triage: remove
-      backlog: add
-      started: add
-      completed: remove
-  slack:
-    mode: socket
-    dm:
-      enabled: true
-      policy: open
-
-# Bundled skills (plain = private, "clawhub:" prefix = public)
-skills:
-  - eng-queue-handler
-  - eng-ticket-workflow
-  - eng-pr-tester
-  - pr-review-resolver
-
-# Template variables used in workspace files
-templateVars:
-  - OWNER_NAME
-  - TIMEZONE
-  - WORKING_HOURS
-  - USER_NOTES
-  - LINEAR_TEAM
-  - GITHUB_REPO
-```
-
-### Using Custom Identities
-
-Point an agent at any Git repo or local directory during `agent-army init`:
-
-```yaml
-# agent-army.yaml
-agents:
-  - name: agent-pm
-    displayName: Juno
-    role: pm
-    identity: "https://github.com/your-org/army-identities#pm"
-    identityVersion: "v1.0.0"   # optional: pin to a tag or commit
-    volumeSize: 30
-```
-
-Identities are cached locally at `~/.agent-army/identity-cache/` and re-fetched on deploy.
-
-### Workspace Files
-
-| File | Purpose |
-|------|---------|
-| `SOUL.md` | Personality, role, approach, communication style |
-| `IDENTITY.md` | Name, role, emoji |
-| `HEARTBEAT.md` | Periodic tasks and state machine logic |
-| `TOOLS.md` | Tool reference (Linear, Slack, GitHub, local env) |
-| `AGENTS.md` | Multi-agent coordination instructions |
-| `BOOTSTRAP.md` | First-run setup instructions |
-| `USER.md` | Owner-specific info (uses template variables) |
-
-Template variables are supported in workspace files:
-
-| Variable | Description |
-|----------|-------------|
-| `{{OWNER_NAME}}` | Agent owner name |
-| `{{TIMEZONE}}` | Owner timezone |
-| `{{WORKING_HOURS}}` | Working hours for scheduling |
-| `{{USER_NOTES}}` | Custom notes for the agent |
-| `{{LINEAR_TEAM}}` | Default Linear team ID |
-| `{{GITHUB_REPO}}` | Default GitHub repository |
-
-## Registries
-
-Agent Army uses registries to manage installable components. Each registry maps names to install scripts and configuration.
-
-### Coding Agent Registry
-
-Defines how coding agent CLIs are installed and configured on cloud instances. The `codingAgent` field in `identity.yaml` selects which entry to use.
-
-| Agent | CLI | Description |
-|-------|-----|-------------|
-| `claude-code` | `claude` | Claude Code CLI (default) |
-
-Each entry provides an install script, model configuration script, and OpenClaw `cliBackends` config. New coding agents (Codex, Amp, etc.) can be added by extending the registry.
-
-### Dep Registry
-
-System-level tools installed on agents. Declared via the `deps` field in `identity.yaml`.
-
-| Dep | What It Installs |
-|-----|-----------------|
-| `gh` | GitHub CLI (with token-based auth) |
-| `brave-search` | Brave Search API key (config-only, no binary) |
-
-### Plugin Registry
-
-OpenClaw plugins configured per-agent. Declared via the `plugins` field in `identity.yaml`.
-
-| Plugin | What It Does |
-|--------|-------------|
-| `openclaw-linear` | Linear issue tracking integration (with webhooks via Tailscale Funnel) |
-| `slack` | Slack bot integration (Socket Mode) |
 
 ## Cloud Providers
 
@@ -400,8 +330,8 @@ Modify config values with validation (no need to re-run `init`):
 ```bash
 agent-army config set region us-west-2
 agent-army config set instanceType t3.large
-agent-army config set instanceType cx32 -a titus   # Per-agent override
-agent-army config set volumeSize 50 -a scout       # Per-agent volume
+agent-army config set instanceType cx32 -a atlas     # Per-agent override
+agent-army config set volumeSize 50 -a atlas         # Per-agent volume
 ```
 
 Run `agent-army redeploy` after changing config to apply.
@@ -430,11 +360,11 @@ agents:
     deps:
       - gh
       - brave-search
-  - name: agent-eng
-    displayName: Titus
-    role: eng
-    identity: "https://github.com/your-org/army-identities#eng"
-    volumeSize: 50
+  - name: agent-researcher
+    displayName: Atlas
+    role: researcher
+    identity: "./my-identities/researcher"
+    volumeSize: 20
 ```
 
 Model, backup model, and coding agent are configured in the identity (not the manifest). The manifest defines _which_ agents to deploy and _where_.
@@ -475,7 +405,9 @@ agent-army/
 │       ├── cloud-init.ts        # Cloud-init script generation (registry-driven)
 │       └── config-generator.ts  # OpenClaw config builder (model fallbacks, cliBackends)
 ├── identities/             # Built-in identity stubs (point to external repos)
-├── docs/                   # Mintlify documentation site
+├── examples/               # Example identities for reference
+│   └── identity/           # Complete "researcher" identity example
+├── docs/                   # Documentation (Mintlify site + guides)
 ├── esc/                    # Pulumi ESC secret templates
 ├── scripts/                # Shell script helpers
 ├── web/                    # Next.js dashboard (agent-army-web)
@@ -490,6 +422,7 @@ agent-army/
 - No public port exposure; Tailscale Serve proxies traffic
 - Token-based gateway authentication
 - Secrets encrypted via Pulumi config
+- Cloud-init scripts use environment variable interpolation
 - SSH available as fallback for debugging
 
 ## Troubleshooting
@@ -497,15 +430,15 @@ agent-army/
 ### Agents not appearing in Tailscale
 
 1. Wait 3-5 minutes for cloud-init to complete
-2. Check logs: `agent-army ssh pm 'sudo cat /var/log/cloud-init-output.log | tail -100'`
+2. Check logs: `agent-army ssh <agent> 'sudo cat /var/log/cloud-init-output.log | tail -100'`
 3. Verify your Tailscale auth key is valid and reusable
 
 ### OpenClaw gateway not running
 
 ```bash
-agent-army ssh pm 'openclaw gateway status'
-agent-army ssh pm 'journalctl -u openclaw -n 50'
-agent-army ssh pm 'openclaw gateway restart'
+agent-army ssh <agent> 'openclaw gateway status'
+agent-army ssh <agent> 'journalctl -u openclaw -n 50'
+agent-army ssh <agent> 'openclaw gateway restart'
 ```
 
 ### SSH connection refused
