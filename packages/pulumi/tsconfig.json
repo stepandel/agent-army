@@ -7,13 +7,13 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "rootDir": "./src",
+    "outDir": "./dist"
   },
-  "references": [
-    { "path": "packages/core" },
-    { "path": "packages/pulumi" },
-    { "path": "cli" }
-  ],
-  "include": [],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

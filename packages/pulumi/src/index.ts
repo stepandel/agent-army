@@ -16,8 +16,8 @@ import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
 import YAML from "yaml";
-import { OpenClawAgent, HetznerOpenClawAgent, PluginInstallConfig } from "./src";
-import type { BaseOpenClawAgentArgs, DepInstallConfig } from "./src";
+import { OpenClawAgent, HetznerOpenClawAgent, PluginInstallConfig } from "./components";
+import type { BaseOpenClawAgentArgs, DepInstallConfig } from "./components";
 import { SharedVpc } from "./shared-vpc";
 import {
   fetchIdentitySync,
@@ -75,8 +75,8 @@ function processTemplates(
 // Load Manifest (YAML)
 // -----------------------------------------------------------------------------
 
-// __dirname is dist/ when running compiled JS, so go up to project root
-const manifestPath = path.join(__dirname, "..", "agent-army.yaml");
+// Pulumi sets cwd to the project root (where Pulumi.yaml lives)
+const manifestPath = path.join(process.cwd(), "agent-army.yaml");
 if (!fs.existsSync(manifestPath)) {
   throw new Error(
     "agent-army.yaml not found. Run `agent-army init` to create it."

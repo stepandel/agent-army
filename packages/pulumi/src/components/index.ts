@@ -1,6 +1,6 @@
 export { OpenClawAgent, OpenClawAgentArgs } from "./openclaw-agent";
 export { HetznerOpenClawAgent, HetznerOpenClawAgentArgs } from "./hetzner-agent";
-export { generateCloudInit, interpolateCloudInit, CloudInitConfig } from "./cloud-init";
+export { generateCloudInit, interpolateCloudInit, CloudInitConfig, PluginInstallConfig } from "./cloud-init";
 export {
   generateOpenClawConfig,
   generateOpenClawConfigJson,
