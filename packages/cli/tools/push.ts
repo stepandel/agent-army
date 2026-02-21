@@ -15,7 +15,7 @@ import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "@agent-army/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { getConfig, selectOrCreateStack } from "../lib/pulumi";
 import type { AgentDefinition } from "@agent-army/core";
-import { fetchIdentitySync } from "@agent-army/core";
+import { fetchIdentitySync } from "@agent-army/core/identity";
 import { classifySkills } from "@agent-army/core";
 import { resolveDeps } from "@agent-army/core";
 import * as os from "os";

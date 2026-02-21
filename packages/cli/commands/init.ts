@@ -10,7 +10,6 @@ import { execSync } from "child_process";
 import * as p from "@clack/prompts";
 import type { AgentDefinition, ArmyManifest, IdentityManifest } from "@agent-army/core";
 import {
-  fetchIdentity,
   BUILT_IN_IDENTITIES,
   PROVIDERS,
   AWS_REGIONS,
@@ -26,6 +25,7 @@ import {
   PLUGIN_REGISTRY,
   DEP_REGISTRY,
 } from "@agent-army/core";
+import { fetchIdentity } from "@agent-army/core/identity";
 import * as os from "os";
 import * as path from "path";
 import { checkPrerequisites } from "../lib/prerequisites";
@@ -398,25 +398,25 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
   p.log.step("Configure integrations");
 
   // Determine which plugins and deps are needed across all identities
-  const agentPlugins = new Map<string, Set<string>>(); // role → plugin names
-  const agentDeps = new Map<string, Set<string>>(); // role → dep names
+  const agentPlugins = new Map<string, Set<string>>(); // agent name → plugin names
+  const agentDeps = new Map<string, Set<string>>(); // agent name → dep names
   const allPluginNames = new Set<string>();
   const allDepNames = new Set<string>();
 
   for (const fi of fetchedIdentities) {
     const plugins = new Set(fi.manifest.plugins ?? []);
     const deps = new Set(fi.manifest.deps ?? []);
-    agentPlugins.set(fi.agent.role, plugins);
-    agentDeps.set(fi.agent.role, deps);
+    agentPlugins.set(fi.agent.name, plugins);
+    agentDeps.set(fi.agent.name, deps);
     for (const pl of plugins) allPluginNames.add(pl);
     for (const d of deps) allDepNames.add(d);
   }
 
-  // Track identity pluginDefaults per role for seeding plugin config files
+  // Track identity pluginDefaults per agent name for seeding plugin config files
   const identityPluginDefaults: Record<string, Record<string, Record<string, unknown>>> = {};
   for (const fi of fetchedIdentities) {
     if (fi.manifest.pluginDefaults) {
-      identityPluginDefaults[fi.agent.role] = fi.manifest.pluginDefaults;
+      identityPluginDefaults[fi.agent.name] = fi.manifest.pluginDefaults;
     }
   }
 
@@ -440,7 +440,7 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     );
 
     for (const fi of fetchedIdentities) {
-      if (!agentPlugins.get(fi.agent.role)?.has("slack")) continue;
+      if (!agentPlugins.get(fi.agent.name)?.has("slack")) continue;
 
       const slackManifest = slackAppManifest(fi.agent.displayName);
       try {
@@ -485,7 +485,7 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     );
 
     const linearAgents = fetchedIdentities.filter(
-      (fi) => agentPlugins.get(fi.agent.role)?.has("openclaw-linear")
+      (fi) => agentPlugins.get(fi.agent.name)?.has("openclaw-linear")
     );
 
     for (const fi of linearAgents) {
@@ -571,7 +571,7 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     );
 
     for (const fi of fetchedIdentities) {
-      if (!agentDeps.get(fi.agent.role)?.has("gh")) continue;
+      if (!agentDeps.get(fi.agent.name)?.has("gh")) continue;
 
       const githubKey = await p.password({
         message: `GitHub token for ${fi.agent.displayName} (${fi.agent.role})`,
@@ -755,15 +755,13 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     templateVars: Object.keys(manifestTemplateVars).length > 0 ? manifestTemplateVars : undefined,
     agents,
   };
-  saveManifest(configName, manifest);
-
   // Inline plugin config into each agent definition
   for (const fi of fetchedIdentities) {
-    const rolePlugins = agentPlugins.get(fi.agent.role);
+    const rolePlugins = agentPlugins.get(fi.agent.name);
     if (!rolePlugins || rolePlugins.size === 0) continue;
 
     const inlinePlugins: Record<string, Record<string, unknown>> = {};
-    const defaults = identityPluginDefaults[fi.agent.role] ?? {};
+    const defaults = identityPluginDefaults[fi.agent.name] ?? {};
 
     for (const pluginName of rolePlugins) {
       const pluginDefaults = defaults[pluginName] ?? {};
@@ -788,6 +786,7 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     }
   }
 
+  saveManifest(configName, manifest);
   s.stop("Config saved");
 
   if (opts.deploy) {

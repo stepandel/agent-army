@@ -18,7 +18,7 @@ export const IdentityManifestSchema = z.object({
   /** Short description of the agent's purpose */
   description: z.string().min(1, '"description" must be a non-empty string'),
   /** Default EBS volume size in GB */
-  volumeSize: z.number({ invalid_type_error: '"volumeSize" must be a number' }),
+  volumeSize: z.number({ invalid_type_error: '"volumeSize" must be a number' }).positive(),
   /** Optional default instance type override */
   instanceType: z.string().optional(),
   /**

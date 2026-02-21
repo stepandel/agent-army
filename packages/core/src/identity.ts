@@ -6,7 +6,7 @@
  * persona and capabilities.
  */
 
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "fs";
 import { join, relative, resolve } from "path";
 import { createHash } from "crypto";
@@ -27,7 +27,7 @@ interface ExecResult {
  */
 function capture(command: string, args: string[] = [], cwd?: string): ExecResult {
   try {
-    const result = execSync([command, ...args].join(" "), {
+    const result = execFileSync(command, args, {
       cwd,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],

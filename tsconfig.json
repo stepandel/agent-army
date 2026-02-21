@@ -12,7 +12,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/pulumi" },
-    { "path": "cli" }
+    { "path": "packages/cli" }
   ],
   "include": [],
   "exclude": ["node_modules", "dist"]

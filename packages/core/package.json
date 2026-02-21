@@ -17,6 +17,19 @@
     "./coding-agent-registry": "./dist/coding-agent-registry.js",
     "./schemas": "./dist/schemas/index.js"
   },
+  "typesVersions": {
+    "*": {
+      "identity": ["dist/identity.d.ts"],
+      "constants": ["dist/constants.d.ts"],
+      "types": ["dist/types.d.ts"],
+      "skills": ["dist/skills.d.ts"],
+      "deps": ["dist/deps.d.ts"],
+      "dep-registry": ["dist/dep-registry.d.ts"],
+      "plugin-registry": ["dist/plugin-registry.d.ts"],
+      "coding-agent-registry": ["dist/coding-agent-registry.d.ts"],
+      "schemas": ["dist/schemas/index.d.ts"]
+    }
+  },
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch"

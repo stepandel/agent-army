@@ -113,6 +113,11 @@ describe("IdentityManifestSchema", () => {
     }
   });
 
+  it("rejects non-positive volumeSize", () => {
+    const result = IdentityManifestSchema.safeParse({ ...validIdentity, volumeSize: 0 });
+    expect(result.success).toBe(false);
+  });
+
   it("validates plugins as array of non-empty strings", () => {
     const result = IdentityManifestSchema.safeParse({
       ...validIdentity,

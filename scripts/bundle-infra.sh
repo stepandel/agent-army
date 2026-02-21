@@ -50,5 +50,5 @@ mkdir -p "$INFRA/node_modules/@agent-army/core"
 cp "$CORE_ROOT/package.json" "$INFRA/node_modules/@agent-army/core/"
 cp -r "$CORE_ROOT/dist" "$INFRA/node_modules/@agent-army/core/dist"
 
-echo "Done. Contents of cli/infra/:"
+echo "Done. Contents of packages/cli/infra/:"
 find "$INFRA" -type f | sed "s|$INFRA/||" | sort

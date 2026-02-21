@@ -20,12 +20,12 @@ import { OpenClawAgent, HetznerOpenClawAgent, PluginInstallConfig } from "./comp
 import type { BaseOpenClawAgentArgs, DepInstallConfig } from "./components";
 import { SharedVpc } from "./shared-vpc";
 import {
-  fetchIdentitySync,
   classifySkills,
   PLUGIN_REGISTRY,
   resolveDeps,
   collectDepSecrets,
 } from "@agent-army/core";
+import { fetchIdentitySync } from "@agent-army/core/identity";
 import type { AgentDefinition, ArmyManifest, PluginConfigFile } from "@agent-army/core";
 import * as os from "os";
 
