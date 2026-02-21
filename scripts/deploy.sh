@@ -2,7 +2,7 @@
 #
 # deploy.sh - Deploy the Agent Army stack
 #
-# Thin wrapper around: agent-army deploy
+# Thin wrapper around: clawup deploy
 #
 set -euo pipefail
 

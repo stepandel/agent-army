@@ -8,7 +8,7 @@ import * as path from "path";
 import * as os from "os";
 import pc from "picocolors";
 
-const PACKAGE_NAME = "agent-army";
+const PACKAGE_NAME = "clawup";
 const CACHE_FILE = ".update-check.json";
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const FETCH_TIMEOUT_MS = 3000;
@@ -19,7 +19,7 @@ interface UpdateCache {
 }
 
 function getCacheDir(): string {
-  return path.join(os.homedir(), ".agent-army");
+  return path.join(os.homedir(), ".clawup");
 }
 
 function getCachePath(): string {
@@ -121,6 +121,6 @@ function printUpdateNotice(current: string, latest: string): void {
   console.log(
     `  Update available: ${pc.dim(current)} ${pc.dim("→")} ${pc.green(latest)}`
   );
-  console.log(`  Run ${pc.cyan("agent-army update")} to install`);
+  console.log(`  Run ${pc.cyan("clawup update")} to install`);
   console.log();
 }

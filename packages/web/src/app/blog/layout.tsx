@@ -38,7 +38,7 @@ export default function BlogLayout({ children }: { children: React.ReactNode }) 
             Docs
           </a>
           <a
-            href="https://github.com/stepandel/agent-army"
+            href="https://github.com/stepandel/clawup"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -64,7 +64,7 @@ export default function BlogLayout({ children }: { children: React.ReactNode }) 
             <div className="flex gap-7 flex-wrap">
               {[
                 { label: "Blog", href: "/blog/launch" },
-                { label: "GitHub", href: "https://github.com/stepandel/agent-army" },
+                { label: "GitHub", href: "https://github.com/stepandel/clawup" },
                 { label: "Documentation", href: "https://docs.agent-army.ai" },
               ].map((link) => (
                 <a

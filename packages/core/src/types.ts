@@ -14,10 +14,10 @@ import type {
 /** Definition of a single agent in the manifest */
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 
-/** Per-plugin configuration file stored at ~/.agent-army/configs/<stack>/plugins/<plugin>.yaml */
+/** Per-plugin configuration file stored at ~/.clawup/configs/<stack>/plugins/<plugin>.yaml */
 export type PluginConfigFile = z.infer<typeof PluginConfigFileSchema>;
 
-/** The agent-army.yaml manifest */
+/** The clawup.yaml manifest */
 export type ArmyManifest = z.infer<typeof ArmyManifestSchema>;
 
 /** Manifest schema for an agent identity (identity.yaml) */

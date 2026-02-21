@@ -1,10 +1,10 @@
 /**
- * Re-export all types from @agent-army/core for backward compatibility.
- * External consumers importing "agent-army/types" will get these.
+ * Re-export all types from @clawup/core for backward compatibility.
+ * External consumers importing "clawup/types" will get these.
  */
 export {
   validateAgentDefinition,
-} from "@agent-army/core";
+} from "@clawup/core";
 export type {
   AgentDefinition,
   ArmyManifest,
@@ -12,4 +12,4 @@ export type {
   IdentityResult,
   PluginConfigFile,
   PrereqResult,
-} from "@agent-army/core";
+} from "@clawup/core";

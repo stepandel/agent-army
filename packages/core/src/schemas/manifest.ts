@@ -1,5 +1,5 @@
 /**
- * Zod schemas for the agent-army.yaml manifest and agent definitions.
+ * Zod schemas for the clawup.yaml manifest and agent definitions.
  * These are the source of truth — TypeScript types are derived via z.infer<>.
  */
 
@@ -35,7 +35,7 @@ export const PluginConfigFileSchema = z.object({
   agents: z.record(z.string(), z.record(z.string(), z.unknown())),
 });
 
-/** Schema for the agent-army.yaml manifest */
+/** Schema for the clawup.yaml manifest */
 export const ArmyManifestSchema = z.object({
   stackName: z.string().min(1, "stackName is required"),
   provider: z.enum(["aws", "hetzner"]),

@@ -2,7 +2,7 @@
 #
 # destroy.sh - Tear down the Agent Army stack
 #
-# Thin wrapper around: agent-army destroy
+# Thin wrapper around: clawup destroy
 #
 set -euo pipefail
 

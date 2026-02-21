@@ -1,5 +1,5 @@
 {
-  "name": "agent-army-root",
+  "name": "clawup-root",
   "private": true,
   "packageManager": "pnpm@10.29.2",
   "description": "Agent Army monorepo — deploy fleets of AI agents",
