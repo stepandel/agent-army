@@ -68,3 +68,15 @@ export interface PrereqResult {
   message: string;
   hint?: string;
 }
+
+/**
+ * Discriminated union for fallible operations that don't return a value.
+ * Use instead of `{ ok: boolean; error?: string }` for proper type narrowing.
+ */
+export type VoidResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Discriminated union for fallible operations that return a value on success.
+ * After narrowing with `if (result.ok)`, `result.value` is typed as `T`.
+ */
+export type Result<T> = { ok: true; value: T } | { ok: false; error: string };

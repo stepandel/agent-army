@@ -4,36 +4,18 @@
  * Platform-agnostic implementation using RuntimeAdapter.
  */
 
-import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
+import type { RuntimeAdapter, ToolImplementation } from "../adapters";
 import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
 import { cleanupTailscaleDevices } from "../lib/tailscale";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
-import pc from "picocolors";
+import { getConfig } from "../lib/tool-helpers";
+import { formatAgentList } from "../lib/ui";
 
 export interface DestroyOptions {
   /** Skip confirmation prompts (dangerous!) */
   yes?: boolean;
   /** Config name (auto-detected if only one) */
   config?: string;
-}
-
-/**
- * Format agent list for display
- */
-function formatAgentList(
-  agents: { displayName: string; role: string }[]
-): string {
-  return agents
-    .map((a) => `  ${pc.bold(a.displayName)} (${a.role})`)
-    .join("\n");
-}
-
-/**
- * Get Pulumi config value
- */
-function getConfig(exec: ExecAdapter, key: string, cwd?: string): string | null {
-  const result = exec.capture("pulumi", ["config", "get", key], cwd);
-  return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 
 /**

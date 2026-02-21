@@ -10,6 +10,8 @@ export type {
   IdentityResult,
   PluginConfigFile,
   PrereqResult,
+  VoidResult,
+  Result,
 } from "./types";
 export { validateAgentDefinition } from "./types";
 

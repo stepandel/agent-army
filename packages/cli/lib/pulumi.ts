@@ -3,6 +3,7 @@
  */
 
 import { capture, stream } from "./exec";
+import type { VoidResult } from "@agent-army/core";
 
 /**
  * Get the current Pulumi stack name
@@ -16,7 +17,7 @@ export function currentStack(cwd?: string): string | null {
  * Select a Pulumi stack (create if it doesn't exist).
  * Returns { ok, error } so callers can display the error message.
  */
-export function selectOrCreateStack(stackName: string, cwd?: string): { ok: boolean; error?: string } {
+export function selectOrCreateStack(stackName: string, cwd?: string): VoidResult {
   const select = capture("pulumi", ["stack", "select", stackName], cwd);
   if (select.exitCode === 0) return { ok: true };
 

@@ -9,6 +9,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { execSync } from "child_process";
+import type { VoidResult } from "@agent-army/core";
 
 const WORKSPACE_DIR = path.join(os.homedir(), ".agent-army", "workspace");
 const VERSION_FILE = ".cli-version";
@@ -59,7 +60,7 @@ export function getWorkspaceDir(): string | undefined {
  * Ensure the workspace is set up (copy bundled infra, install deps).
  * No-op in dev mode.
  */
-export function ensureWorkspace(): { ok: boolean; error?: string } {
+export function ensureWorkspace(): VoidResult {
   if (isDevMode()) return { ok: true };
 
   const bundled = getBundledInfraDir();

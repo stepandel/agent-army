@@ -9,6 +9,7 @@ import { loadManifest, resolveConfigName } from "../lib/config";
 import { SSH_USER, tailscaleHostname } from "@agent-army/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { isTailscaleRunning } from "../lib/tailscale";
+import { getConfig, getStackOutputs } from "../lib/tool-helpers";
 
 export interface StatusOptions {
   /** Output as JSON */
@@ -72,29 +73,6 @@ function getGhAuthStatus(exec: ExecAdapter, host: string, timeout: number = 5): 
     return "✓";
   }
   return "—";
-}
-
-/**
- * Get Pulumi config value
- */
-function getConfig(exec: ExecAdapter, key: string, cwd?: string): string | null {
-  const result = exec.capture("pulumi", ["config", "get", key], cwd);
-  return result.exitCode === 0 ? result.stdout.trim() : null;
-}
-
-/**
- * Get stack outputs
- */
-function getStackOutputs(exec: ExecAdapter, showSecrets: boolean = false, cwd?: string): Record<string, unknown> | null {
-  const args = ["stack", "output", "--json"];
-  if (showSecrets) args.push("--show-secrets");
-  const result = exec.capture("pulumi", args, cwd);
-  if (result.exitCode !== 0) return null;
-  try {
-    return JSON.parse(result.stdout);
-  } catch {
-    return null;
-  }
 }
 
 /**

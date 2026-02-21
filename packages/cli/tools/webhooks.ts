@@ -11,6 +11,7 @@ import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapter
 import { loadManifest, resolveConfigName } from "../lib/config";
 import { SSH_USER, tailscaleHostname } from "@agent-army/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
+import { getConfig, getStackOutputs } from "../lib/tool-helpers";
 import pc from "picocolors";
 
 export interface WebhooksSetupOptions {
@@ -24,27 +25,6 @@ const SSH_OPTS = [
   "-o", "UserKnownHostsFile=/dev/null",
   "-o", "BatchMode=yes",
 ];
-
-/**
- * Get stack outputs
- */
-function getStackOutputs(exec: ExecAdapter, cwd?: string): Record<string, unknown> | null {
-  const result = exec.capture("pulumi", ["stack", "output", "--json", "--show-secrets"], cwd);
-  if (result.exitCode !== 0) return null;
-  try {
-    return JSON.parse(result.stdout);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Get Pulumi config value
- */
-function getConfig(exec: ExecAdapter, key: string, cwd?: string): string | null {
-  const result = exec.capture("pulumi", ["config", "get", key], cwd);
-  return result.exitCode === 0 ? result.stdout.trim() : null;
-}
 
 /**
  * Run a command over SSH
@@ -105,7 +85,7 @@ export const webhooksSetupTool: ToolImplementation<WebhooksSetupOptions> = async
   }
 
   // Get stack outputs
-  const outputs = getStackOutputs(exec, cwd);
+  const outputs = getStackOutputs(exec, true, cwd);
   if (!outputs) {
     ui.log.error(`Could not fetch stack outputs. Run ${pc.cyan("agent-army deploy")} first.`);
     process.exit(1);

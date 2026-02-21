@@ -4,44 +4,20 @@
  * Platform-agnostic implementation using RuntimeAdapter.
  */
 
-import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
+import type { RuntimeAdapter, ToolImplementation } from "../adapters";
 import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
 import { COST_ESTIMATES, HETZNER_COST_ESTIMATES } from "@agent-army/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { isTailscaleInstalled, isTailscaleRunning, cleanupTailscaleDevices, ensureMagicDns, ensureTailscaleFunnel } from "../lib/tailscale";
+import { getConfig } from "../lib/tool-helpers";
+import { formatAgentList, formatCost } from "../lib/ui";
 import pc from "picocolors";
-
-/**
- * Get Pulumi config value
- */
-function getConfig(exec: ExecAdapter, key: string, cwd?: string): string | null {
-  const result = exec.capture("pulumi", ["config", "get", key], cwd);
-  return result.exitCode === 0 ? result.stdout.trim() : null;
-}
 
 export interface DeployOptions {
   /** Skip confirmation prompt */
   yes?: boolean;
   /** Config name (auto-detected if only one) */
   config?: string;
-}
-
-/**
- * Format agent list for display
- */
-function formatAgentList(
-  agents: { displayName: string; role: string }[]
-): string {
-  return agents
-    .map((a) => `  ${pc.bold(a.displayName)} (${a.role})`)
-    .join("\n");
-}
-
-/**
- * Format cost as monthly estimate
- */
-function formatCost(monthlyCost: number): string {
-  return `~$${monthlyCost}/mo`;
 }
 
 /**

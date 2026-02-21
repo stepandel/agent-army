@@ -9,6 +9,7 @@ import { loadManifest, resolveConfigName } from "../lib/config";
 import { SSH_USER, tailscaleHostname } from "@agent-army/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { requireTailscale } from "../lib/tailscale";
+import { getConfig } from "../lib/tool-helpers";
 import pc from "picocolors";
 
 export interface ValidateOptions {
@@ -49,14 +50,6 @@ function runSshCheck(
     `"${command.replace(/"/g, '\\"')}"`,
   ]);
   return { ok: result.exitCode === 0, output: result.stdout || result.stderr };
-}
-
-/**
- * Get Pulumi config value
- */
-function getConfig(exec: ExecAdapter, key: string, cwd?: string): string | null {
-  const result = exec.capture("pulumi", ["config", "get", key], cwd);
-  return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 
 /**
