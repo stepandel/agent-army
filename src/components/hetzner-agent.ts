@@ -5,36 +5,18 @@
 
 import * as pulumi from "@pulumi/pulumi";
 import * as hcloud from "@pulumi/hcloud";
-import * as tls from "@pulumi/tls";
-import * as crypto from "crypto";
-import { generateCloudInit, interpolateCloudInit, compressCloudInit, CloudInitConfig, PluginInstallConfig } from "./cloud-init";
+import type { BaseOpenClawAgentArgs } from "./types";
+import { generateKeyPairAndToken, buildCloudInitUserData } from "./shared";
 
 /**
  * Arguments for creating a Hetzner OpenClaw Agent
  */
-export interface HetznerOpenClawAgentArgs {
+export interface HetznerOpenClawAgentArgs extends BaseOpenClawAgentArgs {
   /**
    * Hetzner server type (default: cx22)
    * cx22 = 2 vCPUs, 4GB RAM - recommended minimum
    */
   serverType?: pulumi.Input<string>;
-
-  /**
-   * Anthropic API key (required)
-   */
-  anthropicApiKey: pulumi.Input<string>;
-
-  /**
-   * Tailscale auth key for secure access (required)
-   * Generate at: https://login.tailscale.com/admin/settings/keys
-   */
-  tailscaleAuthKey: pulumi.Input<string>;
-
-  /**
-   * Your Tailnet DNS name (e.g., tailxxxxx.ts.net)
-   * Find it in Tailscale admin console under DNS
-   */
-  tailnetDnsName: pulumi.Input<string>;
 
   /**
    * Hetzner datacenter location (default: nbg1)
@@ -43,91 +25,14 @@ export interface HetznerOpenClawAgentArgs {
   location?: pulumi.Input<string>;
 
   /**
-   * AI model to use (default: anthropic/claude-opus-4-6)
-   */
-  model?: pulumi.Input<string>;
-
-  /**
-   * Backup/fallback model (e.g., "anthropic/claude-sonnet-4-5")
-   */
-  backupModel?: pulumi.Input<string>;
-
-  /**
-   * Coding agent CLI name (e.g., "claude-code", "codex", "amp")
-   */
-  codingAgent?: string;
-
-  /**
-   * Enable Docker sandbox for code execution (default: true)
-   */
-  enableSandbox?: pulumi.Input<boolean>;
-
-  /**
-   * Gateway port (default: 18789)
-   */
-  gatewayPort?: pulumi.Input<number>;
-
-  /**
    * Allowed SSH source IPs (optional)
    * If not provided, SSH rule is not added (Tailscale is primary access)
    * Example: ["1.2.3.4/32", "10.0.0.0/8"]
    */
   allowedSshIps?: pulumi.Input<string[]>;
 
-  /**
-   * Browser control port (default: 18791)
-   */
-  browserPort?: pulumi.Input<number>;
-
-  /**
-   * Additional labels to apply to all resources
-   */
+  /** Additional labels to apply to all resources */
   labels?: pulumi.Input<Record<string, pulumi.Input<string>>>;
-
-  /**
-   * Workspace files to inject (path -> content)
-   */
-  workspaceFiles?: Record<string, string>;
-
-  /**
-   * Additional environment variables for the agent
-   */
-  envVars?: Record<string, string>;
-
-  /**
-   * Custom post-setup shell commands
-   */
-  postSetupCommands?: string[];
-
-  /**
-   * Plugins to install and configure on this agent
-   */
-  plugins?: PluginInstallConfig[];
-
-  /**
-   * Resolved secret values for plugin env vars: { envVarName: pulumiOutput }
-   */
-  pluginSecrets?: Record<string, pulumi.Input<string>>;
-
-  /**
-   * Resolved deps from the dep registry
-   */
-  deps?: { name: string; installScript: string; postInstallScript: string; secrets: Record<string, { envVar: string }> }[];
-
-  /**
-   * Dep secret Pulumi outputs: { envVarName: pulumiOutput }
-   */
-  depSecrets?: Record<string, pulumi.Input<string>>;
-
-  /**
-   * Whether to enable Tailscale Funnel (public HTTPS for webhooks)
-   */
-  enableFunnel?: boolean;
-
-  /**
-   * Public skill slugs to install via `clawhub install`
-   */
-  clawhubSkills?: string[];
 }
 
 /**
@@ -182,28 +87,8 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
     const location = args.location ?? "nbg1";
     const baseLabels = args.labels ?? {};
 
-    // Generate SSH key pair
-    const sshKey = new tls.PrivateKey(
-      `${name}-ssh-key`,
-      {
-        algorithm: "ED25519",
-      },
-      defaultResourceOptions
-    );
-
-    // Generate gateway token from a separate TLS key
-    const tokenKey = new tls.PrivateKey(
-      `${name}-gateway-token-key`,
-      {
-        algorithm: "ED25519",
-      },
-      defaultResourceOptions
-    );
-
-    const gatewayTokenValue = tokenKey.publicKeyOpenssh.apply((key) => {
-      const hash = crypto.createHash("sha256").update(key).digest("hex");
-      return hash.substring(0, 48);
-    });
+    // Generate SSH key pair + gateway token
+    const { sshKey, gatewayTokenValue } = generateKeyPairAndToken(name, defaultResourceOptions);
 
     // Create Hetzner SSH key
     const hcloudSshKey = new hcloud.SshKey(
@@ -247,86 +132,11 @@ export class HetznerOpenClawAgent extends pulumi.ComponentResource {
       defaultResourceOptions
     );
 
-    // Build outputs for plugin secrets
-    const pluginSecretEntries = Object.entries(args.pluginSecrets ?? {});
-    const pluginSecretOutputs = pluginSecretEntries.map(([, v]) => pulumi.output(v));
-
-    // Build outputs for dep secrets
-    const depSecretEntries = Object.entries(args.depSecrets ?? {});
-    const depSecretOutputs = depSecretEntries.map(([, v]) => pulumi.output(v));
-
-    // Resolve Input<> values for cloud-init config
-    const gatewayPortResolved = pulumi.output(args.gatewayPort ?? 18789);
-    const browserPortResolved = pulumi.output(args.browserPort ?? 18791);
-    const modelResolved = pulumi.output(args.model ?? "anthropic/claude-opus-4-6");
-    const enableSandboxResolved = pulumi.output(args.enableSandbox ?? true);
-
-    // Generate cloud-init user data
-    const userData = pulumi
-      .all([
-        args.tailscaleAuthKey,
-        args.anthropicApiKey,
-        gatewayTokenValue,
-        ...pluginSecretOutputs,
-        ...depSecretOutputs,
-      ])
-      .apply(
-        ([
-          tsAuthKey,
-          apiKey,
-          gwToken,
-          ...secretValues
-        ]) =>
-          pulumi
-            .all([gatewayPortResolved, browserPortResolved, modelResolved, enableSandboxResolved])
-            .apply(([gatewayPort, browserPort, model, enableSandbox]) => {
-              // Include stack name in Tailscale hostname to avoid conflicts across deployments
-              const tsHostname = `${pulumi.getStack()}-${name}`;
-
-              // Build additional secrets map from plugin secrets + dep secrets
-              const additionalSecrets: Record<string, string> = {};
-              pluginSecretEntries.forEach(([envVar], idx) => {
-                additionalSecrets[envVar] = secretValues[idx] as string;
-              });
-              depSecretEntries.forEach(([envVar], idx) => {
-                additionalSecrets[envVar] = secretValues[pluginSecretEntries.length + idx] as string;
-              });
-
-              const cloudInitConfig: CloudInitConfig = {
-                anthropicApiKey: apiKey,
-                tailscaleAuthKey: tsAuthKey,
-                gatewayToken: gwToken,
-                gatewayPort: gatewayPort,
-                browserPort: browserPort,
-                model: model,
-                backupModel: args.backupModel as string | undefined,
-                codingAgent: args.codingAgent,
-                enableSandbox: enableSandbox,
-                tailscaleHostname: tsHostname,
-                workspaceFiles: args.workspaceFiles,
-                envVars: args.envVars,
-                postSetupCommands: args.postSetupCommands,
-                createUbuntuUser: true, // Hetzner images don't have ubuntu user by default
-                // Plugins
-                plugins: args.plugins,
-                enableFunnel: args.enableFunnel,
-                clawhubSkills: args.clawhubSkills,
-                // Deps
-                deps: args.deps,
-                depSecrets: additionalSecrets,
-              };
-
-              const script = generateCloudInit(cloudInitConfig);
-              const interpolated = interpolateCloudInit(script, {
-                anthropicApiKey: apiKey,
-                tailscaleAuthKey: tsAuthKey,
-                gatewayToken: gwToken,
-                additionalSecrets,
-              });
-              // Compress to stay within Hetzner's 32KB user_data limit
-              return compressCloudInit(interpolated);
-            })
-      );
+    // Generate cloud-init user data (compressed for Hetzner's 32KB limit)
+    const userData = buildCloudInitUserData(name, args, gatewayTokenValue, {
+      createUbuntuUser: true,
+      compress: true,
+    });
 
     // Create Hetzner server
     const server = new hcloud.Server(

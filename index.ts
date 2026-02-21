@@ -17,6 +17,7 @@ import * as fs from "fs";
 import * as path from "path";
 import YAML from "yaml";
 import { OpenClawAgent, HetznerOpenClawAgent, PluginInstallConfig } from "./src";
+import type { BaseOpenClawAgentArgs, DepInstallConfig } from "./src";
 import { SharedVpc } from "./shared-vpc";
 import {
   fetchIdentitySync,
@@ -285,14 +286,15 @@ const agentOutputs: Record<string, {
   sshPrivateKey: pulumi.Output<string>;
 }> = {};
 
-for (const agent of manifest.agents) {
-  // Build workspace files
-  let workspaceFiles: Record<string, string>;
-  let clawhubSkillSlugs: string[] = [];
-  let agentEmoji = "";
-  let agentDisplayName = agent.displayName;
-  let agentVolumeSize = agent.volumeSize;
-
+/**
+ * Build the base agent args shared by all providers.
+ * Provider-specific fields (VPC, location, tags/labels) are added by the caller.
+ */
+function buildBaseAgentArgs(agent: AgentDefinition): {
+  baseArgs: BaseOpenClawAgentArgs;
+  agentDisplayName: string;
+  agentVolumeSize: number;
+} {
   const templateVars: Record<string, string> = {
     OWNER_NAME: ownerName,
     TIMEZONE: timezone,
@@ -305,16 +307,16 @@ for (const agent of manifest.agents) {
   const identity = fetchIdentitySync(agent.identity, identityCacheDir);
 
   // Identity files are the workspace files
-  workspaceFiles = processTemplates(identity.files, templateVars);
+  const workspaceFiles = processTemplates(identity.files, templateVars);
 
   // Pull defaults from identity manifest
-  agentEmoji = identity.manifest.emoji ?? agentEmoji;
-  agentDisplayName = agent.displayName || identity.manifest.displayName;
-  agentVolumeSize = agent.volumeSize ?? identity.manifest.volumeSize ?? 30;
+  const agentEmoji = identity.manifest.emoji ?? "";
+  const agentDisplayName = agent.displayName || identity.manifest.displayName;
+  const agentVolumeSize = agent.volumeSize ?? identity.manifest.volumeSize ?? 30;
 
   // Extract public (clawhub) skills from identity manifest
   const { public: publicSkills } = classifySkills(identity.manifest.skills);
-  clawhubSkillSlugs = publicSkills.map((s) => s.slug);
+  const clawhubSkillSlugs = publicSkills.map((s) => s.slug);
 
   // Build plugin configs for this agent (always from identity)
   const { plugins, pluginSecrets, enableFunnel } = buildPluginsForAgent(agent, identity.manifest.pluginDefaults, identity.manifest.plugins);
@@ -327,7 +329,7 @@ for (const agent of manifest.agents) {
   // Resolve deps from identity
   const depNames = identity.manifest.deps ?? [];
   const resolvedDeps = resolveDeps(depNames);
-  const depEntries = resolvedDeps.map(d => ({
+  const depEntries: DepInstallConfig[] = resolvedDeps.map(d => ({
     name: d.name,
     installScript: d.entry.installScript,
     postInstallScript: d.entry.postInstallScript,
@@ -348,46 +350,44 @@ for (const agent of manifest.agents) {
     }
   }
 
-  if (provider === "aws") {
-    // AWS path: create OpenClawAgent with VPC args
-    const agentResource = new OpenClawAgent(agent.name, {
+  return {
+    baseArgs: {
       anthropicApiKey,
       tailscaleAuthKey,
       tailnetDnsName,
-      instanceType: agent.instanceType ?? instanceType,
-      volumeSize: agentVolumeSize ?? 30,
       model: agentModel,
       backupModel: agentBackupModel,
       codingAgent: agentCodingAgent,
-
-      // Use shared VPC
-      vpcId: sharedVpc!.vpcId,
-      subnetId: sharedVpc!.subnetId,
-      securityGroupId: sharedVpc!.securityGroupId,
-
-      // Workspace files
       workspaceFiles,
-
-      // Environment variables
       envVars: {
         AGENT_ROLE: agent.role,
         AGENT_NAME: agentDisplayName,
         AGENT_EMOJI: agentEmoji,
         ...agent.envVars,
       },
-
-      // Plugins
       plugins,
       pluginSecrets,
       enableFunnel,
-
-      // Public skills from clawhub
       clawhubSkills: clawhubSkillSlugs,
-
-      // Deps
       deps: depEntries,
       depSecrets,
+    },
+    agentDisplayName,
+    agentVolumeSize,
+  };
+}
 
+for (const agent of manifest.agents) {
+  const { baseArgs, agentVolumeSize } = buildBaseAgentArgs(agent);
+
+  if (provider === "aws") {
+    const agentResource = new OpenClawAgent(agent.name, {
+      ...baseArgs,
+      instanceType: agent.instanceType ?? instanceType,
+      volumeSize: agentVolumeSize ?? 30,
+      vpcId: sharedVpc!.vpcId,
+      subnetId: sharedVpc!.subnetId,
+      securityGroupId: sharedVpc!.securityGroupId,
       tags: {
         ...baseTags,
         AgentRole: agent.role,
@@ -403,40 +403,10 @@ for (const agent of manifest.agents) {
       sshPrivateKey: agentResource.sshPrivateKey,
     };
   } else {
-    // Hetzner path: create HetznerOpenClawAgent
     const agentResource = new HetznerOpenClawAgent(agent.name, {
-      anthropicApiKey,
-      tailscaleAuthKey,
-      tailnetDnsName,
+      ...baseArgs,
       serverType: agent.instanceType ?? instanceType,
       location: manifest.region,
-      model: agentModel,
-      backupModel: agentBackupModel,
-      codingAgent: agentCodingAgent,
-
-      // Workspace files
-      workspaceFiles,
-
-      // Environment variables
-      envVars: {
-        AGENT_ROLE: agent.role,
-        AGENT_NAME: agentDisplayName,
-        AGENT_EMOJI: agentEmoji,
-        ...agent.envVars,
-      },
-
-      // Plugins
-      plugins,
-      pluginSecrets,
-      enableFunnel,
-
-      // Public skills from clawhub
-      clawhubSkills: clawhubSkillSlugs,
-
-      // Deps
-      deps: depEntries,
-      depSecrets,
-
       labels: {
         ...baseTags,
         AgentRole: agent.role,
@@ -444,7 +414,6 @@ for (const agent of manifest.agents) {
       },
     });
 
-    // Map serverId → instanceId so CLI tools work unchanged
     agentOutputs[agent.role] = {
       tailscaleUrl: agentResource.tailscaleUrl,
       gatewayToken: agentResource.gatewayToken,

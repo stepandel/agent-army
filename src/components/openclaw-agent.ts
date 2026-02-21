@@ -5,133 +5,37 @@
 
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import * as tls from "@pulumi/tls";
-import * as crypto from "crypto";
 import * as zlib from "zlib";
-import { generateCloudInit, interpolateCloudInit, CloudInitConfig, PluginInstallConfig } from "./cloud-init";
+import type { BaseOpenClawAgentArgs } from "./types";
+import { generateKeyPairAndToken, buildCloudInitUserData } from "./shared";
 
 /**
  * Arguments for creating an OpenClaw Agent
  */
-export interface OpenClawAgentArgs {
+export interface OpenClawAgentArgs extends BaseOpenClawAgentArgs {
   /**
    * EC2 instance type (default: t3.medium)
    * WARNING: Do not use t3.micro - 1GB memory is insufficient
    */
   instanceType?: pulumi.Input<string>;
 
-  /**
-   * Anthropic API key (required)
-   */
-  anthropicApiKey: pulumi.Input<string>;
-
-  /**
-   * Tailscale auth key for secure access (required)
-   * Generate at: https://login.tailscale.com/admin/settings/keys
-   */
-  tailscaleAuthKey: pulumi.Input<string>;
-
-  /**
-   * Your Tailnet DNS name (e.g., tailxxxxx.ts.net)
-   * Find it in Tailscale admin console under DNS
-   */
-  tailnetDnsName: pulumi.Input<string>;
-
-  /**
-   * Existing VPC ID. If not provided, creates a new VPC
-   */
+  /** Existing VPC ID. If not provided, creates a new VPC */
   vpcId?: pulumi.Input<string>;
 
-  /**
-   * Existing Subnet ID. If not provided, creates a new subnet
-   */
+  /** Existing Subnet ID. If not provided, creates a new subnet */
   subnetId?: pulumi.Input<string>;
 
-  /**
-   * Existing Security Group ID. If not provided, creates one
-   */
+  /** Existing Security Group ID. If not provided, creates one */
   securityGroupId?: pulumi.Input<string>;
 
-  /**
-   * AI model to use (default: anthropic/claude-opus-4-6)
-   */
-  model?: pulumi.Input<string>;
-
-  /**
-   * Backup/fallback model (e.g., "anthropic/claude-sonnet-4-5")
-   */
-  backupModel?: pulumi.Input<string>;
-
-  /**
-   * Coding agent CLI name (e.g., "claude-code", "codex", "amp")
-   */
-  codingAgent?: string;
-
-  /**
-   * Enable Docker sandbox for code execution (default: true)
-   */
-  enableSandbox?: pulumi.Input<boolean>;
-
-  /**
-   * Gateway port (default: 18789)
-   */
-  gatewayPort?: pulumi.Input<number>;
-
-  /**
-   * Browser control port (default: 18791)
-   */
-  browserPort?: pulumi.Input<number>;
-
-  /**
-   * EBS root volume size in GB (default: 30)
-   */
+  /** EBS root volume size in GB (default: 30) */
   volumeSize?: pulumi.Input<number>;
 
-  /**
-   * Additional tags to apply to all resources
-   */
+  /** Additional tags to apply to all resources */
   tags?: pulumi.Input<Record<string, pulumi.Input<string>>>;
 
-  /**
-   * Workspace files to inject (path -> content)
-   */
-  workspaceFiles?: Record<string, string>;
-
-  /**
-   * Additional environment variables for the agent
-   */
-  envVars?: Record<string, string>;
-
-  /**
-   * Custom post-setup shell commands
-   */
-  postSetupCommands?: string[];
-
-  /**
-   * AWS region (uses default provider region if not specified)
-   */
+  /** AWS region (uses default provider region if not specified) */
   region?: pulumi.Input<string>;
-
-  /**
-   * Plugins to install and configure on this agent
-   */
-  plugins?: PluginInstallConfig[];
-
-  /**
-   * Resolved secret values for plugin env vars: { envVarName: pulumiOutput }
-   * e.g., { "LINEAR_API_KEY": output<string>, "LINEAR_WEBHOOK_SECRET": output<string> }
-   */
-  pluginSecrets?: Record<string, pulumi.Input<string>>;
-
-  /**
-   * Resolved deps from the dep registry
-   */
-  deps?: { name: string; installScript: string; postInstallScript: string; secrets: Record<string, { envVar: string }> }[];
-
-  /**
-   * Dep secret Pulumi outputs: { envVarName: pulumiOutput }
-   */
-  depSecrets?: Record<string, pulumi.Input<string>>;
 
   /**
    * CIDR blocks allowed SSH access (default: none — use Tailscale).
@@ -139,16 +43,6 @@ export interface OpenClawAgentArgs {
    * Example: ["1.2.3.4/32"] to restrict to your IP only.
    */
   allowedSshCidrs?: pulumi.Input<pulumi.Input<string>[]>;
-
-  /**
-   * Whether to enable Tailscale Funnel (public HTTPS for webhooks)
-   */
-  enableFunnel?: boolean;
-
-  /**
-   * Public skill slugs to install via `clawhub install`
-   */
-  clawhubSkills?: string[];
 }
 
 /**
@@ -238,28 +132,8 @@ export class OpenClawAgent extends pulumi.ComponentResource {
     const enableSandbox = args.enableSandbox ?? true;
     const baseTags = args.tags ?? {};
 
-    // Generate SSH key pair
-    const sshKey = new tls.PrivateKey(
-      `${name}-ssh-key`,
-      {
-        algorithm: "ED25519",
-      },
-      defaultResourceOptions
-    );
-
-    // Generate gateway token from a separate TLS key
-    const tokenKey = new tls.PrivateKey(
-      `${name}-gateway-token-key`,
-      {
-        algorithm: "ED25519",
-      },
-      defaultResourceOptions
-    );
-
-    const gatewayTokenValue = tokenKey.publicKeyOpenssh.apply((key) => {
-      const hash = crypto.createHash("sha256").update(key).digest("hex");
-      return hash.substring(0, 48);
-    });
+    // Generate SSH key pair + gateway token
+    const { sshKey, gatewayTokenValue } = generateKeyPairAndToken(name, defaultResourceOptions);
 
     // VPC - create or use existing
     let vpcId: pulumi.Output<string>;
@@ -426,70 +300,12 @@ export class OpenClawAgent extends pulumi.ComponentResource {
     );
 
     // Generate cloud-init user data
-    // Build outputs for plugin secrets
-    const pluginSecretEntries = Object.entries(args.pluginSecrets ?? {});
-    const pluginSecretOutputs = pluginSecretEntries.map(([, v]) => pulumi.output(v));
-
-    // Build outputs for dep secrets
-    const depSecretEntries = Object.entries(args.depSecrets ?? {});
-    const depSecretOutputs = depSecretEntries.map(([, v]) => pulumi.output(v));
-
-    // Combine all string outputs
-    const userData = pulumi.all([
-      args.tailscaleAuthKey,
-      args.anthropicApiKey,
-      gatewayTokenValue,
-      ...pluginSecretOutputs,
-      ...depSecretOutputs,
-    ]).apply(([
-      tsAuthKey,
-      apiKey,
-      gwToken,
-      ...secretValues
-    ]) => {
-        // Include stack name in Tailscale hostname to avoid conflicts across deployments
-        const tsHostname = `${pulumi.getStack()}-${name}`;
-
-        // Build additional secrets map from plugin secrets + dep secrets
-        const additionalSecrets: Record<string, string> = {};
-        pluginSecretEntries.forEach(([envVar], idx) => {
-          additionalSecrets[envVar] = secretValues[idx] as string;
-        });
-        depSecretEntries.forEach(([envVar], idx) => {
-          additionalSecrets[envVar] = secretValues[pluginSecretEntries.length + idx] as string;
-        });
-
-        const cloudInitConfig: CloudInitConfig = {
-          anthropicApiKey: apiKey,
-          tailscaleAuthKey: tsAuthKey,
-          gatewayToken: gwToken,
-          gatewayPort: gatewayPort as number,
-          browserPort: browserPort as number,
-          model: model as string,
-          backupModel: args.backupModel as string | undefined,
-          codingAgent: args.codingAgent,
-          enableSandbox: enableSandbox as boolean,
-          tailscaleHostname: tsHostname,
-          workspaceFiles: args.workspaceFiles,
-          envVars: args.envVars,
-          postSetupCommands: args.postSetupCommands,
-          // Plugins
-          plugins: args.plugins,
-          enableFunnel: args.enableFunnel,
-          clawhubSkills: args.clawhubSkills,
-          // Deps
-          deps: args.deps,
-          depSecrets: additionalSecrets,
-        };
-
-        const script = generateCloudInit(cloudInitConfig);
-        return interpolateCloudInit(script, {
-          anthropicApiKey: apiKey,
-          tailscaleAuthKey: tsAuthKey,
-          gatewayToken: gwToken,
-          additionalSecrets,
-        });
-      });
+    const userData = buildCloudInitUserData(name, args, gatewayTokenValue, {
+      gatewayPort: gatewayPort as number,
+      browserPort: browserPort as number,
+      model: model as string,
+      enableSandbox: enableSandbox as boolean,
+    });
 
     // Create EC2 instance
     const instance = new aws.ec2.Instance(

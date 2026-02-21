@@ -3,3 +3,4 @@ export { OpenClawAgent, OpenClawAgentArgs } from "./components/openclaw-agent";
 export { HetznerOpenClawAgent, HetznerOpenClawAgentArgs } from "./components/hetzner-agent";
 export { generateCloudInit, CloudInitConfig, PluginInstallConfig } from "./components/cloud-init";
 export { generateOpenClawConfig, OpenClawConfigOptions, PluginEntry } from "./components/config-generator";
+export type { BaseOpenClawAgentArgs, DepInstallConfig } from "./components/types";
