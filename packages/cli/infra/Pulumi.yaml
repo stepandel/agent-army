@@ -1,6 +1,0 @@
-name: agent-army
-description: Multi-agent OpenClaw deployment - PM, Engineer, and Tester
-runtime:
-  name: nodejs
-  options:
-    packagemanager: npm
