@@ -1,6 +1,3 @@
-"use client";
-
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -165,8 +162,8 @@ function renderYamlLine(line: string, i: number) {
     const value = line.slice(colonIdx);
     return (
       <div key={i}>
-        <span className="text-[#60a5fa]">{key}</span>
-        <span className="text-[#9ca3af]">{value}</span>
+        <span className="text-accent-blue">{key}</span>
+        <span className="text-muted-foreground">{value}</span>
       </div>
     );
   }
@@ -174,26 +171,11 @@ function renderYamlLine(line: string, i: number) {
 }
 
 export default function Home() {
-  const [showBanner, setShowBanner] = useState(true);
-
-  useEffect(() => {
-    const handleScroll = () => setShowBanner(window.scrollY < 50);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
   return (
     <div className="min-h-screen overflow-hidden">
-      {/* Beta Banner */}
-      <div
-        className={`fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black text-center px-4 py-2 text-sm font-semibold transition-transform duration-300 ${showBanner ? "translate-y-0" : "-translate-y-full"}`}
-      >
-        ⚠️ This is a beta product — use at your own risk.
-      </div>
-
       {/* Nav */}
       <nav
-        className={`fixed left-0 right-0 z-50 flex items-center justify-between px-8 py-4 backdrop-blur-md bg-background/80 border-b border-border transition-[top] duration-300 ${showBanner ? "top-10" : "top-0"}`}
+        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 backdrop-blur-md bg-background/80 border-b border-border"
       >
         <a href="/" className="flex items-center gap-2.5">
           <img src="/logo.svg" alt="Clawup" className="h-7 w-7" />
@@ -266,16 +248,16 @@ export default function Home() {
 
         {/* Install command */}
         <div className="animate-fade-in-up-3 max-w-md mx-auto mb-10">
-          <div className="flex items-center gap-3 px-6 py-4 rounded-xl bg-[#0c0c0c] border border-border font-mono text-sm">
-            <span className="text-[#34d399]">$</span>
-            <code className="text-white flex-1 text-left">
+          <div className="flex items-center gap-3 px-6 py-4 rounded-xl bg-muted border border-border font-mono text-sm">
+            <span className="text-accent-emerald">$</span>
+            <code className="text-foreground flex-1 text-left">
               npm install -g clawup
             </code>
             <button
               onClick={() =>
                 navigator.clipboard?.writeText("npm install -g clawup").catch(() => {})
               }
-              className="text-[#9ca3af] hover:text-white transition-colors shrink-0"
+              className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
               title="Copy to clipboard"
             >
               <svg
@@ -318,42 +300,42 @@ export default function Home() {
 
       {/* Terminal Preview — YAML-first flow */}
       <section className="max-w-2xl mx-auto mb-24 px-8">
-        <div className="animate-fade-in-up-3 bg-[#0c0c0c] border border-border rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
+        <div className="animate-fade-in-up-3 bg-muted border border-border rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.06)]">
           {/* Title bar */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
             <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
             <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
             <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-            <span className="ml-2 text-xs text-[#9ca3af]">
+            <span className="ml-2 text-xs text-muted-foreground">
               Terminal
             </span>
           </div>
           {/* Content */}
           <div className="p-6 font-mono text-sm leading-7">
             <div className="mb-1">
-              <span className="text-[#34d399]">$</span>{" "}
-              <span className="text-white">cat atlas.yaml</span>
+              <span className="text-accent-emerald">$</span>{" "}
+              <span className="text-foreground">cat atlas.yaml</span>
             </div>
-            <div className="text-[#9ca3af] pl-2 mb-3 whitespace-pre leading-6 text-xs">
+            <div className="text-muted-foreground pl-2 mb-3 whitespace-pre leading-6 text-xs">
               {yamlSnippet.split("\n").map(renderYamlLine)}
             </div>
             <div className="mb-1">
-              <span className="text-[#34d399]">$</span>{" "}
-              <span className="text-white">clawup deploy</span>
+              <span className="text-accent-emerald">$</span>{" "}
+              <span className="text-foreground">clawup deploy</span>
             </div>
-            <div className="text-[#9ca3af]">
+            <div className="text-muted-foreground">
               Deploying 1 agent to Hetzner (nbg1)...
             </div>
             <div>
-              <span className="text-[#34d399]">✓</span>{" "}
-              <span className="text-[#9ca3af]">
+              <span className="text-accent-emerald">✓</span>{" "}
+              <span className="text-muted-foreground">
                 Atlas (researcher) —{" "}
               </span>
-              <span className="text-[#34d399]">ready</span>
+              <span className="text-accent-emerald">ready</span>
             </div>
             <div className="mt-1">
-              <span className="text-[#34d399]">$</span>{" "}
-              <span className="text-[#9ca3af]">
+              <span className="text-accent-emerald">$</span>{" "}
+              <span className="text-muted-foreground">
                 <span className="animate-pulse-glow">▊</span>
               </span>
             </div>
@@ -466,16 +448,16 @@ export default function Home() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           {/* YAML snippet */}
-          <div className="bg-[#0c0c0c] border border-border rounded-2xl overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10">
+          <div className="bg-muted border border-border rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
               <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
               <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
               <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-              <span className="ml-2 text-xs text-[#9ca3af]">
+              <span className="ml-2 text-xs text-muted-foreground">
                 sentinel.yaml
               </span>
             </div>
-            <div className="p-6 font-mono text-xs leading-6 whitespace-pre text-[#9ca3af]">
+            <div className="p-6 font-mono text-xs leading-6 whitespace-pre text-muted-foreground">
               {customYamlSnippet.split("\n").map(renderYamlLine)}
             </div>
           </div>
