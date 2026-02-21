@@ -12,7 +12,7 @@ const presets = [
     colorClass: "text-accent-purple",
     bgClass: "bg-accent-purple-faded",
     borderClass: "hover:border-accent-purple-border",
-    docsUrl: "https://docs.agent-army.ai/architecture/agent-presets#juno-pm",
+    docsUrl: "https://docs.clawup.ai/architecture/agent-presets#juno-pm",
     description:
       "Breaks down tickets, researches APIs and requirements, sizes work into sub-issues, enriches context, and assigns tasks to the engineering agent.",
     tags: ["Linear", "Ticket Prep", "Planning"],
@@ -24,7 +24,7 @@ const presets = [
     colorClass: "text-accent-blue",
     bgClass: "bg-accent-blue-faded",
     borderClass: "hover:border-accent-blue-border",
-    docsUrl: "https://docs.agent-army.ai/architecture/agent-presets#titus-eng",
+    docsUrl: "https://docs.clawup.ai/architecture/agent-presets#titus-eng",
     description:
       "Picks up assigned tickets, writes production code via Claude Code, runs builds and tests, creates pull requests, and responds to review feedback.",
     tags: ["Claude Code", "GitHub", "CI/CD"],
@@ -36,7 +36,7 @@ const presets = [
     colorClass: "text-accent-green",
     bgClass: "bg-accent-green-faded",
     borderClass: "hover:border-accent-green-border",
-    docsUrl: "https://docs.agent-army.ai/architecture/agent-presets#scout-qa",
+    docsUrl: "https://docs.clawup.ai/architecture/agent-presets#scout-qa",
     description:
       "Reviews pull requests against acceptance criteria, runs tests, auto-fixes failures with Claude Code, and labels PRs as approved or needs-work.",
     tags: ["Code Review", "Testing", "QA"],
@@ -56,14 +56,14 @@ const steps = [
     title: "Deploy",
     description:
       "One command provisions cloud infrastructure and launches your agents.",
-    command: "agent-army deploy",
+    command: "clawup deploy",
   },
   {
     number: "03",
     title: "Manage",
     description:
       "Monitor, update, and scale your fleet from the terminal. Changes tracked in git.",
-    command: "agent-army status",
+    command: "clawup status",
   },
 ];
 
@@ -198,7 +198,7 @@ export default function Home() {
         <a href="/" className="flex items-center gap-2.5">
           <span className="text-xl">🪖</span>
           <span className="text-base font-bold tracking-tight">
-            Agent Army
+            Clawup
           </span>
         </a>
         <div className="flex items-center gap-6">
@@ -209,13 +209,13 @@ export default function Home() {
             Blog
           </a>
           <a
-            href="https://docs.agent-army.ai"
+            href="https://docs.clawup.ai"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Docs
           </a>
           <a
-            href="https://github.com/stepandel/agent-army"
+            href="https://github.com/stepandel/clawup"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -269,11 +269,11 @@ export default function Home() {
           <div className="flex items-center gap-3 px-6 py-4 rounded-xl bg-[#0c0c0c] border border-border font-mono text-sm">
             <span className="text-accent-emerald">$</span>
             <code className="text-foreground flex-1 text-left">
-              npm install -g agent-army
+              npm install -g clawup
             </code>
             <button
               onClick={() =>
-                navigator.clipboard?.writeText("npm install -g agent-army").catch(() => {})
+                navigator.clipboard?.writeText("npm install -g clawup").catch(() => {})
               }
               className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
               title="Copy to clipboard"
@@ -303,7 +303,7 @@ export default function Home() {
             className="shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)]"
           >
             <a
-              href="https://github.com/stepandel/agent-army"
+              href="https://github.com/stepandel/clawup"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -311,7 +311,7 @@ export default function Home() {
             </a>
           </Button>
           <Button asChild variant="outline" size="lg">
-            <a href="https://docs.agent-army.ai">Read the Docs</a>
+            <a href="https://docs.clawup.ai">Read the Docs</a>
           </Button>
         </div>
       </section>
@@ -339,7 +339,7 @@ export default function Home() {
             </div>
             <div className="mb-1">
               <span className="text-accent-emerald">$</span>{" "}
-              <span className="text-foreground">agent-army deploy</span>
+              <span className="text-foreground">clawup deploy</span>
             </div>
             <div className="text-muted-foreground">
               Deploying 1 agent to Hetzner (nbg1)...
@@ -503,11 +503,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Why Agent Army */}
+      {/* Why Clawup */}
       <section className="max-w-5xl mx-auto px-8 py-20">
         <div className="text-center mb-14">
           <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-bold tracking-tight mb-4">
-            Why Agent Army
+            Why Clawup
           </h2>
           <p className="text-base text-muted-foreground max-w-lg mx-auto">
             You&apos;ve built your agents. Now ship them.
@@ -539,18 +539,18 @@ export default function Home() {
             <div className="flex items-center gap-2.5">
               <span className="text-base">🪖</span>
               <span className="text-sm font-semibold text-muted-foreground">
-                Agent Army
+                Clawup
               </span>
             </div>
             <div className="flex gap-7 flex-wrap">
               {[
                 {
                   label: "GitHub",
-                  href: "https://github.com/stepandel/agent-army",
+                  href: "https://github.com/stepandel/clawup",
                 },
                 {
                   label: "Documentation",
-                  href: "https://docs.agent-army.ai",
+                  href: "https://docs.clawup.ai",
                 },
                 { label: "OpenClaw", href: "https://openclaw.ai" },
               ].map((link) => (
