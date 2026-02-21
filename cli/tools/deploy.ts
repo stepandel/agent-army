@@ -6,7 +6,7 @@
 
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
-import { COST_ESTIMATES, HETZNER_COST_ESTIMATES } from "../lib/constants";
+import { COST_ESTIMATES, HETZNER_COST_ESTIMATES } from "@agent-army/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { isTailscaleInstalled, isTailscaleRunning, cleanupTailscaleDevices, ensureMagicDns, ensureTailscaleFunnel } from "../lib/tailscale";
 import pc from "picocolors";

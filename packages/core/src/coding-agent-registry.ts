@@ -56,16 +56,14 @@ else
   echo "WARNING: Claude Code installation may have failed"
   exit 1
 fi
-CLAUDE_CODE_INSTALL_SCRIPT
-`.trim(),
+CLAUDE_CODE_INSTALL_SCRIPT`.trim(),
     configureModelScript: `
 # Configure Claude Code default model
 sudo -u ubuntu bash -c '
 mkdir -p ~/.claude
 echo '"'"'{"model":"\${MODEL}","fastMode":true}'"'"' > ~/.claude/settings.json
 echo "Claude Code default model set to \${MODEL} (fast mode)"
-'
-`.trim(),
+'`.trim(),
     cliBackend: {
       command: "claude",
       args: ["-p", "--output-format", "stream-json", "--verbose"],

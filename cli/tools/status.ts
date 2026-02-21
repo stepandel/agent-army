@@ -6,7 +6,7 @@
 
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { loadManifest, resolveConfigName } from "../lib/config";
-import { SSH_USER, tailscaleHostname } from "../lib/constants";
+import { SSH_USER, tailscaleHostname } from "@agent-army/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { isTailscaleRunning } from "../lib/tailscale";
 

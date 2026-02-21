@@ -10,6 +10,7 @@
     "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
+    "@agent-army/core": "workspace:*",
     "@clack/prompts": "^0.9",
     "commander": "^13.0",
     "picocolors": "^1.1",

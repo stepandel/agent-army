@@ -3,7 +3,7 @@
  */
 
 import * as p from "@clack/prompts";
-import type { PrereqResult } from "../types";
+import type { PrereqResult } from "@agent-army/core";
 import { commandExists, capture } from "./exec";
 import { isVendored } from "./vendor";
 import { isDevMode } from "./workspace";

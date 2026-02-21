@@ -18,46 +18,15 @@ import * as path from "path";
 import YAML from "yaml";
 import { OpenClawAgent, HetznerOpenClawAgent, PluginInstallConfig } from "./src";
 import { SharedVpc } from "./shared-vpc";
-import { fetchIdentitySync } from "./cli/lib/identity";
-import { classifySkills } from "./cli/lib/skills";
-import { PLUGIN_REGISTRY } from "./cli/lib/plugin-registry";
-import { resolveDeps, collectDepSecrets } from "./cli/lib/deps";
+import {
+  fetchIdentitySync,
+  classifySkills,
+  PLUGIN_REGISTRY,
+  resolveDeps,
+  collectDepSecrets,
+} from "@agent-army/core";
+import type { AgentDefinition, ArmyManifest, PluginConfigFile } from "@agent-army/core";
 import * as os from "os";
-
-// -----------------------------------------------------------------------------
-// Manifest type (duplicated here to avoid importing from cli/)
-// -----------------------------------------------------------------------------
-
-interface ManifestAgent {
-  name: string;
-  displayName: string;
-  role: string;
-  /** Git URL or local path to an identity repo/folder */
-  identity: string;
-  /** Pin the identity to a specific Git tag or commit hash */
-  identityVersion?: string;
-  volumeSize: number;
-  instanceType?: string;
-  envVars?: Record<string, string>;
-}
-
-interface Manifest {
-  stackName: string;
-  provider?: "aws" | "hetzner";
-  region: string;
-  instanceType: string;
-  ownerName: string;
-  timezone?: string;
-  workingHours?: string;
-  userNotes?: string;
-  templateVars?: Record<string, string>;
-  agents: ManifestAgent[];
-}
-
-/** Plugin config file shape */
-interface PluginConfigFile {
-  agents: Record<string, Record<string, unknown>>;
-}
 
 // -----------------------------------------------------------------------------
 // Configuration from Pulumi Config / ESC
@@ -113,7 +82,8 @@ if (!fs.existsSync(manifestPath)) {
   );
 }
 
-const manifest: Manifest = YAML.parse(fs.readFileSync(manifestPath, "utf-8"));
+// Cast as partial — old manifests may omit `provider` (defaults to "aws" below)
+const manifest = YAML.parse(fs.readFileSync(manifestPath, "utf-8")) as ArmyManifest & { provider?: string };
 
 // Load plugin configs from ~/.agent-army/configs/<stackName>/plugins/
 const pluginConfigsDir = path.join(os.homedir(), ".agent-army", "configs", manifest.stackName, "plugins");
@@ -234,7 +204,7 @@ if (provider === "aws") {
 // -----------------------------------------------------------------------------
 
 function buildPluginsForAgent(
-  agent: ManifestAgent,
+  agent: AgentDefinition,
   identityDefaults?: Record<string, Record<string, unknown>>,
   identityPlugins?: string[]
 ): { plugins: PluginInstallConfig[]; pluginSecrets: Record<string, pulumi.Output<string>>; enableFunnel: boolean } {

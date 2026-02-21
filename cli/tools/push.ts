@@ -11,13 +11,13 @@ import * as fs from "fs";
 import * as path from "path";
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { loadManifest, resolveConfigName } from "../lib/config";
-import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "../lib/constants";
+import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "@agent-army/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { getConfig, selectOrCreateStack } from "../lib/pulumi";
-import type { AgentDefinition } from "../types";
-import { fetchIdentitySync } from "../lib/identity";
-import { classifySkills } from "../lib/skills";
-import { resolveDeps } from "../lib/deps";
+import type { AgentDefinition } from "@agent-army/core";
+import { fetchIdentitySync } from "@agent-army/core";
+import { classifySkills } from "@agent-army/core";
+import { resolveDeps } from "@agent-army/core";
 import * as os from "os";
 import pc from "picocolors";
 

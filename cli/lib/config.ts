@@ -6,8 +6,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import YAML from "yaml";
-import type { ArmyManifest, PluginConfigFile } from "../types";
-import { CONFIG_DIR, MANIFEST_FILE, PLUGINS_DIR } from "./constants";
+import type { ArmyManifest, PluginConfigFile } from "@agent-army/core";
+import { CONFIG_DIR, MANIFEST_FILE, PLUGINS_DIR } from "@agent-army/core";
 
 /**
  * Get the configs directory path (~/.agent-army/configs/)

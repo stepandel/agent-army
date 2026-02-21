@@ -6,12 +6,41 @@
  * persona and capabilities.
  */
 
+import { execSync } from "child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "fs";
 import { join, relative, resolve } from "path";
 import { createHash } from "crypto";
 import YAML from "yaml";
-import { capture } from "./exec";
-import type { IdentityManifest, IdentityResult } from "../types";
+import type { IdentityManifest, IdentityResult } from "./types";
+
+/** Result of a captured command execution */
+interface ExecResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+/**
+ * Simple command runner for git operations.
+ * No vendored binary resolution needed — only used for git clone/pull/rm.
+ */
+function capture(command: string, args: string[] = [], cwd?: string): ExecResult {
+  try {
+    const result = execSync([command, ...args].join(" "), {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return { stdout: result.trim(), stderr: "", exitCode: 0 };
+  } catch (err: unknown) {
+    const e = err as { stdout?: string; stderr?: string; status?: number };
+    return {
+      stdout: (e.stdout ?? "").toString().trim(),
+      stderr: (e.stderr ?? "").toString().trim(),
+      exitCode: e.status ?? 1,
+    };
+  }
+}
 
 /** Required fields in identity manifest */
 const REQUIRED_FIELDS: (keyof IdentityManifest)[] = [
@@ -169,7 +198,7 @@ function validatePluginDefaults(value: unknown): Record<string, Record<string, u
  * Validate and parse an identity manifest object.
  * Throws with descriptive errors if required fields are missing or malformed.
  */
-function parseManifest(raw: unknown, sourcePath: string): IdentityManifest {
+export function parseManifest(raw: unknown, sourcePath: string): IdentityManifest {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw new Error(`identity manifest at ${sourcePath} is not a valid object`);
   }
@@ -212,22 +241,6 @@ function parseManifest(raw: unknown, sourcePath: string): IdentityManifest {
   };
 }
 
-/**
- * Fetch an agent identity from a Git repo or local path.
- *
- * @param source - Git URL (with optional `#subfolder`), or a local directory path
- * @param cacheDir - Directory to cache cloned Git repos (e.g., `~/.agent-army/identity-cache/`)
- * @returns Parsed identity manifest and all workspace files
- *
- * @example
- * ```ts
- * // From a Git repo with subfolder
- * const id = await fetchIdentity("https://github.com/org/identities#pm", cacheDir);
- *
- * // From a local path
- * const id = await fetchIdentity("./my-identity", cacheDir);
- * ```
- */
 /**
  * Synchronous version of fetchIdentity for use in contexts that don't support async
  * (e.g., Pulumi resource construction).

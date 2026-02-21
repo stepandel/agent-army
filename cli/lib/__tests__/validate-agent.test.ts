@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateAgentDefinition, type AgentDefinition } from "../../types";
+import { validateAgentDefinition, type AgentDefinition } from "@agent-army/core";
 
 function makeAgent(overrides: Partial<AgentDefinition> = {}): AgentDefinition {
   return {

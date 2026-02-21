@@ -5,7 +5,7 @@
 
 import * as zlib from "zlib";
 import { generateConfigPatchScript, PluginEntry } from "./config-generator";
-import { CODING_AGENT_REGISTRY, CodingAgentEntry } from "../../cli/lib/coding-agent-registry";
+import { CODING_AGENT_REGISTRY, type CodingAgentEntry } from "@agent-army/core";
 
 /**
  * Config for a plugin to be installed on an agent.

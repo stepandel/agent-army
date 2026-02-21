@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  PRESETS,
   PROVIDERS,
   AWS_REGIONS,
   HETZNER_LOCATIONS,
@@ -10,8 +9,8 @@ import {
   hetznerServerTypes,
   COST_ESTIMATES,
   HETZNER_COST_ESTIMATES,
-} from "agent-army/lib/constants";
-import type { ArmyManifest, AgentDefinition } from "agent-army/types";
+} from "@agent-army/core";
+import type { ArmyManifest, AgentDefinition } from "@agent-army/core";
 
 const STEPS = [
   "Stack & Provider",

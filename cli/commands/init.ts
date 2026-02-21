@@ -8,11 +8,9 @@
 
 import { execSync } from "child_process";
 import * as p from "@clack/prompts";
-import type { AgentDefinition, ArmyManifest, IdentityManifest } from "../types";
-import { fetchIdentity } from "../lib/identity";
-import * as os from "os";
-import * as path from "path";
+import type { AgentDefinition, ArmyManifest, IdentityManifest, PluginConfigFile } from "@agent-army/core";
 import {
+  fetchIdentity,
   BUILT_IN_IDENTITIES,
   PROVIDERS,
   AWS_REGIONS,
@@ -25,13 +23,14 @@ import {
   MODEL_PROVIDERS,
   slackAppManifest,
   tailscaleHostname,
-} from "../lib/constants";
-import { PLUGIN_REGISTRY } from "../lib/plugin-registry";
-import { DEP_REGISTRY } from "../lib/dep-registry";
+  PLUGIN_REGISTRY,
+  DEP_REGISTRY,
+} from "@agent-army/core";
+import * as os from "os";
+import * as path from "path";
 import { checkPrerequisites } from "../lib/prerequisites";
 import { selectOrCreateStack, setConfig } from "../lib/pulumi";
 import { saveManifest, savePluginConfig } from "../lib/config";
-import type { PluginConfigFile } from "../types";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { showBanner, handleCancel, exitWithError, formatCost, formatAgentList } from "../lib/ui";
 

@@ -5,7 +5,7 @@
 import * as p from "@clack/prompts";
 import { loadManifest, resolveConfigName } from "../lib/config";
 import { getConfig, selectOrCreateStack } from "../lib/pulumi";
-import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "../lib/constants";
+import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "@agent-army/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { showBanner, exitWithError } from "../lib/ui";
 import { requireTailscale } from "../lib/tailscale";

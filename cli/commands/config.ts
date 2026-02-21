@@ -20,8 +20,8 @@ import {
   HETZNER_SERVER_TYPES_EU,
   HETZNER_SERVER_TYPES_US,
   hetznerServerTypes,
-} from "../lib/constants";
-import type { ArmyManifest, AgentDefinition } from "../types";
+} from "@agent-army/core";
+import type { ArmyManifest, AgentDefinition } from "@agent-army/core";
 import pc from "picocolors";
 
 // ---------------------------------------------------------------------------
