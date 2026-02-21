@@ -215,11 +215,19 @@ function buildPluginsForAgent(
   const pluginList = identityPlugins ?? [];
 
   for (const pluginName of pluginList) {
-    const pluginCfg = pluginConfigs[pluginName];
-    const userConfig = pluginCfg?.agents?.[agent.role] ?? {};
-    const identityConfig = identityDefaults?.[pluginName] ?? {};
-    // Merge: identity defaults first, user config overrides
-    const agentSection = { ...identityConfig, ...userConfig };
+    let agentSection: Record<string, unknown>;
+
+    if (agent.plugins && agent.plugins[pluginName]) {
+      // New format: inline plugin config on the agent definition
+      agentSection = agent.plugins[pluginName];
+    } else {
+      // Backward compat: fall back to file-based plugin config
+      const pluginCfg = pluginConfigs[pluginName];
+      const userConfig = pluginCfg?.agents?.[agent.role] ?? {};
+      const identityConfig = identityDefaults?.[pluginName] ?? {};
+      agentSection = { ...identityConfig, ...userConfig };
+    }
+
     const registryEntry = PLUGIN_REGISTRY[pluginName];
     const secretMapping = registryEntry?.secretEnvVars ?? {};
 

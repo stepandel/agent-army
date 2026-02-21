@@ -21,7 +21,7 @@ import type { PushOptions } from "./tools/push";
 import { destroyCommand } from "./commands/destroy";
 import { listCommand } from "./commands/list";
 import { updateCommand } from "./commands/update";
-import { configShowCommand, configSetCommand } from "./commands/config";
+import { configShowCommand, configSetCommand, configMigrateCommand } from "./commands/config";
 import { secretsSetCommand, secretsListCommand } from "./commands/secrets";
 import { redeployCommand } from "./commands/redeploy";
 import { webhooksSetupCommand } from "./commands/webhooks";
@@ -154,6 +154,14 @@ configCmd
   .option("-a, --agent <name>", "Target a specific agent")
   .action(async (key: string, value: string, opts) => {
     await configSetCommand(key, value, opts);
+  });
+
+configCmd
+  .command("migrate")
+  .description("Migrate plugin config files into the manifest (one-time upgrade)")
+  .option("-c, --config <name>", "Config name (auto-detected if only one)")
+  .action(async (opts) => {
+    await configMigrateCommand(opts);
   });
 
 const secretsCmd = program

@@ -8,7 +8,7 @@
 
 import { execSync } from "child_process";
 import * as p from "@clack/prompts";
-import type { AgentDefinition, ArmyManifest, IdentityManifest, PluginConfigFile } from "@agent-army/core";
+import type { AgentDefinition, ArmyManifest, IdentityManifest } from "@agent-army/core";
 import {
   fetchIdentity,
   BUILT_IN_IDENTITIES,
@@ -30,7 +30,7 @@ import * as os from "os";
 import * as path from "path";
 import { checkPrerequisites } from "../lib/prerequisites";
 import { selectOrCreateStack, setConfig } from "../lib/pulumi";
-import { saveManifest, savePluginConfig } from "../lib/config";
+import { saveManifest } from "../lib/config";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { showBanner, handleCancel, exitWithError, formatCost, formatAgentList } from "../lib/ui";
 
@@ -757,21 +757,18 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
   };
   saveManifest(configName, manifest);
 
-  // Build and save plugin config files (seeded from identity pluginDefaults)
-  const allPlugins = new Set<string>();
+  // Inline plugin config into each agent definition
   for (const fi of fetchedIdentities) {
-    for (const pl of fi.manifest.plugins ?? []) allPlugins.add(pl);
-  }
+    const rolePlugins = agentPlugins.get(fi.agent.role);
+    if (!rolePlugins || rolePlugins.size === 0) continue;
 
-  for (const pluginName of allPlugins) {
-    const pluginAgents: Record<string, Record<string, unknown>> = {};
+    const inlinePlugins: Record<string, Record<string, unknown>> = {};
+    const defaults = identityPluginDefaults[fi.agent.role] ?? {};
 
-    for (const fi of fetchedIdentities) {
-      if (!agentPlugins.get(fi.agent.role)?.has(pluginName)) continue;
-
-      const defaults = identityPluginDefaults[fi.agent.role]?.[pluginName] ?? {};
+    for (const pluginName of rolePlugins) {
+      const pluginDefaults = defaults[pluginName] ?? {};
       const agentConfig: Record<string, unknown> = {
-        ...defaults,
+        ...pluginDefaults,
         agentId: fi.agent.name,
       };
 
@@ -783,12 +780,11 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
         }
       }
 
-      pluginAgents[fi.agent.role] = agentConfig;
+      inlinePlugins[pluginName] = agentConfig;
     }
 
-    if (Object.keys(pluginAgents).length > 0) {
-      const pluginConfig: PluginConfigFile = { agents: pluginAgents };
-      savePluginConfig(configName, pluginName, pluginConfig);
+    if (Object.keys(inlinePlugins).length > 0) {
+      fi.agent.plugins = inlinePlugins;
     }
   }
 

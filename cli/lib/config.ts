@@ -137,11 +137,13 @@ export function resolveConfigName(name?: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Plugin config helpers
+// Plugin config helpers (deprecated — plugin config is now inline in manifest)
+// These remain for backward compat and the `config migrate` command.
 // ---------------------------------------------------------------------------
 
 /**
  * Get the plugins directory for a stack (~/.agent-army/configs/<stackName>/plugins/)
+ * @deprecated Plugin config is now inline in the manifest. Use `agent-army config migrate` to upgrade.
  */
 export function pluginsDir(stackName: string): string {
   return path.join(configsDir(), stackName, PLUGINS_DIR);
@@ -149,6 +151,7 @@ export function pluginsDir(stackName: string): string {
 
 /**
  * Ensure the plugins directory exists for a stack
+ * @deprecated Plugin config is now inline in the manifest.
  */
 export function ensurePluginsDir(stackName: string): void {
   const dir = pluginsDir(stackName);
@@ -159,6 +162,7 @@ export function ensurePluginsDir(stackName: string): void {
 
 /**
  * Load a plugin config file. Returns null if not found or invalid.
+ * @deprecated Plugin config is now inline in the manifest. Use `agent-army config migrate` to upgrade.
  */
 export function loadPluginConfig(stackName: string, pluginName: string): PluginConfigFile | null {
   const filePath = path.join(pluginsDir(stackName), `${pluginName}.yaml`);
@@ -175,6 +179,7 @@ export function loadPluginConfig(stackName: string, pluginName: string): PluginC
 
 /**
  * Save a plugin config file
+ * @deprecated Plugin config is now inline in the manifest. Use `agent-army config migrate` to upgrade.
  */
 export function savePluginConfig(stackName: string, pluginName: string, data: PluginConfigFile): void {
   ensurePluginsDir(stackName);
