@@ -158,6 +158,21 @@ templateVars:
   - OWNER_NAME
   - ESCALATION_CHANNEL`;
 
+function renderYamlLine(line: string, i: number) {
+  const colonIdx = line.indexOf(":");
+  if (colonIdx > 0 && !line.trimStart().startsWith("-") && !line.trimStart().startsWith("#")) {
+    const key = line.slice(0, colonIdx);
+    const value = line.slice(colonIdx);
+    return (
+      <div key={i}>
+        <span className="text-accent-blue">{key}</span>
+        <span className="text-muted-foreground">{value}</span>
+      </div>
+    );
+  }
+  return <div key={i}>{line || "\u00A0"}</div>;
+}
+
 export default function Home() {
   const [showBanner, setShowBanner] = useState(true);
 
@@ -258,7 +273,7 @@ export default function Home() {
             </code>
             <button
               onClick={() =>
-                navigator.clipboard.writeText("npm install -g agent-army")
+                navigator.clipboard?.writeText("npm install -g agent-army").catch(() => {})
               }
               className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
               title="Copy to clipboard"
@@ -320,20 +335,7 @@ export default function Home() {
               <span className="text-foreground">cat atlas.yaml</span>
             </div>
             <div className="text-muted-foreground pl-2 mb-3 whitespace-pre leading-6 text-xs">
-              {yamlSnippet.split("\n").map((line, i) => {
-                const colonIdx = line.indexOf(":");
-                if (colonIdx > 0 && !line.trimStart().startsWith("-") && !line.trimStart().startsWith("#")) {
-                  const key = line.slice(0, colonIdx);
-                  const value = line.slice(colonIdx);
-                  return (
-                    <div key={i}>
-                      <span className="text-accent-blue">{key}</span>
-                      <span className="text-muted-foreground">{value}</span>
-                    </div>
-                  );
-                }
-                return <div key={i}>{line || "\u00A0"}</div>;
-              })}
+              {yamlSnippet.split("\n").map(renderYamlLine)}
             </div>
             <div className="mb-1">
               <span className="text-accent-emerald">$</span>{" "}
@@ -474,24 +476,7 @@ export default function Home() {
               </span>
             </div>
             <div className="p-6 font-mono text-xs leading-6 whitespace-pre text-muted-foreground">
-              {customYamlSnippet.split("\n").map((line, i) => {
-                const colonIdx = line.indexOf(":");
-                if (
-                  colonIdx > 0 &&
-                  !line.trimStart().startsWith("-") &&
-                  !line.trimStart().startsWith("#")
-                ) {
-                  const key = line.slice(0, colonIdx);
-                  const value = line.slice(colonIdx);
-                  return (
-                    <div key={i}>
-                      <span className="text-accent-blue">{key}</span>
-                      <span className="text-muted-foreground">{value}</span>
-                    </div>
-                  );
-                }
-                return <div key={i}>{line || "\u00A0"}</div>;
-              })}
+              {customYamlSnippet.split("\n").map(renderYamlLine)}
             </div>
           </div>
 
