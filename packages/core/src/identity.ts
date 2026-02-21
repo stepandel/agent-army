@@ -12,6 +12,7 @@ import { join, relative, resolve } from "path";
 import { createHash } from "crypto";
 import YAML from "yaml";
 import type { IdentityManifest, IdentityResult } from "./types";
+import { IdentityManifestSchema } from "./schemas";
 
 /** Result of a captured command execution */
 interface ExecResult {
@@ -42,17 +43,6 @@ function capture(command: string, args: string[] = [], cwd?: string): ExecResult
   }
 }
 
-/** Required fields in identity manifest */
-const REQUIRED_FIELDS: (keyof IdentityManifest)[] = [
-  "name",
-  "displayName",
-  "role",
-  "emoji",
-  "description",
-  "volumeSize",
-  "skills",
-  "templateVars",
-];
 
 /**
  * Parse a source string into its components.
@@ -162,83 +152,34 @@ function readFilesRecursive(dir: string, base?: string): Record<string, string> 
 }
 
 /**
- * Validate plugins field (optional array of strings).
- */
-function validatePlugins(value: unknown): string[] | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!Array.isArray(value)) {
-    throw new Error(`identity manifest: "plugins" must be an array of strings`);
-  }
-  for (const entry of value) {
-    if (typeof entry !== "string" || !entry) {
-      throw new Error(`identity manifest: each plugin must be a non-empty string`);
-    }
-  }
-  return value as string[];
-}
-
-/**
- * Validate pluginDefaults field (optional record of records).
- */
-function validatePluginDefaults(value: unknown): Record<string, Record<string, unknown>> | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`identity manifest: "pluginDefaults" must be an object`);
-  }
-  const pd = value as Record<string, unknown>;
-  for (const [key, val] of Object.entries(pd)) {
-    if (typeof val !== "object" || val === null || Array.isArray(val)) {
-      throw new Error(`identity manifest: "pluginDefaults.${key}" must be an object`);
-    }
-  }
-  return value as Record<string, Record<string, unknown>>;
-}
-
-/**
- * Validate and parse an identity manifest object.
+ * Validate and parse an identity manifest object using Zod schema.
  * Throws with descriptive errors if required fields are missing or malformed.
  */
 export function parseManifest(raw: unknown, sourcePath: string): IdentityManifest {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    throw new Error(`identity manifest at ${sourcePath} is not a valid object`);
+  const result = IdentityManifestSchema.safeParse(raw);
+
+  if (!result.success) {
+    // Build a human-readable error message from Zod issues
+    const issues = result.error.issues;
+
+    // Check for missing required fields
+    const missingFields = issues
+      .filter((i) => i.code === "invalid_type" && i.received === "undefined")
+      .map((i) => i.path.join("."));
+
+    if (missingFields.length > 0) {
+      throw new Error(
+        `identity manifest at ${sourcePath} is missing required fields: ${missingFields.join(", ")}`
+      );
+    }
+
+    // For other errors, use the first issue's message
+    const firstIssue = issues[0];
+    const fieldPath = firstIssue.path.length > 0 ? `"${firstIssue.path.join(".")}"` : "root";
+    throw new Error(`identity manifest: ${fieldPath} — ${firstIssue.message}`);
   }
 
-  const obj = raw as Record<string, unknown>;
-  const missing = REQUIRED_FIELDS.filter((f) => !(f in obj));
-
-  if (missing.length > 0) {
-    throw new Error(
-      `identity manifest at ${sourcePath} is missing required fields: ${missing.join(", ")}`
-    );
-  }
-
-  // Type checks
-  if (typeof obj.name !== "string") throw new Error(`identity manifest: "name" must be a string`);
-  if (typeof obj.displayName !== "string") throw new Error(`identity manifest: "displayName" must be a string`);
-  if (typeof obj.role !== "string") throw new Error(`identity manifest: "role" must be a string`);
-  if (typeof obj.emoji !== "string") throw new Error(`identity manifest: "emoji" must be a string`);
-  if (typeof obj.description !== "string") throw new Error(`identity manifest: "description" must be a string`);
-  if (typeof obj.volumeSize !== "number") throw new Error(`identity manifest: "volumeSize" must be a number`);
-  if (!Array.isArray(obj.skills)) throw new Error(`identity manifest: "skills" must be an array`);
-  if (!Array.isArray(obj.templateVars)) throw new Error(`identity manifest: "templateVars" must be an array`);
-
-  return {
-    name: obj.name as string,
-    displayName: obj.displayName as string,
-    role: obj.role as string,
-    emoji: obj.emoji as string,
-    description: obj.description as string,
-    volumeSize: obj.volumeSize as number,
-    instanceType: typeof obj.instanceType === "string" ? obj.instanceType : undefined,
-    skills: obj.skills as string[],
-    plugins: validatePlugins(obj.plugins),
-    pluginDefaults: validatePluginDefaults(obj.pluginDefaults),
-    templateVars: obj.templateVars as string[],
-    model: typeof obj.model === "string" ? obj.model : undefined,
-    backupModel: typeof obj.backupModel === "string" ? obj.backupModel : undefined,
-    codingAgent: typeof obj.codingAgent === "string" ? obj.codingAgent : undefined,
-    deps: Array.isArray(obj.deps) ? obj.deps as string[] : undefined,
-  };
+  return result.data;
 }
 
 /**

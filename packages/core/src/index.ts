@@ -59,3 +59,11 @@ export { CLAWHUB_PREFIX, parseSkill, classifySkills } from "./skills";
 
 // Identity
 export { fetchIdentity, fetchIdentitySync, parseManifest } from "./identity";
+
+// Schemas
+export {
+  AgentDefinitionSchema,
+  ArmyManifestSchema,
+  PluginConfigFileSchema,
+  IdentityManifestSchema,
+} from "./schemas";

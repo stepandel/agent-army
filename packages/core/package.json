@@ -14,14 +14,16 @@
     "./deps": "./dist/deps.js",
     "./dep-registry": "./dist/dep-registry.js",
     "./plugin-registry": "./dist/plugin-registry.js",
-    "./coding-agent-registry": "./dist/coding-agent-registry.js"
+    "./coding-agent-registry": "./dist/coding-agent-registry.js",
+    "./schemas": "./dist/schemas/index.js"
   },
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "yaml": "^2.7.0"
+    "yaml": "^2.7.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
