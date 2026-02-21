@@ -1,0 +1,11 @@
+{
+  "name": "agent-army-infra",
+  "private": true,
+  "main": "dist/index.js",
+  "dependencies": {
+    "@pulumi/pulumi": "^3.0.0",
+    "@pulumi/aws": "^6.0.0",
+    "@pulumi/hcloud": "^1.32.0",
+    "@pulumi/tls": "^5.0.0"
+  }
+}

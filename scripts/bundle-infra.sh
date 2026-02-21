@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Bundle infrastructure files into cli/infra/ for npm publishing.
+# Bundle infrastructure files into packages/cli/infra/ for npm publishing.
 # Run after `pnpm -r build` so compiled JS exists.
 #
 set -euo pipefail
@@ -8,9 +8,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PULUMI_DIST="$ROOT/packages/pulumi/dist"
 CORE_ROOT="$ROOT/packages/core"
-INFRA="$ROOT/cli/infra"
+INFRA="$ROOT/packages/cli/infra"
 
-echo "Bundling infrastructure into cli/infra/ ..."
+echo "Bundling infrastructure into packages/cli/infra/ ..."
 
 # Clean previous bundle
 rm -rf "$INFRA"
