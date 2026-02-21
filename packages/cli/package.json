@@ -24,7 +24,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/stepandel/agent-army.git",
+    "url": "https://github.com/stepandel/clawup.git",
     "directory": "packages/cli"
   },
   "homepage": "https://agent-army.ai",
