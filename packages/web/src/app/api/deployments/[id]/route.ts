@@ -48,6 +48,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   // If there's a Pulumi stack, attempt to destroy it
   if (deployment.pulumiStack) {
     try {
+      // @ts-expect-error — pulumi is only available at runtime on deploy servers
       const { LocalWorkspace } = await import("@pulumi/pulumi/automation");
       const stack = await LocalWorkspace.selectStack({
         stackName: deployment.pulumiStack,

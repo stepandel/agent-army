@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['@pulumi/pulumi'],
+  experimental: {
+    serverComponentsExternalPackages: ['@pulumi/pulumi'],
+  },
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals.push(({ request }, callback) => {

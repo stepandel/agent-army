@@ -9,6 +9,7 @@ import {
   hetznerServerTypes,
   COST_ESTIMATES,
   HETZNER_COST_ESTIMATES,
+  BUILT_IN_IDENTITIES,
 } from "@agent-army/core";
 import type { ArmyManifest, AgentDefinition } from "@agent-army/core";
 
@@ -20,7 +21,7 @@ const STEPS = [
   "Review",
 ];
 
-type PresetKey = keyof typeof PRESETS;
+type PresetKey = keyof typeof BUILT_IN_IDENTITIES;
 
 interface WizardState {
   stackName: string;
@@ -136,13 +137,14 @@ export default function NewDeploymentWizard() {
 
   function buildManifest(): ArmyManifest {
     const agents: AgentDefinition[] = state.selectedAgents.map((key) => {
-      const preset = PRESETS[key];
+      const identity = BUILT_IN_IDENTITIES[key];
+      const [displayName] = identity.label.split(" (");
       return {
-        name: preset.name,
-        displayName: preset.displayName,
-        role: preset.role,
-        preset: preset.preset,
-        volumeSize: preset.volumeSize,
+        name: key,
+        displayName,
+        role: key,
+        identity: identity.path,
+        volumeSize: 30,
       };
     });
     return {
@@ -297,8 +299,8 @@ export default function NewDeploymentWizard() {
             <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 16 }}>
               Select the agents you want to deploy:
             </p>
-            {(Object.keys(PRESETS) as PresetKey[]).map((key) => {
-              const preset = PRESETS[key];
+            {(Object.keys(BUILT_IN_IDENTITIES) as PresetKey[]).map((key) => {
+              const identity = BUILT_IN_IDENTITIES[key];
               const selected = state.selectedAgents.includes(key);
               return (
                 <div
@@ -315,13 +317,10 @@ export default function NewDeploymentWizard() {
                     />
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 15 }}>
-                        {preset.displayName}{" "}
-                        <span style={{ fontWeight: 400, color: "#6b7280" }}>
-                          ({preset.role})
-                        </span>
+                        {identity.label}
                       </div>
                       <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>
-                        {preset.description}
+                        {identity.hint}
                       </div>
                     </div>
                   </div>
@@ -342,7 +341,7 @@ export default function NewDeploymentWizard() {
               ["Owner", state.ownerName],
               ["Timezone", state.timezone],
               ["Working Hours", state.workingHours],
-              ["Agents", state.selectedAgents.map((k) => PRESETS[k].displayName).join(", ")],
+              ["Agents", state.selectedAgents.map((k) => BUILT_IN_IDENTITIES[k].label).join(", ")],
             ].map(([label, value]) => (
               <div key={label} style={s.reviewRow}>
                 <span style={s.reviewLabel}>{label}</span>

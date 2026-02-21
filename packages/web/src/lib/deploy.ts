@@ -50,6 +50,7 @@ export async function runDeployment(deploymentId: string): Promise<void> {
     appendLog(`Agents: ${manifest.agents?.map((a: { displayName: string }) => a.displayName).join(", ")}`);
 
     // Import Pulumi Automation API
+    // @ts-expect-error — pulumi is only available at runtime on deploy servers
     const { LocalWorkspace } = await import("@pulumi/pulumi/automation");
 
     // Parse credentials for environment
