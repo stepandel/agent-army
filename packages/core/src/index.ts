@@ -5,7 +5,7 @@
 // Types
 export type {
   AgentDefinition,
-  ArmyManifest,
+  ClawupManifest,
   IdentityManifest,
   IdentityResult,
   PluginConfigFile,
@@ -65,7 +65,7 @@ export { CLAWHUB_PREFIX, parseSkill, classifySkills } from "./skills";
 // Schemas
 export {
   AgentDefinitionSchema,
-  ArmyManifestSchema,
+  ClawupManifestSchema,
   PluginConfigFileSchema,
   IdentityManifestSchema,
 } from "./schemas";

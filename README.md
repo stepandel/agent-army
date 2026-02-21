@@ -155,7 +155,7 @@ The wizard walks you through:
 - **Optional integrations** — Slack, Linear, GitHub per agent
 - **Review & confirm** — see full config and estimated monthly cost
 
-This generates an `clawup.yaml` manifest and sets all Pulumi config values automatically.
+This generates a `clawup.yaml` manifest and sets all Pulumi config values automatically.
 
 ### 3. Deploy
 

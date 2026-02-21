@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# deploy.sh - Deploy the Agent Army stack
+# deploy.sh - Deploy the Clawup stack
 #
 # Thin wrapper around: clawup deploy
 #

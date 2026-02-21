@@ -26,7 +26,7 @@ import {
   collectDepSecrets,
 } from "@clawup/core";
 import { fetchIdentitySync } from "@clawup/core/identity";
-import type { AgentDefinition, ArmyManifest, PluginConfigFile } from "@clawup/core";
+import type { AgentDefinition, ClawupManifest, PluginConfigFile } from "@clawup/core";
 import * as os from "os";
 
 // -----------------------------------------------------------------------------
@@ -84,7 +84,7 @@ if (!fs.existsSync(manifestPath)) {
 }
 
 // Cast as partial — old manifests may omit `provider` (defaults to "aws" below)
-const manifest = YAML.parse(fs.readFileSync(manifestPath, "utf-8")) as ArmyManifest & { provider?: string };
+const manifest = YAML.parse(fs.readFileSync(manifestPath, "utf-8")) as ClawupManifest & { provider?: string };
 
 // Load plugin configs from ~/.clawup/configs/<stackName>/plugins/
 const pluginConfigsDir = path.join(os.homedir(), ".clawup", "configs", manifest.stackName, "plugins");

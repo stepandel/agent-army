@@ -7,7 +7,7 @@ export {
 } from "@clawup/core";
 export type {
   AgentDefinition,
-  ArmyManifest,
+  ClawupManifest,
   IdentityManifest,
   IdentityResult,
   PluginConfigFile,

@@ -1,12 +1,12 @@
 /**
- * Shared type definitions for Agent Army.
+ * Shared type definitions for Clawup.
  * Types are derived from Zod schemas — the schemas are the source of truth.
  */
 
 import type { z } from "zod";
 import type {
   AgentDefinitionSchema,
-  ArmyManifestSchema,
+  ClawupManifestSchema,
   PluginConfigFileSchema,
   IdentityManifestSchema,
 } from "./schemas";
@@ -18,7 +18,7 @@ export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 export type PluginConfigFile = z.infer<typeof PluginConfigFileSchema>;
 
 /** The clawup.yaml manifest */
-export type ArmyManifest = z.infer<typeof ArmyManifestSchema>;
+export type ClawupManifest = z.infer<typeof ClawupManifestSchema>;
 
 /** Manifest schema for an agent identity (identity.yaml) */
 export type IdentityManifest = z.infer<typeof IdentityManifestSchema>;

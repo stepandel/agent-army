@@ -19,6 +19,7 @@ interface UpdateCache {
 }
 
 function getCacheDir(): string {
+  // Previously ~/.agent-army — users upgrading from the old name will start a fresh cache
   return path.join(os.homedir(), ".clawup");
 }
 
@@ -104,7 +105,11 @@ export async function checkForUpdates(currentVersion: string): Promise<void> {
 
     // Fetch in background — don't block CLI exit
     const latest = await fetchLatestVersion();
-    if (!latest) return;
+    if (!latest) {
+      // Cache the current version so we don't retry on every CLI run
+      saveCache({ lastChecked: now, latestVersion: currentVersion });
+      return;
+    }
 
     saveCache({ lastChecked: now, latestVersion: latest });
 

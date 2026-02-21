@@ -6,7 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import YAML from "yaml";
-import type { ArmyManifest, PluginConfigFile } from "@clawup/core";
+import type { ClawupManifest, PluginConfigFile } from "@clawup/core";
 import { CONFIG_DIR, MANIFEST_FILE, PLUGINS_DIR } from "@clawup/core";
 
 /**
@@ -53,13 +53,13 @@ export function manifestExists(name: string): boolean {
 /**
  * Load a manifest by name. Returns null if not found or invalid.
  */
-export function loadManifest(name: string): ArmyManifest | null {
+export function loadManifest(name: string): ClawupManifest | null {
   const filePath = configPath(name);
   if (!fs.existsSync(filePath)) return null;
 
   try {
     const raw = fs.readFileSync(filePath, "utf-8");
-    return YAML.parse(raw) as ArmyManifest;
+    return YAML.parse(raw) as ClawupManifest;
   } catch (err) {
     console.warn(`[config] Failed to load manifest '${name}' at ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
     return null;
@@ -69,7 +69,7 @@ export function loadManifest(name: string): ArmyManifest | null {
 /**
  * Save a manifest by name
  */
-export function saveManifest(name: string, manifest: ArmyManifest): void {
+export function saveManifest(name: string, manifest: ClawupManifest): void {
   ensureConfigsDir();
   const filePath = configPath(name);
   fs.writeFileSync(filePath, YAML.stringify(manifest), "utf-8");

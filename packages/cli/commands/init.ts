@@ -8,7 +8,7 @@
 
 import { execSync } from "child_process";
 import * as p from "@clack/prompts";
-import type { AgentDefinition, ArmyManifest, IdentityManifest } from "@clawup/core";
+import type { AgentDefinition, ClawupManifest, IdentityManifest } from "@clawup/core";
 import {
   BUILT_IN_IDENTITIES,
   PROVIDERS,
@@ -743,7 +743,7 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     }
   }
 
-  const manifest: ArmyManifest = {
+  const manifest: ClawupManifest = {
     stackName: configName,
     provider: basicConfig.provider,
     region: basicConfig.region,

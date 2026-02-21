@@ -28,7 +28,7 @@ Interactive setup wizard that walks you through the full configuration:
 6. **Optional integrations** — Slack, Linear, GitHub per agent
 7. **Summary & confirmation** — review config and estimated cost before proceeding
 
-Outputs an `clawup.yaml` manifest and sets all Pulumi config values.
+Outputs a `clawup.yaml` manifest and sets all Pulumi config values.
 
 ```bash
 clawup init              # Interactive wizard
@@ -183,7 +183,7 @@ You can also define fully custom agents during `init`.
 
 ### `clawup.yaml`
 
-The `init` command generates an `clawup.yaml` manifest:
+The `init` command generates a `clawup.yaml` manifest:
 
 ```yaml
 stackName: dev

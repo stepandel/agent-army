@@ -354,7 +354,7 @@ function copyDirSync(src, dest) {
 
 async function main() {
   // Skip in CI or if CLAWUP_SKIP_POSTINSTALL is set
-  if (process.env.CLAWUP_SKIP_POSTINSTALL || process.env.CI) {
+  if (process.env.CLAWUP_SKIP_POSTINSTALL || process.env.AGENT_ARMY_SKIP_POSTINSTALL || process.env.CI) {
     console.log("clawup: skipping postinstall (CI or CLAWUP_SKIP_POSTINSTALL set)");
     return;
   }

@@ -24,7 +24,7 @@ import {
   HETZNER_SERVER_TYPES_US,
   hetznerServerTypes,
 } from "@clawup/core";
-import type { ArmyManifest, AgentDefinition } from "@clawup/core";
+import type { ClawupManifest, AgentDefinition } from "@clawup/core";
 import pc from "picocolors";
 
 // ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ function allInstanceTypeValues(provider: string, region?: string): string[] {
 }
 
 function validateTopValue(
-  manifest: ArmyManifest,
+  manifest: ClawupManifest,
   key: SettableTopKey,
   value: string
 ): string | null {
@@ -105,7 +105,7 @@ function validateTopValue(
 }
 
 function validateAgentValue(
-  manifest: ArmyManifest,
+  manifest: ClawupManifest,
   key: SettableAgentKey,
   value: string
 ): string | null {

@@ -36,7 +36,7 @@ export const PluginConfigFileSchema = z.object({
 });
 
 /** Schema for the clawup.yaml manifest */
-export const ArmyManifestSchema = z.object({
+export const ClawupManifestSchema = z.object({
   stackName: z.string().min(1, "stackName is required"),
   provider: z.enum(["aws", "hetzner"]),
   region: z.string().min(1, "region is required"),

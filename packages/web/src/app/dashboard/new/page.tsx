@@ -11,7 +11,7 @@ import {
   HETZNER_COST_ESTIMATES,
   BUILT_IN_IDENTITIES,
 } from "@clawup/core";
-import type { ArmyManifest, AgentDefinition } from "@clawup/core";
+import type { ClawupManifest, AgentDefinition } from "@clawup/core";
 
 const STEPS = [
   "Stack & Provider",
@@ -135,7 +135,7 @@ export default function NewDeploymentWizard() {
     }));
   }
 
-  function buildManifest(): ArmyManifest {
+  function buildManifest(): ClawupManifest {
     const agents: AgentDefinition[] = state.selectedAgents.map((key) => {
       const identity = BUILT_IN_IDENTITIES[key];
       const [displayName] = identity.label.split(" (");
