@@ -26,12 +26,17 @@ runtime:
     packagemanager: npm
 EOF
 
-# --- package.json (Pulumi SDK deps + yaml) ---
+# --- package.json (Pulumi SDK deps + yaml + @clawup/core deps) ---
 node -e "
-  const pkg = require('$ROOT/packages/pulumi/package.json');
+  const pulumiPkg = require('$ROOT/packages/pulumi/package.json');
+  const corePkg = require('$ROOT/packages/core/package.json');
   const deps = {};
   for (const name of ['@pulumi/pulumi', '@pulumi/aws', '@pulumi/hcloud', '@pulumi/tls', 'yaml']) {
-    if (pkg.dependencies[name]) deps[name] = pkg.dependencies[name];
+    if (pulumiPkg.dependencies[name]) deps[name] = pulumiPkg.dependencies[name];
+  }
+  // Include @clawup/core's runtime deps (zod, etc.) since core is manually copied
+  for (const [name, ver] of Object.entries(corePkg.dependencies || {})) {
+    if (!deps[name]) deps[name] = ver;
   }
   const out = { name: 'clawup-infra', private: true, main: 'dist/index.js', dependencies: deps };
   console.log(JSON.stringify(out, null, 2));
