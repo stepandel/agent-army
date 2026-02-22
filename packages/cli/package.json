@@ -13,6 +13,7 @@
   "scripts": {
     "build": "tsc",
     "build:bundle": "node scripts/bundle.mjs",
+    "prepublishOnly": "node scripts/bundle.mjs",
     "watch": "tsc --watch",
     "postinstall": "node scripts/postinstall.mjs"
   },

@@ -14,9 +14,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
 
 // External: all real dependencies (installed from npm) + node builtins
+// @clawup/core must NOT be external — it's a private workspace package that
+// needs to be inlined into the bundle for the published npm package to work.
 const external = [
   ...Object.keys(pkg.dependencies || {}).filter((d) => d !== "@clawup/core"),
-  ...Object.keys(pkg.devDependencies || {}).filter((d) => d !== "esbuild"),
+  ...Object.keys(pkg.devDependencies || {}).filter(
+    (d) => d !== "esbuild" && d !== "@clawup/core"
+  ),
 ];
 
 await build({
