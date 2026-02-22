@@ -1,92 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-
-const customYamlSnippet = `name: ops-monitor
-displayName: Sentinel
-role: infrastructure-monitor
-emoji: satellite
-model: anthropic/claude-sonnet-4-5
-
-deps:
-  - brave-search
-
-plugins:
-  - slack
-  - pagerduty
-
-skills:
-  - healthcheck
-  - incident-response
-
-templateVars:
-  - OWNER_NAME
-  - ESCALATION_CHANNEL`;
-
-const configYamlSnippet = `stack: my-team
-cloud: hetzner
-region: nbg1
-instanceType: cpx31
-
-owner:
-  name: Jordan
-  timezone: America/New_York
-  workingHours: "09:00-17:00"
-
-agents:
-  - identity: juno    # PM — preps tickets, assigns work
-  - identity: titus   # Engineer — implements, opens PRs
-  - identity: scout   # QA — reviews PRs, auto-fixes`;
-
-const workspaceFiles = [
-  { file: "SOUL.md", description: "Personality, values, behavioral guidelines" },
-  { file: "IDENTITY.md", description: "Name, role, emoji, display metadata" },
-  { file: "HEARTBEAT.md", description: "Recurring checks and autonomous task loops" },
-  { file: "TOOLS.md", description: "Tool permissions and usage patterns" },
-];
-
-function renderYamlLine(line: string, i: number) {
-  const commentIdx = line.indexOf("#");
-  const colonIdx = line.indexOf(":");
-
-  if (commentIdx > 0) {
-    const before = line.slice(0, commentIdx);
-    const comment = line.slice(commentIdx);
-    return (
-      <div key={i}>
-        {renderYamlPart(before)}
-        <span className="text-muted-foreground/50">{comment}</span>
-      </div>
-    );
-  }
-
-  if (colonIdx > 0 && !line.trimStart().startsWith("-") && !line.trimStart().startsWith("#")) {
-    const key = line.slice(0, colonIdx);
-    const value = line.slice(colonIdx);
-    return (
-      <div key={i}>
-        <span className="text-accent-blue">{key}</span>
-        <span className="text-muted-foreground">{value}</span>
-      </div>
-    );
-  }
-  return <div key={i}>{line || "\u00A0"}</div>;
-}
-
-function renderYamlPart(text: string) {
-  const colonIdx = text.indexOf(":");
-  if (colonIdx > 0 && !text.trimStart().startsWith("-")) {
-    const key = text.slice(0, colonIdx);
-    const value = text.slice(colonIdx);
-    return (
-      <>
-        <span className="text-accent-blue">{key}</span>
-        <span className="text-muted-foreground">{value}</span>
-      </>
-    );
-  }
-  return <span className="text-muted-foreground">{text}</span>;
-}
+import { CUSTOM_YAML_SNIPPET, CONFIG_YAML_SNIPPET, WORKSPACE_FILES } from "./data/constants";
+import { renderYamlLine } from "./components/render-yaml-line";
 
 export default function Home() {
   return (
@@ -269,7 +185,7 @@ export default function Home() {
             <span className="text-xs text-muted-foreground">clawup.yaml</span>
           </div>
           <div className="p-4 font-mono text-xs leading-6 whitespace-pre text-muted-foreground">
-            {configYamlSnippet.split("\n").map(renderYamlLine)}
+            {CONFIG_YAML_SNIPPET.split("\n").map(renderYamlLine)}
           </div>
         </div>
       </section>
@@ -284,7 +200,7 @@ export default function Home() {
               <span className="text-xs text-muted-foreground">identity.yaml</span>
             </div>
             <div className="p-4 font-mono text-xs leading-6 whitespace-pre text-muted-foreground">
-              {customYamlSnippet.split("\n").map(renderYamlLine)}
+              {CUSTOM_YAML_SNIPPET.split("\n").map(renderYamlLine)}
             </div>
           </div>
 
@@ -294,10 +210,10 @@ export default function Home() {
               Each agent gets workspace files — version-controlled markdown that defines who the agent is and how it behaves:
             </p>
             <div className="flex flex-col">
-              {workspaceFiles.map((item, i) => (
+              {WORKSPACE_FILES.map((item, i) => (
                 <div
                   key={item.file}
-                  className={`flex items-baseline gap-3 py-3 ${i < workspaceFiles.length - 1 ? "border-b border-border" : ""}`}
+                  className={`flex items-baseline gap-3 py-3 ${i < WORKSPACE_FILES.length - 1 ? "border-b border-border" : ""}`}
                 >
                   <code className="text-xs font-mono text-accent-emerald whitespace-nowrap shrink-0">
                     {item.file}
