@@ -44,4 +44,4 @@ esc/clawup-secrets.yaml
 packages/cli/vendor/
 
 # Deprecation shim (published separately, not part of the monorepo)
-deprecation/
+/deprecation/
