@@ -258,7 +258,7 @@ echo "Starting OpenClaw agent provisioning..."
 echo "Updating system packages..."
 apt-get update
 apt-get upgrade -y
-apt-get install -y unzip
+apt-get install -y unzip build-essential
 
 # Install Docker
 echo "Installing Docker..."
@@ -267,6 +267,7 @@ systemctl enable docker
 systemctl start docker
 ${createUserSection}
 usermod -aG docker ubuntu
+${tailscaleSection}
 ${depInstallScript}
 
 # Install NVM and Node.js for ubuntu user
@@ -317,7 +318,7 @@ ${(config.deps ?? [])
     .map(envVar => `\\\${${envVar}:+echo 'export ${envVar}="\\\${${envVar}}"' >> /home/ubuntu/.bashrc}`)
     .join("\n")}
 ${additionalEnvVars}
-${tailscaleSection}${depPostInstallScript}
+${depPostInstallScript}
 ${codingClisInstallScript}
 
 # Enable systemd linger for ubuntu user (required for user services to run at boot)
