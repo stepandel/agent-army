@@ -39,7 +39,8 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-8 pt-32 pb-12 grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
         {/* Hero */}
         <section className="lg:col-span-3 bg-card border border-border rounded-lg p-6">
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-3">
+          <h1 className="flex items-center gap-0.5 text-4xl sm:text-5xl font-extrabold tracking-tight mb-3">
+            <img src="/logo.svg" alt="" className="h-20 w-20 sm:h-24 sm:w-24" />
             Clawup
           </h1>
           <p className="text-lg text-muted-foreground mb-6 max-w-xl">
