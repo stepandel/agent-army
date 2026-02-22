@@ -5,6 +5,8 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { stream } from "../lib/exec";
+import * as fs from "fs";
+import * as path from "path";
 
 interface UpdateOptions {
   // reserved for future flags
@@ -44,11 +46,11 @@ export async function updateCommand(_opts: UpdateOptions): Promise<void> {
     process.exit(1);
   }
 
-  // Read current version (go up two levels: dist/commands/ → dist/ → cli/)
-  const fs = await import("fs");
-  const path = await import("path");
+  // Read current version — resolve package root for both tsc and esbuild bundle
+  const oneUp = path.resolve(__dirname, "..");
+  const pkgRoot = fs.existsSync(path.join(oneUp, "package.json")) ? oneUp : path.resolve(__dirname, "..", "..");
   const pkgJson = JSON.parse(
-    fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf-8")
+    fs.readFileSync(path.join(pkgRoot, "package.json"), "utf-8")
   );
   const current: string = pkgJson.version;
 
