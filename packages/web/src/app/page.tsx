@@ -206,7 +206,7 @@ export default function Home() {
       {/* Hero */}
       <section className="relative max-w-4xl mx-auto px-8 pt-44 pb-24 text-center">
         {/* Background glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-[600px] h-[400px] bg-[radial-gradient(ellipse,_rgba(59,130,246,0.12)_0%,_transparent_70%)] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-[600px] h-[400px] bg-[radial-gradient(ellipse,_rgba(99,102,241,0.15)_0%,_transparent_70%)] pointer-events-none" />
 
         <div className="animate-fade-in-up">
           <Badge
@@ -217,7 +217,7 @@ export default function Home() {
           </Badge>
         </div>
 
-        <h1 className="animate-fade-in-up-1 text-[clamp(2.5rem,6vw,4.5rem)] font-extrabold leading-[1.1] tracking-tighter mb-4 bg-gradient-to-b from-foreground to-foreground/50 bg-clip-text text-transparent">
+        <h1 className="animate-fade-in-up-1 text-[clamp(2.5rem,6vw,4.5rem)] font-extrabold leading-[1.1] tracking-tighter mb-4 bg-gradient-to-b from-white to-white/50 bg-clip-text text-transparent">
           Define, deploy, and manage
           <br />
           AI agent fleets
@@ -244,7 +244,7 @@ export default function Home() {
 
         {/* Install command */}
         <div className="animate-fade-in-up-3 max-w-md mx-auto mb-10">
-          <div className="flex items-center gap-3 px-6 py-4 rounded-xl bg-muted border border-border font-mono text-sm">
+          <div className="flex items-center gap-3 px-6 py-4 rounded-xl bg-card border border-border font-mono text-sm">
             <span className="text-accent-emerald">$</span>
             <code className="text-foreground flex-1 text-left">
               npm install -g clawup
@@ -278,7 +278,7 @@ export default function Home() {
           <Button
             asChild
             size="lg"
-            className="shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)]"
+            className="shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_30px_rgba(99,102,241,0.5)]"
           >
             <a
               href="https://github.com/stepandel/clawup"
@@ -296,7 +296,7 @@ export default function Home() {
 
       {/* Terminal Preview — YAML-first flow */}
       <section className="max-w-2xl mx-auto mb-24 px-8">
-        <div className="animate-fade-in-up-3 bg-muted border border-border rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.06)]">
+        <div className="animate-fade-in-up-3 bg-card border border-border rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
           {/* Title bar */}
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
             <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
@@ -444,7 +444,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           {/* YAML snippet */}
-          <div className="bg-muted border border-border rounded-2xl overflow-hidden">
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
               <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
               <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
