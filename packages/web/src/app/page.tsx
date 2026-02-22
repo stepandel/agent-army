@@ -187,12 +187,6 @@ export default function Home() {
         </a>
         <div className="flex items-center gap-6">
           <a
-            href="/blog/launch"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Blog
-          </a>
-          <a
             href="https://docs.clawup.ai"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >

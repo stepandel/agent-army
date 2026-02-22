@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
 
   // Only the home page and health check are publicly accessible
   // Everything else redirects to home
-  if (pathname === "/" || pathname === "/api/health" || pathname.startsWith("/blog")) {
+  if (pathname === "/" || pathname === "/api/health") {
     return NextResponse.next();
   }
 
