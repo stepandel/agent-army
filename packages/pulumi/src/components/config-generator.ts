@@ -97,10 +97,12 @@ export interface OpenClawConfig {
     enabled: boolean;
   };
   model?: string;
-  web?: {
-    search: {
-      provider: string;
-      apiKey: string;
+  tools?: {
+    web: {
+      search: {
+        provider: string;
+        apiKey: string;
+      };
     };
   };
   [key: string]: unknown;
@@ -141,7 +143,7 @@ export function generateOpenClawConfig(options: OpenClawConfigOptions): OpenClaw
   // Note: model config is now handled in generateConfigPatchScript() via agents.defaults.model
 
   if (options.braveApiKey) {
-    config.web = { search: { provider: "brave", apiKey: options.braveApiKey } };
+    config.tools = { web: { search: { provider: "brave", apiKey: options.braveApiKey } } };
   }
 
   // Merge custom config
@@ -373,8 +375,9 @@ if agent_name:
 # Configure web search (Brave API key) if available
 brave_api_key = os.environ.get("BRAVE_API_KEY", "")
 if brave_api_key:
-    config.setdefault("web", {})
-    config["web"]["search"] = {"provider": "brave", "apiKey": brave_api_key}
+    config.setdefault("tools", {})
+    config["tools"].setdefault("web", {})
+    config["tools"]["web"]["search"] = {"provider": "brave", "apiKey": brave_api_key}
     print("Configured web search with Brave API key")
 
 with open(config_path, "w") as f:
