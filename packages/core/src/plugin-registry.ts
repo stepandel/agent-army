@@ -9,6 +9,14 @@ export interface PluginRegistryEntry {
   installable: boolean;
   /** Whether this plugin needs Tailscale Funnel (public HTTPS for webhooks) */
   needsFunnel?: boolean;
+  /**
+   * Default config values for this plugin. Merged as lowest-priority defaults
+   * (identity defaults and manifest inline config override these).
+   *
+   * Values can use $ENV_VAR syntax to reference runtime environment variables.
+   * e.g., { "$AGENT_NAME": "default" } → {os.environ.get("AGENT_NAME", ""): "default"}
+   */
+  defaultConfig?: Record<string, unknown>;
 }
 
 export const PLUGIN_REGISTRY: Record<string, PluginRegistryEntry> = {
@@ -19,6 +27,9 @@ export const PLUGIN_REGISTRY: Record<string, PluginRegistryEntry> = {
     },
     installable: true,
     needsFunnel: true,
+    defaultConfig: {
+      agentMapping: { "$AGENT_NAME": "default" },
+    },
   },
   slack: {
     secretEnvVars: {

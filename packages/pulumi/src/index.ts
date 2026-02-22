@@ -232,9 +232,14 @@ function buildPluginsForAgent(
     const registryEntry = PLUGIN_REGISTRY[pluginName];
     const secretMapping = registryEntry?.secretEnvVars ?? {};
 
+    // Merge registry defaultConfig as lowest-priority defaults
+    const mergedConfig = registryEntry?.defaultConfig
+      ? { ...registryEntry.defaultConfig, ...agentSection }
+      : agentSection;
+
     plugins.push({
       name: pluginName,
-      config: agentSection,
+      config: mergedConfig,
       secretEnvVars: Object.keys(secretMapping).length > 0 ? secretMapping : undefined,
       installable: registryEntry?.installable ?? true,
     });

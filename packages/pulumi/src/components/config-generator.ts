@@ -26,21 +26,41 @@ export interface PluginEntry {
 /** Keys that are clawup-internal metadata and should NOT be written to OpenClaw config */
 const INTERNAL_PLUGIN_KEYS = new Set(["agentId", "linearUserUuid"]);
 
+/** Matches a string that is entirely an env var reference: $VAR_NAME */
+const ENV_VAR_PATTERN = /^\$([A-Z][A-Z0-9_]*)$/;
+
 /**
  * Convert a JS value to a Python literal string (recursive).
  * Booleans: true→True, false→False. null/undefined→None.
  * Arrays and objects are recursively converted.
+ *
+ * Strings matching $ENV_VAR are emitted as os.environ.get("ENV_VAR", "")
+ * instead of literal strings. This works for both dict keys and values,
+ * allowing plugin configs to reference runtime environment variables.
  */
 function toPythonLiteral(value: unknown): string {
   if (value === true) return "True";
   if (value === false) return "False";
   if (value === null || value === undefined) return "None";
+  if (typeof value === "string") {
+    const envMatch = value.match(ENV_VAR_PATTERN);
+    if (envMatch) {
+      return `os.environ.get("${envMatch[1]}", "")`;
+    }
+    return JSON.stringify(value);
+  }
   if (Array.isArray(value)) {
     return `[${value.map(toPythonLiteral).join(", ")}]`;
   }
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
-      .map(([k, v]) => `"${k}": ${toPythonLiteral(v)}`)
+      .map(([k, v]) => {
+        const keyEnvMatch = k.match(ENV_VAR_PATTERN);
+        const pyKey = keyEnvMatch
+          ? `os.environ.get("${keyEnvMatch[1]}", "")`
+          : `"${k}"`;
+        return `${pyKey}: ${toPythonLiteral(v)}`;
+      })
       .join(", ");
     return `{${entries}}`;
   }
@@ -172,7 +192,6 @@ function generatePluginPython(plugin: PluginEntry): string {
   if (plugin.name === "slack") {
     return generateSlackPluginPython(plugin);
   }
-
   // Build the config dict, injecting secrets from env vars
   const configEntries: string[] = [];
 
