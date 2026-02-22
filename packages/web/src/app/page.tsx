@@ -43,7 +43,16 @@ export default function Home() {
             Clawup
           </h1>
           <p className="text-lg text-muted-foreground mb-6 max-w-xl">
-            Deploy fleets of specialized AI agents to your cloud. Define identities in YAML, provision with one command, track changes in git.
+            Deploy fleets of specialized{" "}
+            <a
+              href="https://openclaw.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground hover:underline"
+            >
+              OpenClaw
+            </a>{" "}
+            agents to your cloud. Define identities in YAML, provision with one command, track changes in git.
           </p>
 
           <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-background border border-border font-mono text-sm w-fit mb-6">
@@ -80,16 +89,7 @@ export default function Home() {
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Powered by{" "}
-            <a
-              href="https://openclaw.ai"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-foreground/80 font-medium hover:text-foreground transition-colors"
-            >
-              OpenClaw
-            </a>
-            {" "}&middot; Infrastructure via{" "}
+            Infrastructure via{" "}
             <a
               href="https://www.pulumi.com"
               target="_blank"
