@@ -23,6 +23,27 @@ export interface PluginEntry {
   secretEnvVars?: Record<string, string>;
 }
 
+/**
+ * Convert a JS value to a Python literal string (recursive).
+ * Booleans: true→True, false→False. null/undefined→None.
+ * Arrays and objects are recursively converted.
+ */
+function toPythonLiteral(value: unknown): string {
+  if (value === true) return "True";
+  if (value === false) return "False";
+  if (value === null || value === undefined) return "None";
+  if (Array.isArray(value)) {
+    return `[${value.map(toPythonLiteral).join(", ")}]`;
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .map(([k, v]) => `"${k}": ${toPythonLiteral(v)}`)
+      .join(", ");
+    return `{${entries}}`;
+  }
+  return JSON.stringify(value);
+}
+
 export interface OpenClawConfigOptions {
   /** Gateway port (default: 18789) */
   gatewayPort?: number;
@@ -156,7 +177,7 @@ function generatePluginPython(plugin: PluginEntry): string {
 
   // Non-secret config values
   for (const [key, value] of Object.entries(plugin.config)) {
-    configEntries.push(`        "${key}": ${JSON.stringify(value)}`);
+    configEntries.push(`        "${key}": ${toPythonLiteral(value)}`);
   }
 
   const configBlock = configEntries.length > 0
@@ -195,7 +216,7 @@ function generateSlackPluginPython(plugin: PluginEntry): string {
 
   // Non-secret config values (mode, userTokenReadOnly, groupPolicy, dm, etc.)
   for (const [key, value] of Object.entries(plugin.config)) {
-    channelEntries.push(`    "${key}": ${JSON.stringify(value)}`);
+    channelEntries.push(`    "${key}": ${toPythonLiteral(value)}`);
   }
 
   // Add enabled: True
