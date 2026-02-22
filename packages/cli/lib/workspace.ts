@@ -15,22 +15,12 @@ const WORKSPACE_DIR = path.join(os.homedir(), ".clawup", "workspace");
 const VERSION_FILE = ".cli-version";
 
 /**
- * Resolve the CLI package root directory.
- * Works for both tsc output (dist/lib/workspace.js → ../../) and
- * esbuild bundle (dist/bin.js → ../).
- */
-function getCliPackageRoot(): string {
-  const oneUp = path.resolve(__dirname, "..");
-  if (fs.existsSync(path.join(oneUp, "package.json"))) return oneUp;
-  return path.resolve(__dirname, "..", "..");
-}
-
-/**
- * Read the CLI package version from cli/package.json.
+ * Read the CLI package version from cli/package.json at build time.
+ * At runtime this resolves to cli/dist/lib/workspace.js → ../../package.json.
  */
 function cliVersion(): string {
+  const pkgPath = path.join(__dirname, "..", "..", "package.json");
   try {
-    const pkgPath = path.join(getCliPackageRoot(), "package.json");
     return JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version as string;
   } catch {
     return "unknown";
@@ -39,9 +29,10 @@ function cliVersion(): string {
 
 /**
  * Resolve the bundled infra directory shipped inside the npm package.
+ * From cli/dist/lib/ → ../../infra/
  */
 function getBundledInfraDir(): string {
-  return path.join(getCliPackageRoot(), "infra");
+  return path.join(__dirname, "..", "..", "infra");
 }
 
 /**
@@ -49,7 +40,8 @@ function getBundledInfraDir(): string {
  * Detected by the presence of Pulumi.yaml AND node_modules/@pulumi at the repo root.
  */
 export function isDevMode(): boolean {
-  const repoRoot = path.resolve(getCliPackageRoot(), "..");
+  // cli/dist/lib/ → 3 levels up → repo root
+  const repoRoot = path.resolve(__dirname, "..", "..", "..");
   return (
     fs.existsSync(path.join(repoRoot, "Pulumi.yaml")) &&
     fs.existsSync(path.join(repoRoot, "node_modules", "@pulumi"))
@@ -129,6 +121,15 @@ export function ensureWorkspace(): VoidResult {
       ok: false,
       error: `Failed to install Pulumi SDK dependencies in workspace:\n${msg}`,
     };
+  }
+
+  // Re-copy @clawup/core after npm install, which prunes it since it's
+  // not in package.json (it's a private workspace package, not on npm).
+  const bundledCore = path.join(bundled, "node_modules", "@clawup", "core");
+  if (fs.existsSync(bundledCore)) {
+    const destCore = path.join(WORKSPACE_DIR, "node_modules", "@clawup", "core");
+    fs.mkdirSync(destCore, { recursive: true });
+    copyDirSync(bundledCore, destCore);
   }
 
   // Write version marker only after successful install
