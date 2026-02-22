@@ -162,18 +162,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Architecture Diagram */}
-      <section className="max-w-3xl mx-auto px-8 py-12">
-        <h2 className="text-xl font-bold tracking-tight mb-4">How agents collaborate</h2>
-        <div className="overflow-x-auto">
-          <pre className="font-mono text-xs leading-6 text-muted-foreground whitespace-pre">
-{`Linear ticket → `}<span className="text-accent-purple font-medium">Juno</span>{` (prep) → `}<span className="text-accent-blue font-medium">Titus</span>{` (implement) → `}<span className="text-accent-green font-medium">Scout</span>{` (review) → PR merged
-                    ↓              ↓                  ↓`}
-{`                  Slack          GitHub             Slack`}
-          </pre>
-        </div>
-      </section>
-
       {/* Config Example */}
       <section className="max-w-3xl mx-auto px-8 py-12">
         <h2 className="text-xl font-bold tracking-tight mb-4">Config example</h2>
