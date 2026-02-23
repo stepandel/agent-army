@@ -8,7 +8,7 @@ import path from "path";
 import os from "os";
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { loadManifest, resolveConfigName } from "../lib/config";
-import { SSH_USER, tailscaleHostname, CODING_AGENT_REGISTRY, DEP_REGISTRY } from "@clawup/core";
+import { SSH_USER, tailscaleHostname, CODING_AGENT_REGISTRY, DEP_REGISTRY, PLUGIN_REGISTRY } from "@clawup/core";
 import type { IdentityManifest } from "@clawup/core";
 import { fetchIdentitySync } from "@clawup/core/identity";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
@@ -273,6 +273,30 @@ timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
             });
           }
         }
+
+        // Plugin secret checks
+        for (const plugin of identityManifest.plugins ?? []) {
+          const pluginEntry = PLUGIN_REGISTRY[plugin];
+          if (!pluginEntry) {
+            ui.log.warn(`Unknown plugin "${plugin}" — skipping checks`);
+            continue;
+          }
+
+          for (const [key, envVar] of Object.entries(pluginEntry.secretEnvVars)) {
+            const secretCheck = runSshCheck(
+              exec,
+              host,
+              `grep -q '"${envVar}"' /home/${SSH_USER}/.openclaw/openclaw.json && echo 'found' || echo 'missing'`,
+              timeout
+            );
+            const hasSecret = secretCheck.ok && secretCheck.output.trim().includes("found");
+            checks.push({
+              name: `${plugin} secret (${envVar})`,
+              passed: hasSecret,
+              detail: hasSecret ? "configured" : `${envVar} not found in openclaw.json`,
+            });
+          }
+        }
       } else {
         // Fallback: no identity manifest — keep hardcoded checks
         const claudeCode = runSshCheck(
@@ -378,6 +402,14 @@ timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
             }
             for (const _secret of Object.values(depEntry.secrets)) {
               checks.push({ name: `${depEntry.displayName} auth`, passed: false, detail: "skipped (no SSH)" });
+            }
+          }
+        }
+        for (const plugin of identityManifest.plugins ?? []) {
+          const pluginEntry = PLUGIN_REGISTRY[plugin];
+          if (pluginEntry) {
+            for (const [_key, envVar] of Object.entries(pluginEntry.secretEnvVars)) {
+              checks.push({ name: `${plugin} secret (${envVar})`, passed: false, detail: "skipped (no SSH)" });
             }
           }
         }
