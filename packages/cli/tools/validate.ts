@@ -113,11 +113,11 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
 
   // Load identity manifests for each agent
   const identityCacheDir = path.join(os.homedir(), ".clawup", "identity-cache");
-  const identityMap = new Map<string, IdentityManifest>();
+  const identityMap: Record<string, IdentityManifest> = {};
   for (const agent of manifest.agents) {
     try {
       const identity = fetchIdentitySync(agent.identity, identityCacheDir);
-      identityMap.set(agent.name, identity.manifest);
+      identityMap[agent.name] = identity.manifest;
     } catch (err) {
       ui.log.warn(`Could not load identity for ${agent.displayName}: ${(err as Error).message}`);
     }
@@ -133,7 +133,7 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
     const tsHost = tailscaleHostname(manifest.stackName, agent.name);
     const host = `${tsHost}.${tailnetDnsName}`;
     const checks: CheckResult["checks"] = [];
-    const identityManifest = identityMap.get(agent.name);
+    const identityManifest = identityMap[agent.name];
 
     ui.log.info(`${pc.bold(agent.displayName)} (${agent.role}) — ${host}`);
 
@@ -219,7 +219,7 @@ timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
                 checks.push({
                   name: `${agentEntry.displayName} auth`,
                   passed: authWorks,
-                  detail: authWorks ? `${foundEnvVar} verified` : `${foundEnvVar} test failed: ${authTest.output.substring(0, 50)}`,
+                  detail: authWorks ? `${foundEnvVar} verified` : `${foundEnvVar} authentication test failed`,
                 });
               } else {
                 checks.push({
@@ -314,7 +314,7 @@ timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
             checks.push({
               name: "Claude Code auth",
               passed: authWorks,
-              detail: authWorks ? `${credType} verified` : `${credType} test failed: ${authTest.output.substring(0, 50)}`,
+              detail: authWorks ? `${credType} verified` : `${credType} authentication test failed`,
             });
           } else {
             checks.push({
