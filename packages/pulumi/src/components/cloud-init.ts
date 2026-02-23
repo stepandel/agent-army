@@ -134,46 +134,8 @@ DEP_POST_INSTALL
 
   // Dynamic plugin install steps (only for installable plugins)
   const installablePlugins = (config.plugins ?? []).filter((p) => p.installable !== false);
-
-  // Pre-seed plugin secrets into openclaw.json BEFORE `openclaw plugins install`.
-  // The CLI validates the full config on startup; without the required secrets it
-  // refuses to run, preventing the plugin files from being installed.
-  const pluginsWithSecrets = installablePlugins.filter(
-    (p) => p.secretEnvVars && Object.keys(p.secretEnvVars).length > 0
-  );
-  const pluginSecretPreseedEnvVars = pluginsWithSecrets
-    .flatMap((p) => Object.values(p.secretEnvVars ?? {}))
-    .map((envVar) => `  ${envVar}="\${${envVar}:-}"`)
-    .join(" \\\n");
-  const pluginSecretPreseedLines = pluginsWithSecrets.flatMap((p) =>
-    Object.entries(p.secretEnvVars ?? {}).map(
-      ([configKey, envVar]) =>
-        `config["plugins"]["entries"].setdefault("${p.name}", {}).setdefault("config", {})["${configKey}"] = os.environ.get("${envVar}", "")`
-    )
-  );
-  const pluginSecretPreseedScript = pluginsWithSecrets.length > 0
-    ? `
-# Pre-seed plugin secrets so openclaw CLI config validation passes
-echo "Pre-seeding plugin secrets..."
-sudo -H -u ubuntu \\
-${pluginSecretPreseedEnvVars} \\
-  python3 << 'PRESEED_SCRIPT'
-import json, os
-config_path = "/home/ubuntu/.openclaw/openclaw.json"
-with open(config_path) as f:
-    config = json.load(f)
-config.setdefault("plugins", {})
-config["plugins"].setdefault("entries", {})
-${pluginSecretPreseedLines.join("\n")}
-with open(config_path, "w") as f:
-    json.dump(config, f, indent=2)
-print("Plugin secrets pre-seeded")
-PRESEED_SCRIPT
-`
-    : "";
-
   const pluginInstallScript = installablePlugins.length > 0
-    ? `${pluginSecretPreseedScript}
+    ? `
 # Install OpenClaw plugins
 echo "Installing plugins..."
 sudo -H -u ubuntu bash -c '

@@ -218,10 +218,10 @@ ${configEntries.join(",\n")}
 # Configure ${plugin.name} plugin
 config.setdefault("plugins", {})
 config["plugins"].setdefault("entries", {})
-config["plugins"]["entries"]["${plugin.name}"] = {
-    "enabled": ${plugin.enabled ? "True" : "False"},
-    "config": ${configBlock}
-}
+config["plugins"]["entries"].setdefault("${plugin.name}", {})
+config["plugins"]["entries"]["${plugin.name}"]["enabled"] = ${plugin.enabled ? "True" : "False"}
+config["plugins"]["entries"]["${plugin.name}"].setdefault("config", {})
+config["plugins"]["entries"]["${plugin.name}"]["config"].update(${configBlock})
 print("Configured ${plugin.name} plugin")
 `;
 }
