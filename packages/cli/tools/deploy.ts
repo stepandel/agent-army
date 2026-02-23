@@ -30,7 +30,7 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
 ) => {
   const { ui, exec } = runtime;
 
-  ui.intro("Agent Army");
+  ui.intro("Clawup");
 
   // Ensure workspace is set up (no-op in dev mode)
   const wsResult = ensureWorkspace();

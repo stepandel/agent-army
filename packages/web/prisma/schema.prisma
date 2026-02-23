@@ -1,4 +1,4 @@
-// Prisma schema for Agent Army authentication
+// Prisma schema for Clawup authentication
 
 generator client {
   provider = "prisma-client-js"

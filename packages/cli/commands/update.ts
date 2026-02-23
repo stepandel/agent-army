@@ -13,7 +13,7 @@ interface UpdateOptions {
 }
 
 export async function updateCommand(_opts: UpdateOptions): Promise<void> {
-  p.intro(pc.bgCyan(pc.black(" Agent Army — Update ")));
+  p.intro(pc.bgCyan(pc.black(" Clawup — Update ")));
 
   const s = p.spinner();
   s.start("Checking npm for latest version…");

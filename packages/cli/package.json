@@ -38,7 +38,7 @@
     "url": "https://github.com/stepandel/clawup.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://agent-army.ai",
+  "homepage": "https://clawup.ai",
   "exports": {
     "./lib/constants": "./dist/lib/constants.js",
     "./types": "./dist/types.js"

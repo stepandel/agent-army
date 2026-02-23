@@ -6,11 +6,11 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 
 /**
- * Display the Agent Army banner
+ * Display the Clawup banner
  */
 export function showBanner(): void {
   console.log();
-  p.intro(pc.bgCyan(pc.black(" Agent Army ")));
+  p.intro(pc.bgCyan(pc.black(" Clawup ")));
 }
 
 /**

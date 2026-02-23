@@ -86,7 +86,7 @@ export const statusTool: ToolImplementation<StatusOptions> = async (
   const { ui, exec } = runtime;
 
   if (!options.json) {
-    ui.intro("Agent Army");
+    ui.intro("Clawup");
   }
 
   // Ensure workspace is set up (no-op in dev mode)

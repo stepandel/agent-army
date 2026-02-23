@@ -30,7 +30,7 @@ export const redeployTool: ToolImplementation<RedeployOptions> = async (
 ) => {
   const { ui, exec } = runtime;
 
-  ui.intro("Agent Army");
+  ui.intro("Clawup");
 
   // Ensure workspace is set up
   const wsResult = ensureWorkspace();

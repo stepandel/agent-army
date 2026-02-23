@@ -62,7 +62,7 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
 ) => {
   const { ui, exec } = runtime;
 
-  ui.intro("Agent Army");
+  ui.intro("Clawup");
 
   requireTailscale();
 

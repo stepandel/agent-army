@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Agent Army CLI — Entry point
+ * Clawup CLI — Entry point
  *
  * Provides interactive commands for the full agent lifecycle:
  * init, deploy, redeploy, status, ssh, validate, destroy, config

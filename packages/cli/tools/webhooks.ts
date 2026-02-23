@@ -53,7 +53,7 @@ export const webhooksSetupTool: ToolImplementation<WebhooksSetupOptions> = async
 ) => {
   const { ui, exec } = runtime;
 
-  ui.intro("Agent Army — Webhook Setup");
+  ui.intro("Clawup — Webhook Setup");
 
   // Ensure workspace is set up
   const wsResult = ensureWorkspace();
