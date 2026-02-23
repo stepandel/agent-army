@@ -4,9 +4,13 @@
  * Platform-agnostic implementation using RuntimeAdapter.
  */
 
+import path from "path";
+import os from "os";
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { loadManifest, resolveConfigName } from "../lib/config";
 import { SSH_USER, tailscaleHostname } from "@clawup/core";
+import type { IdentityManifest } from "@clawup/core";
+import { fetchIdentitySync } from "@clawup/core/identity";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { requireTailscale } from "../lib/tailscale";
 import { getConfig } from "../lib/tool-helpers";
@@ -107,6 +111,18 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
     process.exit(1);
   }
 
+  // Load identity manifests for each agent
+  const identityCacheDir = path.join(os.homedir(), ".clawup", "identity-cache");
+  const identityMap = new Map<string, IdentityManifest>();
+  for (const agent of manifest.agents) {
+    try {
+      const identity = fetchIdentitySync(agent.identity, identityCacheDir);
+      identityMap.set(agent.name, identity.manifest);
+    } catch (err) {
+      ui.log.warn(`Could not load identity for ${agent.displayName}: ${(err as Error).message}`);
+    }
+  }
+
   const timeout = parseInt(options.timeout ?? "30", 10);
   const results: CheckResult[] = [];
 
@@ -117,6 +133,7 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
     const tsHost = tailscaleHostname(manifest.stackName, agent.name);
     const host = `${tsHost}.${tailnetDnsName}`;
     const checks: CheckResult["checks"] = [];
+    const identityManifest = identityMap.get(agent.name);
 
     ui.log.info(`${pc.bold(agent.displayName)} (${agent.role}) — ${host}`);
 
