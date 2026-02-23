@@ -192,42 +192,41 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
               detail: installed ? version : "not installed",
             });
 
-            // Auth check (coding-agent-specific)
-            if (installed) {
-              if (identityManifest.codingAgent === "claude-code") {
-                const credCheck = runSshCheck(
-                  exec,
-                  host,
-                  `grep -E '"(ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)"' /home/${SSH_USER}/.openclaw/openclaw.json | head -1`,
-                  timeout
-                );
-                const hasApiKey = credCheck.output.includes("ANTHROPIC_API_KEY");
-                const hasOAuthToken = credCheck.output.includes("CLAUDE_CODE_OAUTH_TOKEN");
-                const credIsConfigured = credCheck.ok && (hasApiKey || hasOAuthToken);
-                const credType = hasOAuthToken ? "OAuth token" : "API key";
+            // Auth check — dynamic, driven by registry secrets
+            if (installed && Object.keys(agentEntry.secrets).length > 0) {
+              const secretEnvVars = Object.values(agentEntry.secrets).map((s) => s.envVar);
+              const grepPattern = secretEnvVars.map((v) => `"${v}"`).join("|");
+              const credCheck = runSshCheck(
+                exec,
+                host,
+                `grep -E '(${grepPattern})' /home/${SSH_USER}/.openclaw/openclaw.json | head -1`,
+                timeout
+              );
 
-                if (credIsConfigured) {
-                  const envVar = hasOAuthToken ? "CLAUDE_CODE_OAUTH_TOKEN" : "ANTHROPIC_API_KEY";
-                  const testScript = `
-export ${envVar}=$(jq -r '.env.${envVar}' /home/${SSH_USER}/.openclaw/openclaw.json)
+              // Find first configured secret (OR logic — any one is sufficient)
+              const foundEnvVar = secretEnvVars.find((v) => credCheck.output.includes(v));
+              const credIsConfigured = credCheck.ok && !!foundEnvVar;
+
+              if (credIsConfigured) {
+                const testScript = `
+export ${foundEnvVar}=$(jq -r '.env.${foundEnvVar}' /home/${SSH_USER}/.openclaw/openclaw.json)
 timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
-                  `.trim();
-                  const authTest = runSshCheck(exec, host, testScript, timeout + 15);
-                  const authWorks = authTest.ok &&
-                    !authTest.output.includes("Invalid API key") &&
-                    !authTest.output.includes("not authenticated");
-                  checks.push({
-                    name: `${agentEntry.displayName} auth`,
-                    passed: authWorks,
-                    detail: authWorks ? `${credType} verified` : `${credType} test failed: ${authTest.output.substring(0, 50)}`,
-                  });
-                } else {
-                  checks.push({
-                    name: `${agentEntry.displayName} auth`,
-                    passed: false,
-                    detail: "No credentials configured",
-                  });
-                }
+                `.trim();
+                const authTest = runSshCheck(exec, host, testScript, timeout + 15);
+                const authWorks = authTest.ok &&
+                  !authTest.output.includes("Invalid API key") &&
+                  !authTest.output.includes("not authenticated");
+                checks.push({
+                  name: `${agentEntry.displayName} auth`,
+                  passed: authWorks,
+                  detail: authWorks ? `${foundEnvVar} verified` : `${foundEnvVar} test failed: ${authTest.output.substring(0, 50)}`,
+                });
+              } else {
+                checks.push({
+                  name: `${agentEntry.displayName} auth`,
+                  passed: false,
+                  detail: "No credentials configured",
+                });
               }
             }
           }
