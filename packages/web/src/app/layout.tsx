@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://clawup.ai"),
+  metadataBase: new URL("https://clawup.sh"),
   title: {
     default: "Clawup — Deploy OpenClaw Agents to Your Cloud",
     template: "%s | Clawup",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     description:
       "Deploy fleets of specialized OpenClaw agents to your cloud. Define identities in YAML, provision with one command, track changes in git.",
     type: "website",
-    url: "https://clawup.ai",
+    url: "https://clawup.sh",
     siteName: "Clawup",
     images: [
       {
@@ -64,11 +64,11 @@ const jsonLd = {
     price: "0",
     priceCurrency: "USD",
   },
-  url: "https://clawup.ai",
+  url: "https://clawup.sh",
   author: {
     "@type": "Organization",
     name: "Clawup",
-    url: "https://clawup.ai",
+    url: "https://clawup.sh",
   },
 };
 

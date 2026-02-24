@@ -38,7 +38,7 @@
     "url": "https://github.com/stepandel/clawup.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://clawup.ai",
+  "homepage": "https://clawup.sh",
   "exports": {
     "./lib/constants": "./dist/lib/constants.js",
     "./types": "./dist/types.js"

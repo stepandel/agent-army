@@ -17,9 +17,9 @@ Clawup is an open-source CLI tool that deploys, orchestrates, and monitors AI ag
 
 ## Links
 
-- [Documentation](https://docs.clawup.ai)
-- [Quickstart Guide](https://docs.clawup.ai/quickstart)
+- [Documentation](https://docs.clawup.sh)
+- [Quickstart Guide](https://docs.clawup.sh/quickstart)
 - [GitHub Repository](https://github.com/stepandel/clawup)
-- [CLI Reference](https://docs.clawup.ai/cli/overview)
-- [Architecture Overview](https://docs.clawup.ai/architecture/overview)
+- [CLI Reference](https://docs.clawup.sh/cli/overview)
+- [Architecture Overview](https://docs.clawup.sh/architecture/overview)
 - [OpenClaw](https://openclaw.ai)
