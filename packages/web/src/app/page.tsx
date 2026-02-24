@@ -19,7 +19,7 @@ export default function Home() {
         </a>
         <div className="flex items-center gap-6">
           <a
-            href="https://docs.clawup.ai"
+            href="https://docs.clawup.sh"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Docs
@@ -115,7 +115,7 @@ export default function Home() {
 
           <div className="mb-6">
             <Button asChild size="lg">
-              <a href="https://docs.clawup.ai">Read the Docs</a>
+              <a href="https://docs.clawup.sh">Read the Docs</a>
             </Button>
           </div>
 
@@ -282,7 +282,7 @@ export default function Home() {
                 },
                 {
                   label: "Documentation",
-                  href: "https://docs.clawup.ai",
+                  href: "https://docs.clawup.sh",
                 },
                 { label: "OpenClaw", href: "https://openclaw.ai" },
               ].map((link) => (
