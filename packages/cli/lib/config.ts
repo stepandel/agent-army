@@ -1,5 +1,5 @@
 /**
- * Load/save clawup manifests from ~/.clawup/configs/
+ * Load/save clawup manifests from ~/.clawup/configs/ (global) or project root (project mode).
  */
 
 import * as fs from "fs";
@@ -9,6 +9,13 @@ import YAML from "yaml";
 import type { ClawupManifest, PluginConfigFile } from "@clawup/core";
 import { CONFIG_DIR, MANIFEST_FILE, PLUGINS_DIR } from "@clawup/core";
 import { findProjectRoot } from "./project";
+
+/**
+ * Sentinel config name returned by resolveConfigName() when running in project mode.
+ * Downstream functions (loadManifest, saveManifest, manifestExists) detect this
+ * value and route to <projectRoot>/clawup.yaml instead of ~/.clawup/configs/.
+ */
+export const PROJECT_CONFIG_SENTINEL = "__project__";
 
 /**
  * Get the configs directory path (~/.clawup/configs/)
@@ -66,6 +73,12 @@ export function resolveIdentityPaths(manifest: ClawupManifest, projectRoot: stri
 export function syncManifestToProject(name: string, projectDir?: string): void {
   const startDir = projectDir ?? process.cwd();
   const projectRoot = findProjectRoot(startDir);
+
+  // Defensive guard: sentinel requires a project root
+  if (name === PROJECT_CONFIG_SENTINEL && projectRoot === null) {
+    throw new Error("syncManifestToProject: project-mode sentinel used but no project root found.");
+  }
+
   const src = projectRoot !== null
     ? path.join(projectRoot, MANIFEST_FILE)
     : configPath(name);
@@ -82,16 +95,38 @@ export function syncManifestToProject(name: string, projectDir?: string): void {
 }
 
 /**
- * Check if a config exists by name
+ * Check if a config exists by name.
+ * For the project-mode sentinel, checks <projectRoot>/clawup.yaml.
  */
 export function manifestExists(name: string): boolean {
+  if (name === PROJECT_CONFIG_SENTINEL) {
+    const projectRoot = findProjectRoot();
+    return projectRoot !== null && fs.existsSync(path.join(projectRoot, MANIFEST_FILE));
+  }
   return fs.existsSync(configPath(name));
 }
 
 /**
  * Load a manifest by name. Returns null if not found or invalid.
+ * For the project-mode sentinel, loads from <projectRoot>/clawup.yaml
+ * and resolves relative identity paths.
  */
 export function loadManifest(name: string): ClawupManifest | null {
+  if (name === PROJECT_CONFIG_SENTINEL) {
+    const projectRoot = findProjectRoot();
+    if (projectRoot === null) return null;
+    const filePath = path.join(projectRoot, MANIFEST_FILE);
+    if (!fs.existsSync(filePath)) return null;
+    try {
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const manifest = YAML.parse(raw) as ClawupManifest;
+      return resolveIdentityPaths(manifest, projectRoot);
+    } catch (err) {
+      console.warn(`[config] Failed to load project manifest at ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
   const filePath = configPath(name);
   if (!fs.existsSync(filePath)) return null;
 
@@ -105,9 +140,19 @@ export function loadManifest(name: string): ClawupManifest | null {
 }
 
 /**
- * Save a manifest by name
+ * Save a manifest by name.
+ * For the project-mode sentinel, writes to <projectRoot>/clawup.yaml.
  */
 export function saveManifest(name: string, manifest: ClawupManifest): void {
+  if (name === PROJECT_CONFIG_SENTINEL) {
+    const projectRoot = findProjectRoot();
+    if (projectRoot === null) {
+      throw new Error("Cannot save project manifest: no project root found (no clawup.yaml in current directory or ancestors).");
+    }
+    const filePath = path.join(projectRoot, MANIFEST_FILE);
+    fs.writeFileSync(filePath, YAML.stringify(manifest), "utf-8");
+    return;
+  }
   ensureConfigsDir();
   const filePath = configPath(name);
   fs.writeFileSync(filePath, YAML.stringify(manifest), "utf-8");
@@ -141,8 +186,14 @@ export function deleteManifest(name: string): boolean {
 /**
  * Resolve a config name: auto-selects if only one config exists,
  * errors with list if ambiguous or none found.
+ *
+ * When no explicit name is given, project mode is checked first:
+ * if a clawup.yaml exists in the current directory (or an ancestor),
+ * the sentinel is returned so that loadManifest/saveManifest route
+ * to the project root.
+ *
  * @param name Optional explicit config name
- * @returns The resolved config name
+ * @returns The resolved config name (or PROJECT_CONFIG_SENTINEL)
  * @throws Error if no configs exist or multiple configs exist without explicit name
  */
 export function resolveConfigName(name?: string): string {
@@ -157,6 +208,12 @@ export function resolveConfigName(name?: string): string {
       );
     }
     return name;
+  }
+
+  // Project mode: clawup.yaml in current dir or ancestor takes precedence
+  const projectRoot = findProjectRoot();
+  if (projectRoot !== null) {
+    return PROJECT_CONFIG_SENTINEL;
   }
 
   const configs = listManifests();

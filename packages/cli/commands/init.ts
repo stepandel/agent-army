@@ -880,6 +880,57 @@ async function initProjectMode(projectRoot: string, opts: InitOptions): Promise<
     `Resolved ${fetchedIdentities.length} agent identit${fetchedIdentities.length === 1 ? "y" : "ies"}`
   );
 
+  // ---------------------------------------------------------------------------
+  // Collect template variable values (mirrors normal-mode logic)
+  // ---------------------------------------------------------------------------
+
+  // Auto-fillable vars from manifest owner info
+  const autoVars: Record<string, string> = {};
+  if (manifest.ownerName) autoVars.OWNER_NAME = manifest.ownerName;
+  if (manifest.timezone) autoVars.TIMEZONE = manifest.timezone;
+  if (manifest.workingHours) autoVars.WORKING_HOURS = manifest.workingHours;
+  if (manifest.userNotes) autoVars.USER_NOTES = manifest.userNotes;
+
+  // Scan all identities for template vars and deduplicate
+  const allTemplateVarNames = new Set<string>();
+  for (const fi of fetchedIdentities) {
+    for (const v of fi.manifest.templateVars ?? []) {
+      allTemplateVarNames.add(v);
+    }
+  }
+
+  const templateVars: Record<string, string> = { ...(manifest.templateVars ?? {}) };
+
+  // Auto-fill known vars that aren't already set
+  for (const varName of allTemplateVarNames) {
+    if (!templateVars[varName] && autoVars[varName]) {
+      templateVars[varName] = autoVars[varName];
+    }
+  }
+
+  // Prompt for remaining vars
+  const remainingVars = [...allTemplateVarNames].filter((v) => !templateVars[v]);
+  if (remainingVars.length > 0) {
+    p.log.step("Configure template variables");
+    p.log.info(`Your agents use the following template variables: ${remainingVars.join(", ")}`);
+
+    for (const varName of remainingVars) {
+      const value = await p.text({
+        message: `Value for ${varName}`,
+        placeholder: varName === "LINEAR_TEAM" ? "e.g., ENG" : varName === "GITHUB_REPO" ? "https://github.com/org/repo" : "",
+        validate: (val) => {
+          if (!val.trim()) return `${varName} is required`;
+        },
+      });
+      handleCancel(value);
+      templateVars[varName] = value as string;
+    }
+  }
+
+  if (Object.keys(templateVars).length > 0) {
+    manifest.templateVars = templateVars;
+  }
+
   // Determine which plugins and deps are needed across all identities
   const agentPlugins = new Map<string, Set<string>>();
   const agentDeps = new Map<string, Set<string>>();
@@ -1242,6 +1293,18 @@ async function initProjectMode(projectRoot: string, opts: InitOptions): Promise<
   s.stop("Workspace ready");
   const cwd = getWorkspaceDir();
 
+  // Ensure .clawup/ is in .gitignore
+  const gitignorePath = path.join(projectRoot, ".gitignore");
+  const clawupIgnoreEntry = ".clawup/";
+  if (fs.existsSync(gitignorePath)) {
+    const existing = fs.readFileSync(gitignorePath, "utf-8");
+    if (!existing.includes(clawupIgnoreEntry)) {
+      fs.appendFileSync(gitignorePath, `\n# clawup local state\n${clawupIgnoreEntry}\n`);
+    }
+  } else {
+    fs.writeFileSync(gitignorePath, `# clawup local state\n${clawupIgnoreEntry}\n`, "utf-8");
+  }
+
   // Select/create stack
   const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);
   s.start("Selecting Pulumi stack...");
@@ -1292,8 +1355,7 @@ async function initProjectMode(projectRoot: string, opts: InitOptions): Promise<
   s.stop("Configuration saved");
 
   // Write manifest (update inline plugin config from identities)
-  const configName = manifest.stackName;
-  s.start(`Writing config to ~/.clawup/configs/${configName}.yaml...`);
+  s.start(`Writing config to ${manifestPath}...`);
 
   for (const fi of fetchedIdentities) {
     const rolePlugins = agentPlugins.get(fi.agent.name);
@@ -1324,14 +1386,15 @@ async function initProjectMode(projectRoot: string, opts: InitOptions): Promise<
     }
   }
 
-  saveManifest(configName, manifest);
-  s.stop("Config saved");
+  // Write to project root only — no global copy
   fs.writeFileSync(manifestPath, YAML.stringify(manifest), "utf-8");
+  s.stop("Config saved");
 
   if (opts.deploy) {
     p.log.success("Config saved! Starting deployment...\n");
     const { deployCommand } = await import("./deploy.js");
-    await deployCommand({ config: configName, yes: opts.yes });
+    // Pass config: undefined so deploy auto-detects project mode via resolveConfigName()
+    await deployCommand({ config: undefined, yes: opts.yes });
   } else {
     p.outro("Setup complete! Run `clawup deploy` to deploy your agents.");
   }

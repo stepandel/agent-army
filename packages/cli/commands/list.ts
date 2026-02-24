@@ -2,30 +2,58 @@
  * List all saved configs in a table
  */
 
-import { listManifests, loadManifest, configPath } from "../lib/config";
+import * as path from "path";
+import { MANIFEST_FILE } from "@clawup/core";
+import { listManifests, loadManifest, configPath, PROJECT_CONFIG_SENTINEL } from "../lib/config";
+import { findProjectRoot } from "../lib/project";
 
 interface ListOptions {
   json?: boolean;
 }
 
-export async function listCommand(opts: ListOptions): Promise<void> {
-  const configs = listManifests();
+interface ConfigRow {
+  name: string;
+  agents: number;
+  region: string;
+  stack: string;
+  path: string;
+}
 
-  if (configs.length === 0) {
-    console.log("No configs found. Run 'clawup init' to create one.");
-    return;
+export async function listCommand(opts: ListOptions): Promise<void> {
+  const data: ConfigRow[] = [];
+
+  // Check for project-local config first
+  const projectRoot = findProjectRoot();
+  if (projectRoot !== null) {
+    const manifest = loadManifest(PROJECT_CONFIG_SENTINEL);
+    if (manifest) {
+      data.push({
+        name: `${manifest.stackName} (project)`,
+        agents: manifest.agents.length,
+        region: manifest.region ?? "-",
+        stack: manifest.stackName ?? "-",
+        path: path.join(projectRoot, MANIFEST_FILE),
+      });
+    }
   }
 
-  const data = configs.map((name) => {
+  // Add global configs
+  const configs = listManifests();
+  for (const name of configs) {
     const manifest = loadManifest(name);
-    return {
+    data.push({
       name,
       agents: manifest?.agents.length ?? 0,
       region: manifest?.region ?? "-",
       stack: manifest?.stackName ?? "-",
       path: configPath(name),
-    };
-  });
+    });
+  }
+
+  if (data.length === 0) {
+    console.log("No configs found. Run 'clawup init' to create one, or create a clawup.yaml in your project.");
+    return;
+  }
 
   if (opts.json) {
     console.log(JSON.stringify(data, null, 2));
