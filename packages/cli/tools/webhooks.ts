@@ -8,17 +8,14 @@
  */
 
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
-import { loadManifest, resolveConfigName } from "../lib/config";
+import { requireManifest } from "../lib/config";
 import { SSH_USER, tailscaleHostname } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { getConfig, getStackOutputs } from "../lib/tool-helpers";
 import { qualifiedStackName } from "../lib/pulumi";
 import pc from "picocolors";
 
-export interface WebhooksSetupOptions {
-  /** Config name (auto-detected if only one) */
-  config?: string;
-}
+export interface WebhooksSetupOptions {}
 
 /** SSH options for non-interactive connections */
 const SSH_OPTS = [
@@ -63,18 +60,12 @@ export const webhooksSetupTool: ToolImplementation<WebhooksSetupOptions> = async
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name and load manifest
-  let configName: string;
+  // Load manifest
+  let manifest;
   try {
-    configName = resolveConfigName(options.config);
+    manifest = requireManifest();
   } catch (err) {
     ui.log.error((err as Error).message);
-    process.exit(1);
-  }
-
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    ui.log.error(`Config '${configName}' could not be loaded.`);
     process.exit(1);
   }
 

@@ -7,7 +7,7 @@
 import path from "path";
 import os from "os";
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
-import { loadManifest, resolveConfigName } from "../lib/config";
+import { requireManifest } from "../lib/config";
 import { SSH_USER, tailscaleHostname, CODING_AGENT_REGISTRY, DEP_REGISTRY, PLUGIN_REGISTRY } from "@clawup/core";
 import type { IdentityManifest } from "@clawup/core";
 import { fetchIdentitySync } from "@clawup/core/identity";
@@ -20,8 +20,6 @@ import pc from "picocolors";
 export interface ValidateOptions {
   /** SSH timeout in seconds */
   timeout?: string;
-  /** Config name (auto-detected if only one) */
-  config?: string;
 }
 
 interface CheckResult {
@@ -78,18 +76,12 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name and load manifest
-  let configName: string;
+  // Load manifest
+  let manifest;
   try {
-    configName = resolveConfigName(options.config);
+    manifest = requireManifest();
   } catch (err) {
     ui.log.error((err as Error).message);
-    process.exit(1);
-  }
-
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    ui.log.error(`Config '${configName}' could not be loaded.`);
     process.exit(1);
   }
 

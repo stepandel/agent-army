@@ -7,7 +7,7 @@
  */
 
 import * as process from "process";
-import { resolveConfigName, loadManifest } from "../lib/config";
+import { requireManifest } from "../lib/config";
 import { selectOrCreateStack, setConfig, getConfig } from "../lib/pulumi";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import pc from "picocolors";
@@ -43,12 +43,8 @@ const KNOWN_SECRETS: Record<string, SecretMeta> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function resolveStackAndCwd(configName: string): { stackName: string; cwd: string | undefined } {
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    console.error(pc.red(`Config '${configName}' could not be loaded.`));
-    process.exit(1);
-  }
+function resolveStackAndCwd(): { stackName: string; cwd: string | undefined } {
+  const manifest = requireManifest();
 
   const wsResult = ensureWorkspace();
   if (!wsResult.ok) {
@@ -71,7 +67,6 @@ function resolveStackAndCwd(configName: string): { stackName: string; cwd: strin
 // ---------------------------------------------------------------------------
 
 export interface SecretsSetOptions {
-  config?: string;
   agent?: string;
 }
 
@@ -80,9 +75,9 @@ export async function secretsSetCommand(
   value: string,
   opts: SecretsSetOptions
 ): Promise<void> {
-  let configName: string;
+  let manifest;
   try {
-    configName = resolveConfigName(opts.config);
+    manifest = requireManifest();
   } catch (err) {
     console.error(pc.red((err as Error).message));
     process.exit(1);
@@ -107,7 +102,7 @@ export async function secretsSetCommand(
     pulumiKey = `${opts.agent}${key.charAt(0).toUpperCase()}${key.slice(1)}`;
   }
 
-  const { cwd } = resolveStackAndCwd(configName);
+  const { cwd } = resolveStackAndCwd();
 
   const ok = setConfig(pulumiKey, value, meta.isSecret, cwd);
   if (!ok) {
@@ -127,30 +122,22 @@ export async function secretsSetCommand(
 // List
 // ---------------------------------------------------------------------------
 
-export interface SecretsListOptions {
-  config?: string;
-}
+export interface SecretsListOptions {}
 
 export async function secretsListCommand(opts: SecretsListOptions): Promise<void> {
-  let configName: string;
+  let manifest;
   try {
-    configName = resolveConfigName(opts.config);
+    manifest = requireManifest();
   } catch (err) {
     console.error(pc.red((err as Error).message));
     process.exit(1);
   }
 
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    console.error(pc.red(`Config '${configName}' could not be loaded.`));
-    process.exit(1);
-  }
-
-  const { cwd } = resolveStackAndCwd(configName);
+  const { cwd } = resolveStackAndCwd();
   const roles = manifest.agents.map((a) => a.role);
 
   console.log();
-  console.log(pc.bold(`Secrets for ${configName}:`));
+  console.log(pc.bold(`Secrets for ${manifest.stackName}:`));
   console.log();
 
   // Global secrets

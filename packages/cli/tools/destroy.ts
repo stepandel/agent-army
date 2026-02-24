@@ -5,7 +5,7 @@
  */
 
 import type { RuntimeAdapter, ToolImplementation } from "../adapters";
-import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
+import { requireManifest, syncManifestToProject } from "../lib/config";
 import { cleanupTailscaleDevices } from "../lib/tailscale";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { getConfig } from "../lib/tool-helpers";
@@ -15,8 +15,6 @@ import { qualifiedStackName } from "../lib/pulumi";
 export interface DestroyOptions {
   /** Skip confirmation prompts (dangerous!) */
   yes?: boolean;
-  /** Config name (auto-detected if only one) */
-  config?: string;
 }
 
 /**
@@ -38,18 +36,12 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name and load manifest
-  let configName: string;
+  // Load manifest
+  let manifest;
   try {
-    configName = resolveConfigName(options.config);
+    manifest = requireManifest();
   } catch (err) {
     ui.log.error((err as Error).message);
-    process.exit(1);
-  }
-
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    ui.log.error(`Config '${configName}' could not be loaded.`);
     process.exit(1);
   }
 
@@ -106,7 +98,7 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
   }
 
   // Sync manifest to project root so the Pulumi program can read it
-  syncManifestToProject(configName, cwd);
+  syncManifestToProject(cwd);
 
   // Destroy infrastructure
   ui.log.step("Running pulumi destroy...");

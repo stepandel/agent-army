@@ -34,7 +34,6 @@ import * as os from "os";
 import * as path from "path";
 import { checkPrerequisites } from "../lib/prerequisites";
 import { selectOrCreateStack, setConfig, qualifiedStackName } from "../lib/pulumi";
-import { saveManifest } from "../lib/config";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { showBanner, handleCancel, exitWithError, formatCost, formatAgentList } from "../lib/ui";
 import { findProjectRoot } from "../lib/project";
@@ -696,7 +695,70 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
   // -------------------------------------------------------------------------
   const s = p.spinner();
 
-  // Set up workspace
+  // Build manifest and write to CWD first — ensureWorkspace() needs clawup.yaml
+  // to exist so it detects project mode and uses .clawup/ as the workspace.
+  const configName = basicConfig.stackName;
+  s.start(`Writing ${MANIFEST_FILE}...`);
+
+  // Only include non-auto template vars in manifest (owner vars are derived at deploy time)
+  const manifestTemplateVars: Record<string, string> = {};
+  for (const [k, v] of Object.entries(templateVars)) {
+    if (!autoVars[k]) {
+      manifestTemplateVars[k] = v;
+    }
+  }
+
+  const manifest: ClawupManifest = {
+    stackName: configName,
+    organization: basicConfig.organization,
+    provider: basicConfig.provider,
+    region: basicConfig.region,
+    instanceType: basicConfig.instanceType,
+    ownerName: basicConfig.ownerName,
+    timezone: basicConfig.timezone,
+    workingHours: basicConfig.workingHours,
+    userNotes: basicConfig.userNotes,
+    templateVars: Object.keys(manifestTemplateVars).length > 0 ? manifestTemplateVars : undefined,
+    agents,
+  };
+
+  // Inline plugin config into each agent definition
+  for (const fi of fetchedIdentities) {
+    const rolePlugins = agentPlugins.get(fi.agent.name);
+    if (!rolePlugins || rolePlugins.size === 0) continue;
+
+    const inlinePlugins: Record<string, Record<string, unknown>> = {};
+    const defaults = identityPluginDefaults[fi.agent.name] ?? {};
+
+    for (const pluginName of rolePlugins) {
+      const pluginDefaults = defaults[pluginName] ?? {};
+      const agentConfig: Record<string, unknown> = {
+        ...pluginDefaults,
+        agentId: fi.agent.name,
+      };
+
+      // Layer on user-provided config
+      if (pluginName === "openclaw-linear") {
+        const creds = integrationCredentials[fi.agent.role];
+        if (creds?.linearUserUuid) {
+          agentConfig.linearUserUuid = creds.linearUserUuid;
+        }
+      }
+
+      inlinePlugins[pluginName] = agentConfig;
+    }
+
+    if (Object.keys(inlinePlugins).length > 0) {
+      fi.agent.plugins = inlinePlugins;
+    }
+  }
+
+  // Write manifest to CWD (project root)
+  const manifestPath = path.join(process.cwd(), MANIFEST_FILE);
+  fs.writeFileSync(manifestPath, YAML.stringify(manifest), "utf-8");
+  s.stop("Config saved");
+
+  // Now ensureWorkspace() will find clawup.yaml → use .clawup/ as workspace
   s.start("Setting up workspace...");
   const wsResult = ensureWorkspace();
   if (!wsResult.ok) {
@@ -705,6 +767,18 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
   }
   s.stop("Workspace ready");
   const cwd = getWorkspaceDir();
+
+  // Ensure .clawup/ is in .gitignore
+  const gitignorePath = path.join(process.cwd(), ".gitignore");
+  const clawupIgnoreEntry = ".clawup/";
+  if (fs.existsSync(gitignorePath)) {
+    const existing = fs.readFileSync(gitignorePath, "utf-8");
+    if (!existing.includes(clawupIgnoreEntry)) {
+      fs.appendFileSync(gitignorePath, `\n# clawup local state\n${clawupIgnoreEntry}\n`);
+    }
+  } else {
+    fs.writeFileSync(gitignorePath, `# clawup local state\n${clawupIgnoreEntry}\n`, "utf-8");
+  }
 
   // Select/create stack (use org-qualified name if organization is set)
   const pulumiStack = qualifiedStackName(basicConfig.stackName, basicConfig.organization);
@@ -755,69 +829,10 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
   if (braveApiKey) setConfig("braveApiKey", braveApiKey, true, cwd);
   s.stop("Configuration saved");
 
-  // Write manifest
-  const configName = basicConfig.stackName;
-  s.start(`Writing config to ~/.clawup/configs/${configName}.yaml...`);
-
-  // Only include non-auto template vars in manifest (owner vars are derived at deploy time)
-  const manifestTemplateVars: Record<string, string> = {};
-  for (const [k, v] of Object.entries(templateVars)) {
-    if (!autoVars[k]) {
-      manifestTemplateVars[k] = v;
-    }
-  }
-
-  const manifest: ClawupManifest = {
-    stackName: configName,
-    organization: basicConfig.organization,
-    provider: basicConfig.provider,
-    region: basicConfig.region,
-    instanceType: basicConfig.instanceType,
-    ownerName: basicConfig.ownerName,
-    timezone: basicConfig.timezone,
-    workingHours: basicConfig.workingHours,
-    userNotes: basicConfig.userNotes,
-    templateVars: Object.keys(manifestTemplateVars).length > 0 ? manifestTemplateVars : undefined,
-    agents,
-  };
-  // Inline plugin config into each agent definition
-  for (const fi of fetchedIdentities) {
-    const rolePlugins = agentPlugins.get(fi.agent.name);
-    if (!rolePlugins || rolePlugins.size === 0) continue;
-
-    const inlinePlugins: Record<string, Record<string, unknown>> = {};
-    const defaults = identityPluginDefaults[fi.agent.name] ?? {};
-
-    for (const pluginName of rolePlugins) {
-      const pluginDefaults = defaults[pluginName] ?? {};
-      const agentConfig: Record<string, unknown> = {
-        ...pluginDefaults,
-        agentId: fi.agent.name,
-      };
-
-      // Layer on user-provided config
-      if (pluginName === "openclaw-linear") {
-        const creds = integrationCredentials[fi.agent.role];
-        if (creds?.linearUserUuid) {
-          agentConfig.linearUserUuid = creds.linearUserUuid;
-        }
-      }
-
-      inlinePlugins[pluginName] = agentConfig;
-    }
-
-    if (Object.keys(inlinePlugins).length > 0) {
-      fi.agent.plugins = inlinePlugins;
-    }
-  }
-
-  saveManifest(configName, manifest);
-  s.stop("Config saved");
-
   if (opts.deploy) {
     p.log.success("Config saved! Starting deployment...\n");
     const { deployCommand } = await import("./deploy.js");
-    await deployCommand({ config: configName, yes: opts.yes });
+    await deployCommand({ yes: opts.yes });
   } else {
     p.outro("Setup complete! Run `clawup deploy` to deploy your agents.");
   }
@@ -1393,8 +1408,7 @@ async function initProjectMode(projectRoot: string, opts: InitOptions): Promise<
   if (opts.deploy) {
     p.log.success("Config saved! Starting deployment...\n");
     const { deployCommand } = await import("./deploy.js");
-    // Pass config: undefined so deploy auto-detects project mode via resolveConfigName()
-    await deployCommand({ config: undefined, yes: opts.yes });
+    await deployCommand({ yes: opts.yes });
   } else {
     p.outro("Setup complete! Run `clawup deploy` to deploy your agents.");
   }

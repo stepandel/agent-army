@@ -10,29 +10,24 @@ vi.mock("../project", () => ({
 }));
 
 import { findProjectRoot } from "../project";
-import { syncManifestToProject, saveManifest, configsDir } from "../config";
+import { syncManifestToProject } from "../config";
 
 const mockedFindProjectRoot = vi.mocked(findProjectRoot);
 
 describe("syncManifestToProject", () => {
   let tmpDir: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "config-sync-test-"));
     mockedFindProjectRoot.mockReturnValue(null);
-    // Isolate HOME so configsDir() doesn't touch real ~/.clawup/configs/
-    originalHome = process.env.HOME;
-    process.env.HOME = tmpDir;
   });
 
   afterEach(() => {
-    process.env.HOME = originalHome;
     rmSync(tmpDir, { recursive: true, force: true });
     vi.restoreAllMocks();
   });
 
-  it("copies from project root in project mode", () => {
+  it("copies from project root and resolves identity paths", () => {
     const projectRoot = join(tmpDir, "project");
     mkdirSync(projectRoot);
     const clawupDir = join(projectRoot, ".clawup");
@@ -46,33 +41,22 @@ describe("syncManifestToProject", () => {
     mockedFindProjectRoot.mockReturnValue(projectRoot);
 
     // Sync manifest to the .clawup/ workspace
-    syncManifestToProject("some-config", clawupDir);
+    syncManifestToProject(clawupDir);
 
     // Verify the manifest was copied from project root
     const copied = readFileSync(join(clawupDir, MANIFEST_FILE), "utf-8");
     expect(copied).toBe(manifestContent);
   });
 
-  it("copies from configs dir in global mode", () => {
-    const destDir = join(tmpDir, "workspace");
-    mkdirSync(destDir);
-
-    // Create a config in the global configs dir
-    const configDir = configsDir();
-    mkdirSync(configDir, { recursive: true });
-    const manifestContent = "stack: global-stack\nregion: eu-west-1\n";
-    writeFileSync(join(configDir, "test-config.yaml"), manifestContent);
-
+  it("throws when no project root found", () => {
     mockedFindProjectRoot.mockReturnValue(null);
 
-    // Sync manifest in global mode
-    syncManifestToProject("test-config", destDir);
-
-    const copied = readFileSync(join(destDir, MANIFEST_FILE), "utf-8");
-    expect(copied).toBe(manifestContent);
+    expect(() => syncManifestToProject(join(tmpDir, "dest"))).toThrow(
+      "no project root found"
+    );
   });
 
-  it("uses projectDir as destination in both modes", () => {
+  it("uses projectDir as destination", () => {
     const projectRoot = join(tmpDir, "project");
     mkdirSync(projectRoot);
     const customDest = join(tmpDir, "custom-dest");
@@ -83,7 +67,7 @@ describe("syncManifestToProject", () => {
 
     mockedFindProjectRoot.mockReturnValue(projectRoot);
 
-    syncManifestToProject("ignored-in-project-mode", customDest);
+    syncManifestToProject(customDest);
 
     expect(existsSync(join(customDest, MANIFEST_FILE))).toBe(true);
     const copied = readFileSync(join(customDest, MANIFEST_FILE), "utf-8");

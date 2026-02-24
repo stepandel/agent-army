@@ -10,7 +10,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
-import { loadManifest, resolveConfigName } from "../lib/config";
+import { requireManifest } from "../lib/config";
 import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { getConfig, selectOrCreateStack, qualifiedStackName } from "../lib/pulumi";
@@ -34,8 +34,6 @@ export interface PushOptions {
   pushConfig?: boolean;
   /** Filter to a single agent (name, role, or alias) */
   agent?: string;
-  /** Config name (auto-detected if only one) */
-  config?: string;
 }
 
 /** SSH options for non-interactive connections */
@@ -135,18 +133,8 @@ export const pushTool: ToolImplementation<PushOptions> = async (
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name and load manifest
-  let configName: string;
-  try {
-    configName = resolveConfigName(options.config);
-  } catch (err) {
-    throw new Error((err as Error).message);
-  }
-
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    throw new Error(`Config '${configName}' could not be loaded.`);
-  }
+  // Load manifest
+  const manifest = requireManifest();
 
   // Select Pulumi stack to read tailnet config (use org-qualified name if organization is set)
   const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);

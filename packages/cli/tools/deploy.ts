@@ -5,7 +5,7 @@
  */
 
 import type { RuntimeAdapter, ToolImplementation } from "../adapters";
-import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
+import { requireManifest, syncManifestToProject } from "../lib/config";
 import { COST_ESTIMATES, HETZNER_COST_ESTIMATES } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { isTailscaleInstalled, isTailscaleRunning, cleanupTailscaleDevices, ensureMagicDns, ensureTailscaleFunnel } from "../lib/tailscale";
@@ -17,8 +17,6 @@ import pc from "picocolors";
 export interface DeployOptions {
   /** Skip confirmation prompt */
   yes?: boolean;
-  /** Config name (auto-detected if only one) */
-  config?: string;
 }
 
 /**
@@ -40,18 +38,12 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name and load manifest
-  let configName: string;
+  // Load manifest
+  let manifest;
   try {
-    configName = resolveConfigName(options.config);
+    manifest = requireManifest();
   } catch (err) {
     ui.log.error((err as Error).message);
-    process.exit(1);
-  }
-
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    ui.log.error(`Config '${configName}' could not be loaded.`);
     process.exit(1);
   }
 
@@ -98,7 +90,7 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
   }
 
   // Sync manifest to project root so the Pulumi program can read it
-  syncManifestToProject(configName, cwd);
+  syncManifestToProject(cwd);
 
   // Sync instanceType from manifest to Pulumi config
   exec.capture("pulumi", ["config", "set", "instanceType", manifest.instanceType], cwd);

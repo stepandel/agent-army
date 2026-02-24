@@ -21,7 +21,7 @@ import type { PushOptions } from "./tools/push";
 import { destroyCommand } from "./commands/destroy";
 import { listCommand } from "./commands/list";
 import { updateCommand } from "./commands/update";
-import { configShowCommand, configSetCommand, configMigrateCommand } from "./commands/config";
+import { configShowCommand, configSetCommand } from "./commands/config";
 import { secretsSetCommand, secretsListCommand } from "./commands/secrets";
 import { redeployCommand } from "./commands/redeploy";
 import { webhooksSetupCommand } from "./commands/webhooks";
@@ -53,7 +53,6 @@ program
   .command("deploy")
   .description("Deploy agents with pulumi up")
   .option("-y, --yes", "Skip confirmation prompt")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .action(async (opts) => {
     await deployCommand(opts);
   });
@@ -62,7 +61,6 @@ program
   .command("status")
   .description("Show agent statuses from stack outputs")
   .option("--json", "Output as JSON")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .action(async (opts) => {
     await statusCommand(opts);
   });
@@ -71,7 +69,6 @@ program
   .command("ssh <agent>")
   .description("SSH to an agent by name or alias (juno, titus, scout)")
   .option("-u, --user <user>", "SSH user")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .argument("[command...]", "Command to run on the agent")
   .action(async (agent: string, commandArgs: string[], opts) => {
     await sshCommand(agent, commandArgs, opts);
@@ -81,7 +78,6 @@ program
   .command("validate")
   .description("Health check agents via Tailscale SSH")
   .option("-t, --timeout <seconds>", "SSH timeout in seconds", "30")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .action(async (opts) => {
     await validateCommand(opts);
   });
@@ -95,7 +91,6 @@ program
   .option("--openclaw", "Upgrade openclaw to latest + restart gateway")
   .option("--config-push", "Copy local openclaw.json to remote + restart gateway")
   .option("-a, --agent <name>", "Target a single agent (name, role, or alias)")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .action(async (opts: PushOptions & { configPush?: boolean }) => {
     await pushCommand({
       skills: opts.skills,
@@ -104,7 +99,6 @@ program
       openclaw: opts.openclaw,
       pushConfig: opts.configPush,
       agent: opts.agent,
-      config: opts.config,
     });
   });
 
@@ -112,7 +106,6 @@ program
   .command("redeploy")
   .description("Update agents in-place without destroying infrastructure")
   .option("-y, --yes", "Skip confirmation prompt")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .action(async (opts) => {
     await redeployCommand(opts);
   });
@@ -121,14 +114,13 @@ program
   .command("destroy")
   .description("Tear down all resources with safety confirmations")
   .option("-y, --yes", "Skip confirmation prompts (dangerous!)")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .action(async (opts) => {
     await destroyCommand(opts);
   });
 
 program
   .command("list")
-  .description("List all saved configs")
+  .description("List project config")
   .option("--json", "Output as JSON")
   .action(async (opts) => {
     await listCommand(opts);
@@ -142,7 +134,6 @@ configCmd
   .command("show")
   .description("Display current config")
   .option("--json", "Output as JSON")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .action(async (opts) => {
     await configShowCommand(opts);
   });
@@ -150,18 +141,9 @@ configCmd
 configCmd
   .command("set <key> <value>")
   .description("Update a config value")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .option("-a, --agent <name>", "Target a specific agent")
   .action(async (key: string, value: string, opts) => {
     await configSetCommand(key, value, opts);
-  });
-
-configCmd
-  .command("migrate")
-  .description("Migrate plugin config files into the manifest (one-time upgrade)")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
-  .action(async (opts) => {
-    await configMigrateCommand(opts);
   });
 
 const secretsCmd = program
@@ -171,7 +153,6 @@ const secretsCmd = program
 secretsCmd
   .command("set <key> <value>")
   .description("Set a secret (e.g. braveApiKey, anthropicApiKey)")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .option("-a, --agent <role>", "Agent role for per-agent secrets (e.g. eng, pm, tester)")
   .action(async (key: string, value: string, opts) => {
     await secretsSetCommand(key, value, opts);
@@ -180,7 +161,6 @@ secretsCmd
 secretsCmd
   .command("list")
   .description("Show which secrets are configured (values redacted)")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .action(async (opts) => {
     await secretsListCommand(opts);
   });
@@ -192,7 +172,6 @@ const webhooksCmd = program
 webhooksCmd
   .command("setup")
   .description("Configure Linear webhooks for deployed agents")
-  .option("-c, --config <name>", "Config name (auto-detected if only one)")
   .action(async (opts) => {
     await webhooksSetupCommand(opts);
   });

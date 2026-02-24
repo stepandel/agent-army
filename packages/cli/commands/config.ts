@@ -8,13 +8,9 @@
 
 import * as process from "process";
 import YAML from "yaml";
-import * as fs from "fs";
 import {
-  loadManifest,
+  requireManifest,
   saveManifest,
-  resolveConfigName,
-  pluginsDir,
-  loadPluginConfig,
 } from "../lib/config";
 import {
   AWS_REGIONS,
@@ -133,21 +129,14 @@ function validateAgentValue(
 
 export interface ConfigShowOptions {
   json?: boolean;
-  config?: string;
 }
 
 export async function configShowCommand(opts: ConfigShowOptions): Promise<void> {
-  let configName: string;
+  let manifest: ClawupManifest;
   try {
-    configName = resolveConfigName(opts.config);
+    manifest = requireManifest();
   } catch (err) {
     console.error(pc.red((err as Error).message));
-    process.exit(1);
-  }
-
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    console.error(pc.red(`Config '${configName}' could not be loaded.`));
     process.exit(1);
   }
 
@@ -158,7 +147,7 @@ export async function configShowCommand(opts: ConfigShowOptions): Promise<void> 
 
   // Human-readable output
   console.log();
-  console.log(pc.bold(`Config: ${configName}`));
+  console.log(pc.bold(`Config: ${manifest.stackName}`));
   console.log();
   console.log(`  Stack:          ${manifest.stackName}`);
   console.log(`  Provider:       ${manifest.provider ?? "aws"}`);
@@ -192,7 +181,6 @@ export async function configShowCommand(opts: ConfigShowOptions): Promise<void> 
 // ---------------------------------------------------------------------------
 
 export interface ConfigSetOptions {
-  config?: string;
   agent?: string;
 }
 
@@ -201,17 +189,11 @@ export async function configSetCommand(
   value: string,
   opts: ConfigSetOptions
 ): Promise<void> {
-  let configName: string;
+  let manifest: ClawupManifest;
   try {
-    configName = resolveConfigName(opts.config);
+    manifest = requireManifest();
   } catch (err) {
     console.error(pc.red((err as Error).message));
-    process.exit(1);
-  }
-
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    console.error(pc.red(`Config '${configName}' could not be loaded.`));
     process.exit(1);
   }
 
@@ -245,7 +227,7 @@ export async function configSetCommand(
       agentRec[key] = value;
     }
 
-    saveManifest(configName, manifest);
+    saveManifest(manifest);
     console.log(
       pc.green(`✓ ${agent.displayName}.${key}: ${String(oldValue ?? "(unset)")} → ${value}`)
     );
@@ -261,7 +243,7 @@ export async function configSetCommand(
     const oldValue = manifest.templateVars[varName];
     manifest.templateVars[varName] = value;
 
-    saveManifest(configName, manifest);
+    saveManifest(manifest);
     console.log(pc.green(`✓ templateVars.${varName}: ${String(oldValue ?? "(unset)")} → ${value}`));
   } else {
     // Top-level set
@@ -280,94 +262,9 @@ export async function configSetCommand(
     const oldValue = manifestRec[key];
     manifestRec[key] = value;
 
-    saveManifest(configName, manifest);
+    saveManifest(manifest);
     console.log(pc.green(`✓ ${key}: ${String(oldValue ?? "(unset)")} → ${value}`));
   }
 
   console.log(pc.dim("\nRun 'clawup redeploy' or 'clawup destroy && clawup deploy' to apply changes."));
-}
-
-// ---------------------------------------------------------------------------
-// Migrate — inline plugin config files into the manifest
-// ---------------------------------------------------------------------------
-
-export interface ConfigMigrateOptions {
-  config?: string;
-}
-
-export async function configMigrateCommand(opts: ConfigMigrateOptions): Promise<void> {
-  let configName: string;
-  try {
-    configName = resolveConfigName(opts.config);
-  } catch (err) {
-    console.error(pc.red((err as Error).message));
-    process.exit(1);
-  }
-
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    console.error(pc.red(`Config '${configName}' could not be loaded.`));
-    process.exit(1);
-  }
-
-  const pDir = pluginsDir(configName);
-  if (!fs.existsSync(pDir)) {
-    console.log(pc.green("No plugin config files found — nothing to migrate."));
-    return;
-  }
-
-  const pluginFiles = fs.readdirSync(pDir).filter((f) => f.endsWith(".yaml"));
-  if (pluginFiles.length === 0) {
-    console.log(pc.green("No plugin config files found — nothing to migrate."));
-    return;
-  }
-
-  let migratedCount = 0;
-
-  for (const file of pluginFiles) {
-    const pluginName = file.replace(/\.yaml$/, "");
-    const pluginConfig = loadPluginConfig(configName, pluginName);
-    if (!pluginConfig) continue;
-
-    for (const agent of manifest.agents) {
-      const roleConfig = pluginConfig.agents?.[agent.role];
-      if (!roleConfig) continue;
-
-      // Initialize inline plugins map if needed
-      if (!agent.plugins) agent.plugins = {};
-
-      // Merge: existing inline config takes precedence over file-based
-      if (!agent.plugins[pluginName]) {
-        agent.plugins[pluginName] = roleConfig;
-        migratedCount++;
-      }
-    }
-
-    // Delete the plugin config file
-    const filePath = `${pDir}/${file}`;
-    fs.unlinkSync(filePath);
-    console.log(pc.dim(`  Removed ${filePath}`));
-  }
-
-  // Clean up empty plugins directory
-  try {
-    const remaining = fs.readdirSync(pDir);
-    if (remaining.length === 0) {
-      fs.rmdirSync(pDir);
-      // Also remove the stack directory if empty
-      const stackDir = `${pDir}/..`;
-      const stackRemaining = fs.readdirSync(stackDir);
-      if (stackRemaining.length === 0) {
-        fs.rmdirSync(stackDir);
-      }
-    }
-  } catch {
-    // Ignore cleanup errors
-  }
-
-  // Save updated manifest
-  saveManifest(configName, manifest);
-
-  console.log(pc.green(`\n✓ Migrated ${migratedCount} plugin config(s) into ${configName}.yaml`));
-  console.log(pc.dim("Plugin config is now inline in the manifest under each agent's 'plugins' field."));
 }

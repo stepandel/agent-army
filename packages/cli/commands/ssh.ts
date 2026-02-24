@@ -3,17 +3,16 @@
  */
 
 import * as p from "@clack/prompts";
-import { loadManifest, resolveConfigName } from "../lib/config";
+import { requireManifest } from "../lib/config";
 import { getConfig, selectOrCreateStack } from "../lib/pulumi";
 import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
-import { showBanner, exitWithError } from "../lib/ui";
+import { exitWithError } from "../lib/ui";
 import { requireTailscale } from "../lib/tailscale";
 import { spawn } from "child_process";
 
 interface SshOptions {
   user?: string;
-  config?: string;
 }
 
 export async function sshCommand(agentNameOrAlias: string, commandArgs: string[], opts: SshOptions): Promise<void> {
@@ -26,18 +25,12 @@ export async function sshCommand(agentNameOrAlias: string, commandArgs: string[]
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name
-  let configName: string;
+  // Load manifest
+  let manifest;
   try {
-    configName = resolveConfigName(opts.config);
+    manifest = requireManifest();
   } catch (err) {
     exitWithError((err as Error).message);
-  }
-
-  // Load manifest
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    exitWithError(`Config '${configName}' could not be loaded.`);
   }
 
   // Select stack

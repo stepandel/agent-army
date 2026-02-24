@@ -5,11 +5,10 @@ import YAML from "yaml";
 import type { ClawupManifest } from "@clawup/core";
 import {
   resolveIdentityPaths,
-  resolveConfigName,
   loadManifest,
   saveManifest,
   manifestExists,
-  PROJECT_CONFIG_SENTINEL,
+  requireManifest,
 } from "../config";
 import * as projectModule from "../project";
 
@@ -118,7 +117,7 @@ describe("resolveIdentityPaths", () => {
   });
 });
 
-describe("project-mode config functions", () => {
+describe("project-only config functions", () => {
   const fakeProjectRoot = "/tmp/clawup-test-project";
   const manifestPath = join(fakeProjectRoot, "clawup.yaml");
   const manifest = makeManifest(["./identities/pm", "https://github.com/org/ids#eng"]);
@@ -133,23 +132,10 @@ describe("project-mode config functions", () => {
     fs.rmSync(fakeProjectRoot, { recursive: true, force: true });
   });
 
-  describe("resolveConfigName", () => {
-    it("returns sentinel when findProjectRoot() is non-null and no explicit name", () => {
-      vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(fakeProjectRoot);
-      expect(resolveConfigName()).toBe(PROJECT_CONFIG_SENTINEL);
-    });
-
-    it("bypasses project mode when an explicit name is given", () => {
-      vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(fakeProjectRoot);
-      // Explicit name that doesn't exist should throw — not return sentinel
-      expect(() => resolveConfigName("explicit")).toThrow("Config 'explicit' not found");
-    });
-  });
-
   describe("loadManifest", () => {
-    it("loads from project root and resolves relative identity paths for sentinel", () => {
+    it("loads from project root and resolves relative identity paths", () => {
       vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(fakeProjectRoot);
-      const result = loadManifest(PROJECT_CONFIG_SENTINEL);
+      const result = loadManifest();
 
       expect(result).not.toBeNull();
       expect(result!.stackName).toBe("test-stack");
@@ -159,48 +145,69 @@ describe("project-mode config functions", () => {
       expect(result!.agents[1].identity).toBe("https://github.com/org/ids#eng");
     });
 
-    it("returns null when no project root found for sentinel", () => {
+    it("returns null when no project root found", () => {
       vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(null);
-      expect(loadManifest(PROJECT_CONFIG_SENTINEL)).toBeNull();
+      expect(loadManifest()).toBeNull();
     });
   });
 
   describe("saveManifest", () => {
-    it("writes to project root for sentinel", () => {
+    it("writes to project root", () => {
       vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(fakeProjectRoot);
 
       const updated = { ...manifest, ownerName: "updated-owner" };
-      saveManifest(PROJECT_CONFIG_SENTINEL, updated);
+      saveManifest(updated);
 
       const raw = fs.readFileSync(manifestPath, "utf-8");
       const saved = YAML.parse(raw) as ClawupManifest;
       expect(saved.ownerName).toBe("updated-owner");
     });
 
-    it("throws when no project root found for sentinel", () => {
+    it("throws when no project root found", () => {
       vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(null);
-      expect(() => saveManifest(PROJECT_CONFIG_SENTINEL, manifest)).toThrow(
+      expect(() => saveManifest(manifest)).toThrow(
         "no project root found"
       );
     });
   });
 
   describe("manifestExists", () => {
-    it("returns true for sentinel when project root has clawup.yaml", () => {
+    it("returns true when project root has clawup.yaml", () => {
       vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(fakeProjectRoot);
-      expect(manifestExists(PROJECT_CONFIG_SENTINEL)).toBe(true);
+      expect(manifestExists()).toBe(true);
     });
 
-    it("returns false for sentinel when no project root", () => {
+    it("returns false when no project root", () => {
       vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(null);
-      expect(manifestExists(PROJECT_CONFIG_SENTINEL)).toBe(false);
+      expect(manifestExists()).toBe(false);
     });
 
-    it("returns false for sentinel when project root has no clawup.yaml", () => {
+    it("returns false when project root has no clawup.yaml", () => {
       const emptyDir = join(fakeProjectRoot, "empty");
       fs.mkdirSync(emptyDir, { recursive: true });
       vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(emptyDir);
-      expect(manifestExists(PROJECT_CONFIG_SENTINEL)).toBe(false);
+      expect(manifestExists()).toBe(false);
+    });
+  });
+
+  describe("requireManifest", () => {
+    it("returns manifest when project root has clawup.yaml", () => {
+      vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(fakeProjectRoot);
+      const result = requireManifest();
+      expect(result.stackName).toBe("test-stack");
+      expect(result.agents[0].identity).toBe(join(fakeProjectRoot, "identities/pm"));
+    });
+
+    it("throws when no project root found", () => {
+      vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(null);
+      expect(() => requireManifest()).toThrow("No clawup.yaml found");
+    });
+
+    it("throws when clawup.yaml doesn't exist in project root", () => {
+      const emptyDir = join(fakeProjectRoot, "empty");
+      fs.mkdirSync(emptyDir, { recursive: true });
+      vi.spyOn(projectModule, "findProjectRoot").mockReturnValue(emptyDir);
+      expect(() => requireManifest()).toThrow("No clawup.yaml found");
     });
   });
 });
