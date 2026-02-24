@@ -7,7 +7,9 @@
  */
 
 import { execSync } from "child_process";
+import * as fs from "fs";
 import * as p from "@clack/prompts";
+import YAML from "yaml";
 import type { AgentDefinition, ClawupManifest, IdentityManifest } from "@clawup/core";
 import {
   BUILT_IN_IDENTITIES,
@@ -22,8 +24,10 @@ import {
   MODEL_PROVIDERS,
   slackAppManifest,
   tailscaleHostname,
+  MANIFEST_FILE,
   PLUGIN_REGISTRY,
   DEP_REGISTRY,
+  ClawupManifestSchema,
 } from "@clawup/core";
 import { fetchIdentity } from "@clawup/core/identity";
 import * as os from "os";
@@ -33,6 +37,7 @@ import { selectOrCreateStack, setConfig, qualifiedStackName } from "../lib/pulum
 import { saveManifest } from "../lib/config";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { showBanner, handleCancel, exitWithError, formatCost, formatAgentList } from "../lib/ui";
+import { findProjectRoot } from "../lib/project";
 
 interface InitOptions {
   deploy?: boolean;
@@ -57,6 +62,14 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     exitWithError("Prerequisites not met. Please install the missing tools and try again.");
   }
   p.log.success("All prerequisites satisfied!");
+
+  // -------------------------------------------------------------------------
+  // Project mode: if clawup.yaml exists in CWD or ancestor, skip wizard
+  // -------------------------------------------------------------------------
+  const projectRoot = findProjectRoot();
+  if (projectRoot) {
+    return initProjectMode(projectRoot, opts);
+  }
 
   // -------------------------------------------------------------------------
   // Step 2: Infrastructure config
@@ -800,6 +813,520 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
 
   saveManifest(configName, manifest);
   s.stop("Config saved");
+
+  if (opts.deploy) {
+    p.log.success("Config saved! Starting deployment...\n");
+    const { deployCommand } = await import("./deploy.js");
+    await deployCommand({ config: configName, yes: opts.yes });
+  } else {
+    p.outro("Setup complete! Run `clawup deploy` to deploy your agents.");
+  }
+}
+
+/**
+ * Project mode: the manifest already exists in the project root.
+ * Skip infrastructure/owner/agent prompts and go straight to secrets + credentials.
+ */
+async function initProjectMode(projectRoot: string, opts: InitOptions): Promise<void> {
+  // Load and validate the existing manifest
+  const manifestPath = path.join(projectRoot, MANIFEST_FILE);
+  let validation: ReturnType<typeof ClawupManifestSchema.safeParse>;
+  try {
+    const raw = fs.readFileSync(manifestPath, "utf-8");
+    const parsed = YAML.parse(raw);
+    validation = ClawupManifestSchema.safeParse(parsed);
+  } catch (err) {
+    exitWithError(
+      `Failed to read/parse ${MANIFEST_FILE} at ${manifestPath}: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+    return;
+  }
+  if (!validation.success) {
+    const issues = validation.error.issues.map((i) => i.message).join(", ");
+    exitWithError(`Invalid ${MANIFEST_FILE} at ${manifestPath}: ${issues}`);
+    return; // unreachable, but helps TS
+  }
+  const manifest = validation.data;
+  const agents = manifest.agents;
+
+  p.log.info(`Project mode: ${MANIFEST_FILE} found at ${projectRoot}`);
+  p.log.info(
+    `Stack: ${manifest.stackName} | Provider: ${manifest.provider} | ${agents.length} agent(s)`
+  );
+
+  // Fetch identities to determine required plugins/deps
+  const identityCacheDir = path.join(os.homedir(), ".clawup", "identity-cache");
+  const fetchedIdentities: FetchedIdentity[] = [];
+
+  const identitySpinner = p.spinner();
+  identitySpinner.start("Resolving agent identities...");
+  for (const agent of agents) {
+    try {
+      const identity = await fetchIdentity(agent.identity, identityCacheDir);
+      fetchedIdentities.push({ agent, manifest: identity.manifest });
+    } catch (err) {
+      identitySpinner.stop(`Failed to resolve identity for ${agent.name}`);
+      exitWithError(
+        `Failed to resolve identity "${agent.identity}": ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      return;
+    }
+  }
+  identitySpinner.stop(
+    `Resolved ${fetchedIdentities.length} agent identit${fetchedIdentities.length === 1 ? "y" : "ies"}`
+  );
+
+  // Determine which plugins and deps are needed across all identities
+  const agentPlugins = new Map<string, Set<string>>();
+  const agentDeps = new Map<string, Set<string>>();
+  const allPluginNames = new Set<string>();
+  const allDepNames = new Set<string>();
+
+  for (const fi of fetchedIdentities) {
+    const plugins = new Set(fi.manifest.plugins ?? []);
+    const deps = new Set(fi.manifest.deps ?? []);
+    agentPlugins.set(fi.agent.name, plugins);
+    agentDeps.set(fi.agent.name, deps);
+    for (const pl of plugins) allPluginNames.add(pl);
+    for (const d of deps) allDepNames.add(d);
+  }
+
+  const identityPluginDefaults: Record<string, Record<string, Record<string, unknown>>> = {};
+  for (const fi of fetchedIdentities) {
+    if (fi.manifest.pluginDefaults) {
+      identityPluginDefaults[fi.agent.name] = fi.manifest.pluginDefaults;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Secrets: Anthropic API key
+  // ---------------------------------------------------------------------------
+  p.log.step("Configure Anthropic API key");
+
+  p.note(
+    KEY_INSTRUCTIONS.anthropicApiKey.steps.join("\n"),
+    KEY_INSTRUCTIONS.anthropicApiKey.title
+  );
+
+  const anthropicApiKey = await p.text({
+    message: "Anthropic API key",
+    placeholder: `${MODEL_PROVIDERS.anthropic.keyPrefix}...`,
+    validate: (val) => {
+      if (!val) return "API key is required";
+      if (!val.startsWith(MODEL_PROVIDERS.anthropic.keyPrefix)) {
+        return `Must start with ${MODEL_PROVIDERS.anthropic.keyPrefix}`;
+      }
+    },
+  });
+  handleCancel(anthropicApiKey);
+
+  // ---------------------------------------------------------------------------
+  // Secrets: Tailscale
+  // ---------------------------------------------------------------------------
+  p.log.step("Configure infrastructure secrets");
+
+  p.note(
+    KEY_INSTRUCTIONS.tailscaleAuthKey.steps.join("\n"),
+    KEY_INSTRUCTIONS.tailscaleAuthKey.title
+  );
+
+  const tailscaleAuthKey = await p.password({
+    message: "Tailscale auth key",
+    validate: (val) => {
+      if (!val.startsWith("tskey-auth-")) return "Must start with tskey-auth-";
+    },
+  });
+  handleCancel(tailscaleAuthKey);
+
+  p.note(
+    KEY_INSTRUCTIONS.tailnetDnsName.steps.join("\n"),
+    KEY_INSTRUCTIONS.tailnetDnsName.title
+  );
+
+  const tailnetDnsName = await p.text({
+    message: "Tailnet DNS name",
+    placeholder: "my-tailnet.ts.net",
+    validate: (val) => {
+      if (!val.endsWith(".ts.net")) return "Must end with .ts.net";
+    },
+  });
+  handleCancel(tailnetDnsName);
+
+  p.note(
+    KEY_INSTRUCTIONS.tailscaleApiKey.steps.join("\n"),
+    KEY_INSTRUCTIONS.tailscaleApiKey.title
+  );
+
+  const tailscaleApiKey = await p.text({
+    message: "Tailscale API key (press Enter to skip)",
+    placeholder: "tskey-api-... (optional)",
+    defaultValue: "",
+  });
+  handleCancel(tailscaleApiKey);
+
+  let hcloudToken: string | undefined;
+  if (manifest.provider === "hetzner") {
+    p.note(
+      KEY_INSTRUCTIONS.hcloudToken.steps.join("\n"),
+      KEY_INSTRUCTIONS.hcloudToken.title
+    );
+
+    const token = await p.password({
+      message: "Hetzner Cloud API token",
+      validate: (val) => {
+        if (!val) return "API token is required for Hetzner deployments";
+      },
+    });
+    handleCancel(token);
+    hcloudToken = token as string;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Integration credentials (driven by identity plugins/deps)
+  // ---------------------------------------------------------------------------
+  p.log.step("Configure integrations");
+
+  const integrationCredentials: Record<string, {
+    linearApiKey?: string;
+    linearWebhookSecret?: string;
+    linearUserUuid?: string;
+    githubToken?: string;
+  }> = {};
+  for (const agent of agents) {
+    integrationCredentials[agent.role] = {};
+  }
+
+  // Slack credentials — only if any identity has the slack plugin
+  const slackCredentials: Record<string, { botToken: string; appToken: string }> = {};
+  if (allPluginNames.has("slack")) {
+    p.note(
+      KEY_INSTRUCTIONS.slackCredentials.steps.join("\n"),
+      KEY_INSTRUCTIONS.slackCredentials.title
+    );
+
+    for (const fi of fetchedIdentities) {
+      if (!agentPlugins.get(fi.agent.name)?.has("slack")) continue;
+
+      const slackManifest = slackAppManifest(fi.agent.displayName);
+      try {
+        execSync(
+          process.platform === "darwin" ? "pbcopy" : "xclip -selection clipboard",
+          { input: slackManifest },
+        );
+        p.log.success(`Slack manifest for ${fi.agent.displayName} copied to clipboard — paste it into Slack`);
+      } catch {
+        p.log.warn(`Could not copy to clipboard. Manifest for ${fi.agent.displayName}:`);
+        console.log(slackManifest);
+      }
+
+      const botToken = await p.password({
+        message: `Slack Bot Token for ${fi.agent.displayName} (${fi.agent.role})`,
+        validate: (val) => {
+          if (!val.startsWith("xoxb-")) return "Must start with xoxb-";
+        },
+      });
+      handleCancel(botToken);
+
+      const appToken = await p.password({
+        message: `Slack App Token for ${fi.agent.displayName} (${fi.agent.role})`,
+        validate: (val) => {
+          if (!val.startsWith("xapp-")) return "Must start with xapp-";
+        },
+      });
+      handleCancel(appToken);
+
+      slackCredentials[fi.agent.role] = {
+        botToken: botToken as string,
+        appToken: appToken as string,
+      };
+    }
+  }
+
+  // Linear credentials — only if any identity has the openclaw-linear plugin
+  if (allPluginNames.has("openclaw-linear")) {
+    p.note(
+      KEY_INSTRUCTIONS.linearApiKey.steps.join("\n"),
+      KEY_INSTRUCTIONS.linearApiKey.title
+    );
+
+    const linearAgents = fetchedIdentities.filter(
+      (fi) => agentPlugins.get(fi.agent.name)?.has("openclaw-linear")
+    );
+
+    for (const fi of linearAgents) {
+      const linearKey = await p.password({
+        message: `Linear API key for ${fi.agent.displayName} (${fi.agent.role})`,
+        validate: (val) => {
+          if (!val.startsWith("lin_api_")) return "Must start with lin_api_";
+        },
+      });
+      handleCancel(linearKey);
+
+      integrationCredentials[fi.agent.role].linearApiKey = linearKey as string;
+
+      // Auto-fetch user UUID from Linear API
+      const s = p.spinner();
+      s.start(`Fetching Linear user ID for ${fi.agent.displayName}...`);
+      try {
+        const res = await fetch("https://api.linear.app/graphql", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: linearKey as string,
+          },
+          body: JSON.stringify({ query: "{ viewer { id } }" }),
+        });
+        const data = (await res.json()) as { data?: { viewer?: { id?: string } } };
+        const uuid = data?.data?.viewer?.id;
+        if (!uuid) throw new Error("No user ID in response");
+        integrationCredentials[fi.agent.role].linearUserUuid = uuid;
+        s.stop(`${fi.agent.displayName}: ${uuid}`);
+      } catch (err) {
+        s.stop(`Could not fetch Linear user ID for ${fi.agent.displayName}`);
+        p.log.warn(`${err instanceof Error ? err.message : String(err)}`);
+        const linearUserUuid = await p.text({
+          message: `Enter Linear user UUID manually for ${fi.agent.displayName}`,
+          placeholder: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          validate: (val) => {
+            if (!val) return "Linear user UUID is required";
+            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
+              return "Must be a valid UUID format";
+            }
+          },
+        });
+        handleCancel(linearUserUuid);
+        integrationCredentials[fi.agent.role].linearUserUuid = linearUserUuid as string;
+      }
+    }
+
+    // Linear webhook signing secrets
+    p.note(
+      [
+        "Create a webhook in Linear for each agent:",
+        "1. Go to Settings → API → Webhooks → \"New webhook\"",
+        "2. Paste the webhook URL shown below for each agent",
+        "3. Select events to receive (e.g., Issues, Comments)",
+        "4. Copy the \"Signing secret\" shown after creating the webhook",
+      ].join("\n"),
+      "Linear Webhook Setup"
+    );
+
+    for (const fi of linearAgents) {
+      const webhookUrl = `https://${tailscaleHostname(manifest.stackName, fi.agent.name)}.${tailnetDnsName as string}/hooks/linear`;
+
+      p.log.info(`${fi.agent.displayName} (${fi.agent.role}): ${webhookUrl}`);
+
+      const webhookSecretInput = await p.password({
+        message: `Signing secret for ${fi.agent.displayName} (${fi.agent.role})`,
+        validate: (val) => {
+          if (!val) return "Webhook signing secret is required";
+        },
+      });
+      handleCancel(webhookSecretInput);
+
+      integrationCredentials[fi.agent.role].linearWebhookSecret = webhookSecretInput as string;
+    }
+  }
+
+  // GitHub token — only if any identity has the gh dep
+  if (allDepNames.has("gh")) {
+    p.note(
+      KEY_INSTRUCTIONS.githubToken.steps.join("\n"),
+      KEY_INSTRUCTIONS.githubToken.title
+    );
+
+    for (const fi of fetchedIdentities) {
+      if (!agentDeps.get(fi.agent.name)?.has("gh")) continue;
+
+      const githubKey = await p.password({
+        message: `GitHub token for ${fi.agent.displayName} (${fi.agent.role})`,
+        validate: (val) => {
+          if (!val.startsWith("ghp_") && !val.startsWith("github_pat_")) {
+            return "Must start with ghp_ or github_pat_";
+          }
+        },
+      });
+      handleCancel(githubKey);
+
+      integrationCredentials[fi.agent.role].githubToken = githubKey as string;
+    }
+  }
+
+  // Brave Search API key — only if any identity has the brave-search dep
+  let braveApiKey: string | undefined;
+  if (allDepNames.has("brave-search")) {
+    p.note(
+      KEY_INSTRUCTIONS.braveApiKey.steps.join("\n"),
+      KEY_INSTRUCTIONS.braveApiKey.title
+    );
+
+    const braveKey = await p.password({
+      message: "Brave Search API key",
+      validate: (val) => {
+        if (!val) return "API key is required";
+      },
+    });
+    handleCancel(braveKey);
+    braveApiKey = braveKey as string;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Summary
+  // ---------------------------------------------------------------------------
+  const costEstimates = manifest.provider === "aws" ? COST_ESTIMATES : HETZNER_COST_ESTIMATES;
+  const costPerAgent = costEstimates[manifest.instanceType] ?? 30;
+  const totalCost = agents.reduce((sum, a) => {
+    const agentCost = costEstimates[a.instanceType ?? manifest.instanceType] ?? costPerAgent;
+    return sum + agentCost;
+  }, 0);
+
+  const integrationNames: string[] = [];
+  if (allPluginNames.has("openclaw-linear")) integrationNames.push("Linear");
+  if (allPluginNames.has("slack")) integrationNames.push("Slack");
+  if (allDepNames.has("gh")) integrationNames.push("GitHub CLI");
+  if (allDepNames.has("brave-search")) integrationNames.push("Brave Search");
+
+  const providerLabel = manifest.provider === "aws" ? "AWS" : "Hetzner";
+  const regionLabel = manifest.provider === "aws" ? "Region" : "Location";
+
+  const summaryLines = [
+    `Stack:          ${manifest.stackName}`,
+    `Provider:       ${providerLabel}`,
+    `${regionLabel.padEnd(14, " ")} ${manifest.region}`,
+    `Instance type:  ${manifest.instanceType}`,
+    `Owner:          ${manifest.ownerName}`,
+  ];
+  if (manifest.timezone) summaryLines.push(`Timezone:       ${manifest.timezone}`);
+  if (manifest.workingHours) summaryLines.push(`Working hours:  ${manifest.workingHours}`);
+  if (integrationNames.length > 0) {
+    summaryLines.push(`Integrations:   ${integrationNames.join(", ")}`);
+  }
+  summaryLines.push(
+    ``,
+    `Agents (${agents.length}):`,
+    formatAgentList(agents),
+    ``,
+    `Estimated cost: ${formatCost(totalCost)}`
+  );
+
+  p.note(summaryLines.join("\n"), "Deployment Summary (project mode)");
+
+  // ---------------------------------------------------------------------------
+  // Confirm
+  // ---------------------------------------------------------------------------
+  const confirmed = await p.confirm({
+    message: "Proceed with setup?",
+  });
+  handleCancel(confirmed);
+  if (!confirmed) {
+    p.cancel("Setup cancelled.");
+    process.exit(0);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Execute setup
+  // ---------------------------------------------------------------------------
+  const s = p.spinner();
+
+  // Set up workspace
+  s.start("Setting up workspace...");
+  const wsResult = ensureWorkspace();
+  if (!wsResult.ok) {
+    s.stop("Failed to set up workspace");
+    exitWithError(wsResult.error ?? "Failed to set up workspace.");
+  }
+  s.stop("Workspace ready");
+  const cwd = getWorkspaceDir();
+
+  // Select/create stack
+  const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);
+  s.start("Selecting Pulumi stack...");
+  const stackResult = selectOrCreateStack(pulumiStack, cwd);
+  if (!stackResult.ok) {
+    s.stop("Failed to select/create stack");
+    if (stackResult.error) p.log.error(stackResult.error);
+    exitWithError(`Could not select or create Pulumi stack "${pulumiStack}".`);
+  }
+  s.stop("Pulumi stack ready");
+
+  // Set Pulumi config
+  s.start("Setting Pulumi configuration...");
+  setConfig("provider", manifest.provider, false, cwd);
+  if (manifest.provider === "aws") {
+    setConfig("aws:region", manifest.region, false, cwd);
+  } else {
+    setConfig("hetzner:location", manifest.region, false, cwd);
+    if (hcloudToken) {
+      setConfig("hcloud:token", hcloudToken, true, cwd);
+    }
+  }
+  setConfig("anthropicApiKey", anthropicApiKey as string, true, cwd);
+  setConfig("tailscaleAuthKey", tailscaleAuthKey as string, true, cwd);
+  setConfig("tailnetDnsName", tailnetDnsName as string, false, cwd);
+  if (tailscaleApiKey) {
+    setConfig("tailscaleApiKey", tailscaleApiKey as string, true, cwd);
+  }
+  setConfig("instanceType", manifest.instanceType, false, cwd);
+  setConfig("ownerName", manifest.ownerName, false, cwd);
+  if (manifest.timezone) setConfig("timezone", manifest.timezone, false, cwd);
+  if (manifest.workingHours) setConfig("workingHours", manifest.workingHours, false, cwd);
+  if (manifest.userNotes) setConfig("userNotes", manifest.userNotes, false, cwd);
+
+  // Set per-agent integration credentials
+  for (const [role, creds] of Object.entries(integrationCredentials)) {
+    if (creds.linearApiKey) setConfig(`${role}LinearApiKey`, creds.linearApiKey, true, cwd);
+    if (creds.linearWebhookSecret) setConfig(`${role}LinearWebhookSecret`, creds.linearWebhookSecret, true, cwd);
+    if (creds.linearUserUuid) setConfig(`${role}LinearUserUuid`, creds.linearUserUuid, false, cwd);
+    if (creds.githubToken) setConfig(`${role}GithubToken`, creds.githubToken, true, cwd);
+  }
+  // Set per-agent Slack credentials
+  for (const [role, creds] of Object.entries(slackCredentials)) {
+    setConfig(`${role}SlackBotToken`, creds.botToken, true, cwd);
+    setConfig(`${role}SlackAppToken`, creds.appToken, true, cwd);
+  }
+  if (braveApiKey) setConfig("braveApiKey", braveApiKey, true, cwd);
+  s.stop("Configuration saved");
+
+  // Write manifest (update inline plugin config from identities)
+  const configName = manifest.stackName;
+  s.start(`Writing config to ~/.clawup/configs/${configName}.yaml...`);
+
+  for (const fi of fetchedIdentities) {
+    const rolePlugins = agentPlugins.get(fi.agent.name);
+    if (!rolePlugins || rolePlugins.size === 0) continue;
+
+    const inlinePlugins: Record<string, Record<string, unknown>> = {};
+    const defaults = identityPluginDefaults[fi.agent.name] ?? {};
+
+    for (const pluginName of rolePlugins) {
+      const pluginDefaults = defaults[pluginName] ?? {};
+      const agentConfig: Record<string, unknown> = {
+        ...pluginDefaults,
+        agentId: fi.agent.name,
+      };
+
+      if (pluginName === "openclaw-linear") {
+        const creds = integrationCredentials[fi.agent.role];
+        if (creds?.linearUserUuid) {
+          agentConfig.linearUserUuid = creds.linearUserUuid;
+        }
+      }
+
+      inlinePlugins[pluginName] = agentConfig;
+    }
+
+    if (Object.keys(inlinePlugins).length > 0) {
+      fi.agent.plugins = inlinePlugins;
+    }
+  }
+
+  saveManifest(configName, manifest);
+  s.stop("Config saved");
+  fs.writeFileSync(manifestPath, YAML.stringify(manifest), "utf-8");
 
   if (opts.deploy) {
     p.log.success("Config saved! Starting deployment...\n");
