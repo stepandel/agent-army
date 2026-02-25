@@ -7,9 +7,10 @@
 import type { RuntimeAdapter, ToolImplementation } from "../adapters";
 import { requireManifest, syncManifestToProject } from "../lib/config";
 import { COST_ESTIMATES, HETZNER_COST_ESTIMATES, LOCAL_COST_ESTIMATES } from "@clawup/core";
+import type { ClawupManifest } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { isTailscaleInstalled, isTailscaleRunning, cleanupTailscaleDevices, ensureMagicDns, ensureTailscaleFunnel } from "../lib/tailscale";
-import { getConfig, verifyStackOwnership, stampStackFingerprint } from "../lib/tool-helpers";
+import { getConfig, setConfig, verifyStackOwnership, stampStackFingerprint } from "../lib/tool-helpers";
 import { formatAgentList, formatCost } from "../lib/ui";
 import { qualifiedStackName } from "../lib/pulumi";
 import { getProjectRoot } from "../lib/project";
@@ -18,6 +19,8 @@ import pc from "picocolors";
 export interface DeployOptions {
   /** Skip confirmation prompt */
   yes?: boolean;
+  /** Run in local Docker containers (for testing) */
+  local?: boolean;
 }
 
 /**
@@ -48,8 +51,14 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
     process.exit(1);
   }
 
+  // --local: override provider in memory, use separate stack
+  if (options.local) {
+    manifest = { ...manifest, provider: "local" } as ClawupManifest;
+  }
+
   // Select/create stack (use org-qualified name if organization is set)
-  const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);
+  const stackName = options.local ? `${manifest.stackName}-local` : manifest.stackName;
+  const pulumiStack = qualifiedStackName(stackName, manifest.organization);
   const projectRoot = getProjectRoot();
   const selectResult = exec.capture("pulumi", ["stack", "select", pulumiStack], cwd);
   if (selectResult.exitCode !== 0) {
@@ -100,10 +109,32 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
   }
 
   // Sync manifest to project root so the Pulumi program can read it
-  syncManifestToProject(cwd);
+  syncManifestToProject(cwd, options.local ? { provider: "local" as const } : undefined);
 
   // Sync instanceType from manifest to Pulumi config
   exec.capture("pulumi", ["config", "set", "instanceType", manifest.instanceType], cwd);
+
+  // --local: auto-configure minimal Pulumi config (no `clawup setup` needed)
+  if (options.local) {
+    setConfig(exec, "provider", "local", cwd);
+    setConfig(exec, "instanceType", "local", cwd);
+    if (manifest.ownerName) setConfig(exec, "ownerName", manifest.ownerName, cwd);
+    if (manifest.timezone) setConfig(exec, "timezone", manifest.timezone, cwd);
+    if (manifest.workingHours) setConfig(exec, "workingHours", manifest.workingHours, cwd);
+    if (manifest.userNotes) setConfig(exec, "userNotes", manifest.userNotes, cwd);
+
+    // Try to get anthropicApiKey from the cloud stack config, then fall back to env var
+    const cloudStack = qualifiedStackName(manifest.stackName, manifest.organization);
+    const cloudKeyResult = exec.capture("pulumi", ["config", "get", "anthropicApiKey", "--stack", cloudStack], cwd);
+    const anthropicKey = cloudKeyResult.exitCode === 0 && cloudKeyResult.stdout?.trim()
+      ? cloudKeyResult.stdout.trim()
+      : process.env.ANTHROPIC_API_KEY;
+    if (anthropicKey) {
+      setConfig(exec, "anthropicApiKey", anthropicKey, cwd, true);
+    } else {
+      ui.log.warn("No anthropicApiKey found. Set ANTHROPIC_API_KEY env var or run `clawup setup` on the cloud stack first.");
+    }
+  }
 
   // Tailscale setup (skip for local Docker provider)
   if (manifest.provider !== "local") {

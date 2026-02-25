@@ -20,6 +20,8 @@ import pc from "picocolors";
 export interface ValidateOptions {
   /** SSH timeout in seconds */
   timeout?: string;
+  /** Validate local Docker containers */
+  local?: boolean;
 }
 
 interface CheckResult {
@@ -97,8 +99,14 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
     process.exit(1);
   }
 
+  // --local: override provider in memory, use separate stack
+  if (options.local) {
+    manifest = { ...manifest, provider: "local" as const };
+  }
+
   // Select/create stack (use org-qualified name if organization is set)
-  const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);
+  const stackName = options.local ? `${manifest.stackName}-local` : manifest.stackName;
+  const pulumiStack = qualifiedStackName(stackName, manifest.organization);
   const selectResult = exec.capture("pulumi", ["stack", "select", pulumiStack], cwd);
   if (selectResult.exitCode !== 0) {
     const initResult = exec.capture("pulumi", ["stack", "init", pulumiStack], cwd);

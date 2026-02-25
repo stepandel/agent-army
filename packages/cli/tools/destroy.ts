@@ -16,6 +16,8 @@ import { getProjectRoot } from "../lib/project";
 export interface DestroyOptions {
   /** Skip confirmation prompts (dangerous!) */
   yes?: boolean;
+  /** Destroy local Docker containers only */
+  local?: boolean;
 }
 
 /**
@@ -46,8 +48,14 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
     process.exit(1);
   }
 
+  // --local: override provider in memory, use separate stack
+  if (options.local) {
+    manifest = { ...manifest, provider: "local" as const };
+  }
+
   // Select/create stack (use org-qualified name if organization is set)
-  const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);
+  const stackName = options.local ? `${manifest.stackName}-local` : manifest.stackName;
+  const pulumiStack = qualifiedStackName(stackName, manifest.organization);
   const projectRoot = getProjectRoot();
   const selectResult = exec.capture("pulumi", ["stack", "select", pulumiStack], cwd);
   if (selectResult.exitCode !== 0) {
@@ -121,7 +129,7 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
   }
 
   // Sync manifest to project root so the Pulumi program can read it
-  syncManifestToProject(cwd);
+  syncManifestToProject(cwd, options.local ? { provider: "local" as const } : undefined);
 
   // Destroy infrastructure
   ui.log.step("Running pulumi destroy...");

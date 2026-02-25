@@ -38,8 +38,15 @@ export function resolveIdentityPaths(manifest: ClawupManifest, projectRoot: stri
  *
  * Reads <projectRoot>/clawup.yaml, resolves relative identity paths,
  * and writes to <projectDir|cwd>/clawup.yaml (the .clawup/ workspace).
+ *
+ * When `overrides` is provided, the resolved manifest is shallow-merged
+ * with the overrides before writing. This allows --local to inject
+ * `{ provider: "local" }` without modifying the user's manifest file.
  */
-export function syncManifestToProject(projectDir?: string): void {
+export function syncManifestToProject(
+  projectDir?: string,
+  overrides?: Partial<ClawupManifest>,
+): void {
   const projectRoot = findProjectRoot();
   if (projectRoot === null) {
     throw new Error("syncManifestToProject: no project root found (no clawup.yaml in current directory or ancestors).");
@@ -51,7 +58,8 @@ export function syncManifestToProject(projectDir?: string): void {
   const raw = fs.readFileSync(src, "utf-8");
   const manifest = YAML.parse(raw) as ClawupManifest;
   const resolved = resolveIdentityPaths(manifest, projectRoot);
-  fs.writeFileSync(dest, YAML.stringify(resolved), "utf-8");
+  const final = overrides ? { ...resolved, ...overrides } : resolved;
+  fs.writeFileSync(dest, YAML.stringify(final), "utf-8");
 }
 
 /**

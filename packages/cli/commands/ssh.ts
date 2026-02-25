@@ -13,6 +13,8 @@ import { spawn } from "child_process";
 
 interface SshOptions {
   user?: string;
+  /** Connect to local Docker container */
+  local?: boolean;
 }
 
 export async function sshCommand(agentNameOrAlias: string, commandArgs: string[], opts: SshOptions): Promise<void> {
@@ -31,10 +33,16 @@ export async function sshCommand(agentNameOrAlias: string, commandArgs: string[]
     exitWithError((err as Error).message);
   }
 
+  // --local: override provider in memory, use separate stack
+  if (opts.local) {
+    manifest = { ...manifest, provider: "local" as const };
+  }
+
   // Select stack
-  const stackResult = selectOrCreateStack(manifest.stackName, cwd);
+  const stackName = opts.local ? `${manifest.stackName}-local` : manifest.stackName;
+  const stackResult = selectOrCreateStack(stackName, cwd);
   if (!stackResult.ok) {
-    exitWithError(`Could not select Pulumi stack "${manifest.stackName}".`);
+    exitWithError(`Could not select Pulumi stack "${stackName}".`);
   }
 
   // Resolve agent name/alias

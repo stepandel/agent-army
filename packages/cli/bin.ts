@@ -62,6 +62,7 @@ program
   .command("deploy")
   .description("Deploy agents with pulumi up")
   .option("-y, --yes", "Skip confirmation prompt")
+  .option("--local", "Run in local Docker containers (for testing)")
   .action(async (opts) => {
     await deployCommand(opts);
   });
@@ -70,6 +71,7 @@ program
   .command("status")
   .description("Show agent statuses from stack outputs")
   .option("--json", "Output as JSON")
+  .option("--local", "Show status of local Docker containers")
   .action(async (opts) => {
     await statusCommand(opts);
   });
@@ -78,6 +80,7 @@ program
   .command("ssh <agent>")
   .description("SSH to an agent by name or alias (juno, titus, scout)")
   .option("-u, --user <user>", "SSH user")
+  .option("--local", "Connect to local Docker container")
   .argument("[command...]", "Command to run on the agent")
   .action(async (agent: string, commandArgs: string[], opts) => {
     await sshCommand(agent, commandArgs, opts);
@@ -87,6 +90,7 @@ program
   .command("validate")
   .description("Health check agents via Tailscale SSH")
   .option("-t, --timeout <seconds>", "SSH timeout in seconds", "30")
+  .option("--local", "Validate local Docker containers")
   .action(async (opts) => {
     await validateCommand(opts);
   });
@@ -100,6 +104,7 @@ program
   .option("--openclaw", "Upgrade openclaw to latest + restart gateway")
   .option("--config-push", "Copy local openclaw.json to remote + restart gateway")
   .option("-a, --agent <name>", "Target a single agent (name, role, or alias)")
+  .option("--local", "Push to local Docker containers")
   .action(async (opts: PushOptions & { configPush?: boolean }) => {
     await pushCommand({
       skills: opts.skills,
@@ -108,6 +113,7 @@ program
       openclaw: opts.openclaw,
       pushConfig: opts.configPush,
       agent: opts.agent,
+      local: opts.local,
     });
   });
 
@@ -123,6 +129,7 @@ program
   .command("destroy")
   .description("Tear down all resources with safety confirmations")
   .option("-y, --yes", "Skip confirmation prompts (dangerous!)")
+  .option("--local", "Destroy local Docker containers only")
   .action(async (opts) => {
     await destroyCommand(opts);
   });

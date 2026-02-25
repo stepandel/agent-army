@@ -34,6 +34,8 @@ export interface PushOptions {
   pushConfig?: boolean;
   /** Filter to a single agent (name, role, or alias) */
   agent?: string;
+  /** Push to local Docker containers */
+  local?: boolean;
 }
 
 /** SSH options for non-interactive connections */
@@ -181,10 +183,16 @@ export const pushTool: ToolImplementation<PushOptions> = async (
   const cwd = getWorkspaceDir();
 
   // Load manifest
-  const manifest = requireManifest();
+  let manifest = requireManifest();
+
+  // --local: override provider in memory, use separate stack
+  if (options.local) {
+    manifest = { ...manifest, provider: "local" as const };
+  }
 
   // Select Pulumi stack to read tailnet config (use org-qualified name if organization is set)
-  const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);
+  const stackName = options.local ? `${manifest.stackName}-local` : manifest.stackName;
+  const pulumiStack = qualifiedStackName(stackName, manifest.organization);
   const stackResult = selectOrCreateStack(pulumiStack, cwd);
   if (!stackResult.ok) {
     throw new Error(`Could not select Pulumi stack "${pulumiStack}".`);
