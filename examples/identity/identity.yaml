@@ -28,3 +28,9 @@ templateVars:
   - TIMEZONE
   - WORKING_HOURS
   - USER_NOTES
+
+# Additional secrets not covered by plugins/deps above.
+# Each camelCase key becomes <ROLE>_SCREAMING_SNAKE_CASE in .env.
+# Uncomment to try:
+# requiredSecrets:
+#   - notionApiKey       # → RESEARCHER_NOTION_API_KEY
