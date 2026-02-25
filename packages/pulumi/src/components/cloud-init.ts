@@ -267,7 +267,7 @@ echo "Starting OpenClaw agent provisioning..."
 echo "Updating system packages..."
 apt-get update
 apt-get upgrade -y
-apt-get install -y unzip build-essential sudo
+apt-get install -y unzip build-essential sudo python3
 
 ${config.skipDocker ? "" : `# Install Docker
 echo "Installing Docker..."
