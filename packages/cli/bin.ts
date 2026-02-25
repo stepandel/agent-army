@@ -43,8 +43,8 @@ program
 
 program
   .command("init")
-  .description("Interactive wizard — configure infrastructure and agents (writes clawup.yaml + .env.example)")
-  .option("-y, --yes", "Skip overwrite confirmation if clawup.yaml exists")
+  .description("Configure infrastructure and agents, or refresh existing config from identity changes")
+  .option("-y, --yes", "Skip confirmation prompts")
   .action(async (opts) => {
     await initCommand(opts);
   });

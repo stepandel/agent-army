@@ -18,20 +18,16 @@ npx clawup init
 
 ### `clawup init`
 
-Interactive setup wizard for infrastructure and agent team configuration:
+Interactive setup wizard for infrastructure and agent team configuration.
 
-1. **Prerequisites check** — verifies Pulumi CLI, Node.js, cloud provider CLI, and Tailscale are installed
-2. **Cloud provider** — AWS or Hetzner Cloud
-3. **Region & instance type** — with cost estimates shown inline
-4. **Owner info** — name, timezone, working hours
-5. **Agent selection** — choose from built-in identities, point to a Git repo or local directory, or mix both
-6. **Summary & confirmation** — review config and estimated cost before proceeding
+**Fresh init** (no `clawup.yaml`): full interactive wizard — prerequisites, cloud provider, region, instance type, owner info, agent selection, summary & confirmation.
+
+**Repair mode** (existing `clawup.yaml`): re-fetches identities, updates secrets/plugins/deps from latest identity data, prompts only for new template variables, regenerates `.env.example`. Existing manifest values are preserved.
 
 Outputs a `clawup.yaml` manifest and `.env.example` in the current directory. No secrets are prompted — fill them in `.env` and run `clawup setup`.
 
 ```bash
-clawup init              # Interactive wizard
-clawup init -y           # Skip overwrite confirmation
+clawup init              # Interactive wizard (or repair if clawup.yaml exists)
 ```
 
 ### `clawup setup`
