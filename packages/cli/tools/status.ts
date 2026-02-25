@@ -208,7 +208,7 @@ export const statusTool: ToolImplementation<StatusOptions> = async (
   }
 
   // Table output
-  ui.log.step(`Stack: ${manifest.stackName} | Region: ${manifest.region}`);
+  ui.log.step(`Stack: ${manifest.stackName} | ${isLocal ? "Provider: Local Docker" : `Region: ${manifest.region}`}`);
   console.log();
 
   // Header

@@ -85,18 +85,18 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
   }, 0);
 
   // Show deployment summary
-  ui.note(
-    [
-      `Stack:    ${manifest.stackName}`,
-      `Region:   ${manifest.region}`,
-      ``,
-      `Agents (${manifest.agents.length}):`,
-      formatAgentList(manifest.agents),
-      ``,
-      `Estimated cost: ${formatCost(totalCost)}`,
-    ].join("\n"),
-    "Deployment Summary"
-  );
+  const isLocal = manifest.provider === "local";
+  const summaryLines = [
+    `Stack:    ${manifest.stackName}`,
+    isLocal ? `Provider: Local Docker` : `Region:   ${manifest.region}`,
+    ``,
+    `Agents (${manifest.agents.length}):`,
+    formatAgentList(manifest.agents),
+  ];
+  if (!isLocal) {
+    summaryLines.push(``, `Estimated cost: ${formatCost(totalCost)}`);
+  }
+  ui.note(summaryLines.join("\n"), "Deployment Summary");
 
   // Confirm deployment
   if (!options.yes) {

@@ -81,7 +81,7 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
       ? "Hetzner servers"
       : "EC2 instances";
   const infraLabel = isLocal
-    ? "Docker volumes and networks"
+    ? "Docker networks"
     : manifestProvider === "hetzner"
       ? "Firewall rules"
       : "VPC, subnet, and security group";
@@ -97,8 +97,8 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
 
   ui.note(
     [
-      `Stack:  ${manifest.stackName}`,
-      `Region: ${manifest.region}`,
+      `Stack:    ${manifest.stackName}`,
+      isLocal ? `Provider: Local Docker` : `Region:   ${manifest.region}`,
       ``,
       `Agents (${manifest.agents.length}):`,
       formatAgentList(manifest.agents),

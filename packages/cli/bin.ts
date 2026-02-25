@@ -121,6 +121,7 @@ program
   .command("redeploy")
   .description("Update agents in-place without destroying infrastructure")
   .option("-y, --yes", "Skip confirmation prompt")
+  .option("-l, --local", "Redeploy local Docker containers")
   .action(async (opts) => {
     await redeployCommand(opts);
   });
