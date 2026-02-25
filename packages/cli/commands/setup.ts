@@ -448,17 +448,20 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
   setConfig("provider", manifest.provider, false, cwd);
   if (manifest.provider === "aws") {
     setConfig("aws:region", manifest.region, false, cwd);
-  } else {
+  } else if (manifest.provider === "hetzner") {
     setConfig("hetzner:location", manifest.region, false, cwd);
     if (resolvedSecrets.global.hcloudToken) {
       setConfig("hcloud:token", resolvedSecrets.global.hcloudToken, true, cwd);
     }
   }
+  // Local provider doesn't need region/cloud config
   setConfig("anthropicApiKey", resolvedSecrets.global.anthropicApiKey, true, cwd);
-  setConfig("tailscaleAuthKey", resolvedSecrets.global.tailscaleAuthKey, true, cwd);
-  setConfig("tailnetDnsName", resolvedSecrets.global.tailnetDnsName, false, cwd);
-  if (resolvedSecrets.global.tailscaleApiKey) {
-    setConfig("tailscaleApiKey", resolvedSecrets.global.tailscaleApiKey, true, cwd);
+  if (manifest.provider !== "local") {
+    setConfig("tailscaleAuthKey", resolvedSecrets.global.tailscaleAuthKey, true, cwd);
+    setConfig("tailnetDnsName", resolvedSecrets.global.tailnetDnsName, false, cwd);
+    if (resolvedSecrets.global.tailscaleApiKey) {
+      setConfig("tailscaleApiKey", resolvedSecrets.global.tailscaleApiKey, true, cwd);
+    }
   }
   setConfig("instanceType", manifest.instanceType, false, cwd);
   setConfig("ownerName", manifest.ownerName, false, cwd);

@@ -37,6 +37,7 @@ export const AGENT_ALIASES: Record<string, string> = {
 export const PROVIDERS = [
   { value: "aws", label: "AWS", hint: "Amazon Web Services EC2 instances" },
   { value: "hetzner", label: "Hetzner", hint: "Hetzner Cloud servers (EU/US)" },
+  { value: "local", label: "Local Docker", hint: "Run agents in Docker containers locally (for testing)" },
 ] as const;
 
 /** Common AWS regions for selection */
@@ -108,6 +109,19 @@ export const HETZNER_COST_ESTIMATES: Record<string, number> = {
   cpx31: 9,
   cpx41: 16,
 };
+
+/** Estimated monthly cost for local Docker (always free) */
+export const LOCAL_COST_ESTIMATES: Record<string, number> = {
+  local: 0,
+};
+
+/**
+ * Build the Docker container name for a local agent.
+ * Example: "clawup-dev-agent-pm"
+ */
+export function dockerContainerName(stackName: string, agentName: string): string {
+  return `clawup-${stackName}-${agentName}`;
+}
 
 /** Manifest filename */
 export const MANIFEST_FILE = "clawup.yaml";

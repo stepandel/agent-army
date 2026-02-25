@@ -8,7 +8,7 @@ import path from "path";
 import os from "os";
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { requireManifest } from "../lib/config";
-import { SSH_USER, tailscaleHostname, CODING_AGENT_REGISTRY, DEP_REGISTRY, PLUGIN_REGISTRY } from "@clawup/core";
+import { SSH_USER, tailscaleHostname, dockerContainerName, CODING_AGENT_REGISTRY, DEP_REGISTRY, PLUGIN_REGISTRY } from "@clawup/core";
 import type { IdentityManifest } from "@clawup/core";
 import { fetchIdentitySync } from "@clawup/core/identity";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
@@ -56,6 +56,20 @@ function runSshCheck(
 }
 
 /**
+ * Run a Docker exec check command
+ */
+function runDockerCheck(
+  exec: ExecAdapter,
+  containerName: string,
+  command: string,
+): { ok: boolean; output: string } {
+  const result = exec.capture("docker", [
+    "exec", containerName, "bash", "-c", command,
+  ]);
+  return { ok: result.exitCode === 0, output: result.stdout || result.stderr };
+}
+
+/**
  * Validate tool implementation
  */
 export const validateTool: ToolImplementation<ValidateOptions> = async (
@@ -65,8 +79,6 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
   const { ui, exec } = runtime;
 
   ui.intro("Clawup");
-
-  requireTailscale();
 
   // Ensure workspace is set up (no-op in dev mode)
   const wsResult = ensureWorkspace();
@@ -96,11 +108,17 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
     }
   }
 
-  // Get tailnet
-  const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
-  if (!tailnetDnsName) {
-    ui.log.error("Could not determine tailnet DNS name from Pulumi config.");
-    process.exit(1);
+  const isLocal = manifest.provider === "local";
+
+  // Get tailnet (not needed for local Docker)
+  let tailnetDnsName: string | undefined;
+  if (!isLocal) {
+    requireTailscale();
+    tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd) ?? undefined;
+    if (!tailnetDnsName) {
+      ui.log.error("Could not determine tailnet DNS name from Pulumi config.");
+      process.exit(1);
+    }
   }
 
   // Load identity manifests for each agent
@@ -122,36 +140,56 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
   console.log();
 
   for (const agent of manifest.agents) {
-    const tsHost = tailscaleHostname(manifest.stackName, agent.name);
-    const host = `${tsHost}.${tailnetDnsName}`;
+    const containerName = isLocal ? dockerContainerName(manifest.stackName, agent.name) : "";
+    const tsHost = isLocal ? "" : tailscaleHostname(manifest.stackName, agent.name);
+    const host = isLocal ? containerName : `${tsHost}.${tailnetDnsName}`;
+
+    // Helper that dispatches to Docker or SSH
+    const runCheck = (command: string) =>
+      isLocal ? runDockerCheck(exec, containerName, command) : runSshCheck(exec, host, command, timeout);
+
     const checks: CheckResult["checks"] = [];
     const identityManifest = identityMap[agent.name];
+    const displayHost = isLocal ? containerName : host;
 
-    ui.log.info(`${pc.bold(agent.displayName)} (${agent.role}) — ${host}`);
+    ui.log.info(`${pc.bold(agent.displayName)} (${agent.role}) — ${displayHost}`);
 
-    // Check 1: SSH connectivity
-    const ssh = runSshCheck(exec, host, "echo 'SSH OK'", timeout);
-    checks.push({
-      name: "SSH connectivity",
-      passed: ssh.ok,
-      detail: ssh.ok ? "connected" : "connection failed",
-    });
+    // Check 1: Connectivity (SSH for cloud, container running for local)
+    let connected: boolean;
+    if (isLocal) {
+      const inspect = exec.capture("docker", ["inspect", "-f", "{{.State.Running}}", containerName]);
+      connected = inspect.exitCode === 0 && inspect.stdout?.trim() === "true";
+      checks.push({
+        name: "Container running",
+        passed: connected,
+        detail: connected ? "running" : "not running",
+      });
+    } else {
+      const ssh = runSshCheck(exec, host, "echo 'SSH OK'", timeout);
+      connected = ssh.ok;
+      checks.push({
+        name: "SSH connectivity",
+        passed: ssh.ok,
+        detail: ssh.ok ? "connected" : "connection failed",
+      });
+    }
 
-    if (ssh.ok) {
-      // Check 2: OpenClaw gateway running (systemd user service)
-      const gateway = runSshCheck(exec, host, "systemctl --user is-active openclaw-gateway", timeout);
+    if (connected) {
+      // Check 2: OpenClaw gateway running
+      const gatewayCmd = isLocal
+        ? "pgrep -f 'openclaw' > /dev/null && echo active || echo inactive"
+        : "systemctl --user is-active openclaw-gateway";
+      const gateway = runCheck(gatewayCmd);
+      const gatewayRunning = gateway.ok && (isLocal ? gateway.output.trim().includes("active") : true);
       checks.push({
         name: "OpenClaw gateway",
-        passed: gateway.ok,
-        detail: gateway.ok ? "running" : gateway.output || "not running",
+        passed: gatewayRunning,
+        detail: gatewayRunning ? "running" : gateway.output || "not running",
       });
 
       // Check 3: Workspace files present
-      const workspace = runSshCheck(
-        exec,
-        host,
-        `test -f /home/${SSH_USER}/.openclaw/workspace/SOUL.md && test -f /home/${SSH_USER}/.openclaw/workspace/HEARTBEAT.md && echo 'OK'`,
-        timeout
+      const workspace = runCheck(
+        `test -f /home/${SSH_USER}/.openclaw/workspace/SOUL.md && test -f /home/${SSH_USER}/.openclaw/workspace/HEARTBEAT.md && echo 'OK'`
       );
       checks.push({
         name: "Workspace files",
@@ -170,11 +208,8 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
             const cmd = agentEntry.cliBackend.command;
 
             // Version check
-            const versionCheck = runSshCheck(
-              exec,
-              host,
-              `/home/${SSH_USER}/.local/bin/${cmd} --version 2>/dev/null || ${cmd} --version 2>/dev/null || echo 'not installed'`,
-              timeout
+            const versionCheck = runCheck(
+              `/home/${SSH_USER}/.local/bin/${cmd} --version 2>/dev/null || ${cmd} --version 2>/dev/null || echo 'not installed'`
             );
             const version = versionCheck.output.trim();
             const installed = versionCheck.ok && !version.includes("not installed");
@@ -188,11 +223,8 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
             if (installed && Object.keys(agentEntry.secrets).length > 0) {
               const secretEnvVars = Object.values(agentEntry.secrets).map((s) => s.envVar);
               const grepPattern = secretEnvVars.map((v) => `"${v}"`).join("|");
-              const credCheck = runSshCheck(
-                exec,
-                host,
-                `grep -E '(${grepPattern})' /home/${SSH_USER}/.openclaw/openclaw.json | head -1`,
-                timeout
+              const credCheck = runCheck(
+                `grep -E '(${grepPattern})' /home/${SSH_USER}/.openclaw/openclaw.json | head -1`
               );
 
               // Find first configured secret (OR logic — any one is sufficient)
@@ -204,7 +236,7 @@ export const validateTool: ToolImplementation<ValidateOptions> = async (
 export ${foundEnvVar}=$(jq -r '.env.${foundEnvVar}' /home/${SSH_USER}/.openclaw/openclaw.json)
 timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
                 `.trim();
-                const authTest = runSshCheck(exec, host, testScript, timeout + 15);
+                const authTest = runCheck(testScript);
                 const authWorks = authTest.ok &&
                   !authTest.output.includes("Invalid API key") &&
                   !authTest.output.includes("not authenticated");
@@ -234,11 +266,8 @@ timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
 
           // Binary check (only if installScript is non-empty)
           if (depEntry.installScript) {
-            const depVersion = runSshCheck(
-              exec,
-              host,
-              `${dep} --version 2>/dev/null | head -n1 || echo 'not installed'`,
-              timeout
+            const depVersion = runCheck(
+              `${dep} --version 2>/dev/null | head -n1 || echo 'not installed'`
             );
             const depVersionStr = depVersion.output.trim();
             const depInstalled = depVersion.ok && !depVersionStr.includes("not installed");
@@ -251,12 +280,7 @@ timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
 
           // Secret checks
           for (const secret of Object.values(depEntry.secrets)) {
-            const secretCheck = runSshCheck(
-              exec,
-              host,
-              secret.checkCommand,
-              timeout
-            );
+            const secretCheck = runCheck(secret.checkCommand);
             checks.push({
               name: `${depEntry.displayName} auth`,
               passed: secretCheck.ok,
@@ -278,11 +302,8 @@ timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
             const pyPath = plugin === "slack"
               ? `c.get('channels',{}).get('slack',{}).get('${key}')`
               : `c.get('plugins',{}).get('entries',{}).get('${plugin}',{}).get('config',{}).get('${key}')`;
-            const secretCheck = runSshCheck(
-              exec,
-              host,
-              `python3 -c "import json,sys;c=json.load(open('/home/${SSH_USER}/.openclaw/openclaw.json'));sys.exit(0 if ${pyPath} else 1)"`,
-              timeout
+            const secretCheck = runCheck(
+              `python3 -c "import json,sys;c=json.load(open('/home/${SSH_USER}/.openclaw/openclaw.json'));sys.exit(0 if ${pyPath} else 1)"`
             );
             checks.push({
               name: `${plugin} secret (${envVar})`,
@@ -293,11 +314,8 @@ timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
         }
       } else {
         // Fallback: no identity manifest — keep hardcoded checks
-        const claudeCode = runSshCheck(
-          exec,
-          host,
-          `/home/${SSH_USER}/.local/bin/claude --version 2>/dev/null || echo 'not installed'`,
-          timeout
+        const claudeCode = runCheck(
+          `/home/${SSH_USER}/.local/bin/claude --version 2>/dev/null || echo 'not installed'`
         );
         const claudeVersion = claudeCode.output.trim();
         const claudeInstalled = claudeCode.ok && !claudeVersion.includes("not installed");
@@ -308,11 +326,8 @@ timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
         });
 
         if (claudeInstalled) {
-          const credCheck = runSshCheck(
-            exec,
-            host,
-            `grep -E '"(ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)"' /home/${SSH_USER}/.openclaw/openclaw.json | head -1`,
-            timeout
+          const credCheck = runCheck(
+            `grep -E '"(ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)"' /home/${SSH_USER}/.openclaw/openclaw.json | head -1`
           );
           const hasApiKey = credCheck.output.includes("ANTHROPIC_API_KEY");
           const hasOAuthToken = credCheck.output.includes("CLAUDE_CODE_OAUTH_TOKEN");
@@ -325,7 +340,7 @@ timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
 export ${envVar}=$(jq -r '.env.${envVar}' /home/${SSH_USER}/.openclaw/openclaw.json)
 timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
             `.trim();
-            const authTest = runSshCheck(exec, host, testScript, timeout + 15);
+            const authTest = runCheck(testScript);
             const authWorks = authTest.ok &&
               !authTest.output.includes("Invalid API key") &&
               !authTest.output.includes("not authenticated");
@@ -343,11 +358,8 @@ timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
           }
         }
 
-        const ghVersion = runSshCheck(
-          exec,
-          host,
-          `gh --version 2>/dev/null | head -n1 || echo 'not installed'`,
-          timeout
+        const ghVersion = runCheck(
+          `gh --version 2>/dev/null | head -n1 || echo 'not installed'`
         );
         const ghVersionStr = ghVersion.output.trim();
         const ghInstalled = ghVersion.ok && !ghVersionStr.includes("not installed");
@@ -358,11 +370,8 @@ timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
         });
 
         if (ghInstalled) {
-          const ghAuth = runSshCheck(
-            exec,
-            host,
-            `gh auth status 2>&1 | head -n2 || echo 'not authenticated'`,
-            timeout
+          const ghAuth = runCheck(
+            `gh auth status 2>&1 | head -n2 || echo 'not authenticated'`
           );
           const ghAuthStr = ghAuth.output.trim();
           const ghAuthenticated = ghAuth.ok &&
@@ -376,26 +385,27 @@ timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
         }
       }
     } else {
-      // SSH failed — generate skip entries dynamically
-      checks.push({ name: "OpenClaw gateway", passed: false, detail: "skipped (no SSH)" });
-      checks.push({ name: "Workspace files", passed: false, detail: "skipped (no SSH)" });
+      // Connection failed — generate skip entries dynamically
+      const skipReason = isLocal ? "skipped (container not running)" : "skipped (no SSH)";
+      checks.push({ name: "OpenClaw gateway", passed: false, detail: skipReason });
+      checks.push({ name: "Workspace files", passed: false, detail: skipReason });
 
       if (identityManifest) {
         if (identityManifest.codingAgent) {
           const agentEntry = CODING_AGENT_REGISTRY[identityManifest.codingAgent];
           if (agentEntry) {
-            checks.push({ name: `${agentEntry.displayName} CLI`, passed: false, detail: "skipped (no SSH)" });
-            checks.push({ name: `${agentEntry.displayName} auth`, passed: false, detail: "skipped (no SSH)" });
+            checks.push({ name: `${agentEntry.displayName} CLI`, passed: false, detail: skipReason });
+            checks.push({ name: `${agentEntry.displayName} auth`, passed: false, detail: skipReason });
           }
         }
         for (const dep of identityManifest.deps ?? []) {
           const depEntry = DEP_REGISTRY[dep];
           if (depEntry) {
             if (depEntry.installScript) {
-              checks.push({ name: depEntry.displayName, passed: false, detail: "skipped (no SSH)" });
+              checks.push({ name: depEntry.displayName, passed: false, detail: skipReason });
             }
             for (const _secret of Object.values(depEntry.secrets)) {
-              checks.push({ name: `${depEntry.displayName} auth`, passed: false, detail: "skipped (no SSH)" });
+              checks.push({ name: `${depEntry.displayName} auth`, passed: false, detail: skipReason });
             }
           }
         }
@@ -403,15 +413,15 @@ timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
           const pluginEntry = PLUGIN_REGISTRY[plugin];
           if (pluginEntry) {
             for (const [_key, envVar] of Object.entries(pluginEntry.secretEnvVars)) {
-              checks.push({ name: `${plugin} secret (${envVar})`, passed: false, detail: "skipped (no SSH)" });
+              checks.push({ name: `${plugin} secret (${envVar})`, passed: false, detail: skipReason });
             }
           }
         }
       } else {
-        checks.push({ name: "Claude Code CLI", passed: false, detail: "skipped (no SSH)" });
-        checks.push({ name: "Claude Code auth", passed: false, detail: "skipped (no SSH)" });
-        checks.push({ name: "GitHub CLI", passed: false, detail: "skipped (no SSH)" });
-        checks.push({ name: "GitHub CLI auth", passed: false, detail: "skipped (no SSH)" });
+        checks.push({ name: "Claude Code CLI", passed: false, detail: skipReason });
+        checks.push({ name: "Claude Code auth", passed: false, detail: skipReason });
+        checks.push({ name: "GitHub CLI", passed: false, detail: skipReason });
+        checks.push({ name: "GitHub CLI auth", passed: false, detail: skipReason });
       }
     }
 

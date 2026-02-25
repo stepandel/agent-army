@@ -42,7 +42,7 @@ export const ClawupManifestSchema = z.object({
   stackName: z.string().min(1, "stackName is required"),
   /** Pulumi organization (e.g., "my-org"). When set, stack operations use org/stackName. */
   organization: z.string().optional(),
-  provider: z.enum(["aws", "hetzner"]),
+  provider: z.enum(["aws", "hetzner", "local"]),
   region: z.string().min(1, "region is required"),
   instanceType: z.string().min(1, "instanceType is required"),
   ownerName: z.string().min(1, "ownerName is required"),

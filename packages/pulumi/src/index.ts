@@ -16,7 +16,7 @@ import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
 import YAML from "yaml";
-import { OpenClawAgent, HetznerOpenClawAgent, PluginInstallConfig } from "./components";
+import { OpenClawAgent, HetznerOpenClawAgent, LocalDockerOpenClawAgent, PluginInstallConfig } from "./components";
 import type { BaseOpenClawAgentArgs, DepInstallConfig } from "./components";
 import { SharedVpc } from "./shared-vpc";
 import {
@@ -35,9 +35,16 @@ import * as os from "os";
 
 const config = new pulumi.Config();
 
+// Read provider early so we can conditionally load Tailscale config
+const configProvider = config.get("provider") ?? "aws";
+
 const anthropicApiKey = config.requireSecret("anthropicApiKey");
-const tailscaleAuthKey = config.requireSecret("tailscaleAuthKey");
-const tailnetDnsName = config.require("tailnetDnsName");
+const tailscaleAuthKey = configProvider === "local"
+  ? pulumi.secret("not-used-for-local")
+  : config.requireSecret("tailscaleAuthKey");
+const tailnetDnsName = configProvider === "local"
+  ? "localhost"
+  : config.require("tailnetDnsName");
 const instanceType = config.get("instanceType") ?? "t3.medium";
 const ownerName = config.get("ownerName") ?? "Boss";
 const timezone = config.get("timezone") ?? "PST (America/Los_Angeles)";
@@ -107,8 +114,8 @@ if (fs.existsSync(pluginConfigsDir)) {
 const provider = manifest.provider ?? "aws";
 
 // Validate provider
-if (provider !== "aws" && provider !== "hetzner") {
-  throw new Error(`Unsupported provider: ${provider}. Supported providers are: aws, hetzner`);
+if (provider !== "aws" && provider !== "hetzner" && provider !== "local") {
+  throw new Error(`Unsupported provider: ${provider}. Supported providers are: aws, hetzner, local`);
 }
 
 // -----------------------------------------------------------------------------
@@ -387,6 +394,8 @@ function buildBaseAgentArgs(agent: AgentDefinition): {
   };
 }
 
+let localPortOffset = 0;
+
 for (const agent of manifest.agents) {
   const { baseArgs, agentVolumeSize } = buildBaseAgentArgs(agent);
 
@@ -409,6 +418,26 @@ for (const agent of manifest.agents) {
       tailscaleUrl: agentResource.tailscaleUrl,
       gatewayToken: agentResource.gatewayToken,
       instanceId: agentResource.instanceId,
+      publicIp: agentResource.publicIp,
+      sshPrivateKey: agentResource.sshPrivateKey,
+    };
+  } else if (provider === "local") {
+    const hostPort = 18789 + localPortOffset++;
+    const agentResource = new LocalDockerOpenClawAgent(agent.name, {
+      ...baseArgs,
+      gatewayPort: hostPort,
+      enableSandbox: false,
+      labels: {
+        ...baseTags,
+        AgentRole: agent.role,
+        AgentName: agent.displayName,
+      },
+    });
+
+    agentOutputs[agent.role] = {
+      tailscaleUrl: agentResource.tailscaleUrl,
+      gatewayToken: agentResource.gatewayToken,
+      instanceId: agentResource.containerId,
       publicIp: agentResource.publicIp,
       sshPrivateKey: agentResource.sshPrivateKey,
     };

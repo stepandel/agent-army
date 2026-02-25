@@ -11,7 +11,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { requireManifest } from "../lib/config";
-import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "@clawup/core";
+import { AGENT_ALIASES, SSH_USER, tailscaleHostname, dockerContainerName } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { getConfig, selectOrCreateStack, qualifiedStackName } from "../lib/pulumi";
 import type { AgentDefinition } from "@clawup/core";
@@ -101,6 +101,53 @@ function scpFile(
 }
 
 /**
+ * Run a command inside a Docker container, returning success/failure and output.
+ */
+function dockerExec(
+  exec: ExecAdapter,
+  containerName: string,
+  command: string,
+): { ok: boolean; output: string } {
+  const result = exec.capture("docker", [
+    "exec", containerName, "bash", "-c", command,
+  ]);
+  return { ok: result.exitCode === 0, output: result.stdout || result.stderr };
+}
+
+/**
+ * Copy a local file into a Docker container.
+ */
+function dockerCp(
+  exec: ExecAdapter,
+  localFile: string,
+  containerName: string,
+  remotePath: string,
+): { ok: boolean; output: string } {
+  const result = exec.capture("docker", [
+    "cp", localFile, `${containerName}:${remotePath}`,
+  ]);
+  return { ok: result.exitCode === 0, output: result.stdout || result.stderr };
+}
+
+/**
+ * Sync a local directory into a Docker container (rm + cp).
+ */
+function dockerSyncDir(
+  exec: ExecAdapter,
+  localDir: string,
+  containerName: string,
+  remoteDir: string,
+): { ok: boolean; output: string } {
+  // Remove existing remote dir contents first
+  exec.capture("docker", ["exec", containerName, "bash", "-c", `rm -rf ${remoteDir}/*`]);
+  // Copy local dir into container
+  const result = exec.capture("docker", [
+    "cp", `${localDir}/.`, `${containerName}:${remoteDir}/`,
+  ]);
+  return { ok: result.exitCode === 0, output: result.stdout || result.stderr };
+}
+
+/**
  * Resolve an agent query (name, role, alias, displayName) against the manifest.
  */
 function findAgent(agents: AgentDefinition[], query: string): AgentDefinition | undefined {
@@ -143,9 +190,11 @@ export const pushTool: ToolImplementation<PushOptions> = async (
     throw new Error(`Could not select Pulumi stack "${pulumiStack}".`);
   }
 
-  // Get tailnet DNS name
-  const tailnetDnsName = getConfig("tailnetDnsName", cwd);
-  if (!tailnetDnsName) {
+  const isLocal = manifest.provider === "local";
+
+  // Get tailnet DNS name (not needed for local)
+  const tailnetDnsName = isLocal ? null : getConfig("tailnetDnsName", cwd);
+  if (!isLocal && !tailnetDnsName) {
     throw new Error("Could not determine tailnet DNS name from Pulumi config.");
   }
 
@@ -187,10 +236,20 @@ export const pushTool: ToolImplementation<PushOptions> = async (
   let allOk = true;
 
   for (const agent of targetAgents) {
-    const tsHost = tailscaleHostname(manifest.stackName, agent.name);
-    const host = `${tsHost}.${tailnetDnsName}`;
+    const containerName = isLocal ? dockerContainerName(manifest.stackName, agent.name) : "";
+    const tsHost = isLocal ? "" : tailscaleHostname(manifest.stackName, agent.name);
+    const host = isLocal ? containerName : `${tsHost}.${tailnetDnsName}`;
 
-    ui.log.info(`${pc.bold(agent.displayName)} (${agent.role}) — ${host}`);
+    // Helper wrappers that dispatch to Docker or SSH
+    const remoteExec = (command: string) =>
+      isLocal ? dockerExec(exec, containerName, command) : sshExec(exec, host, command);
+    const remoteCp = (localFile: string, remotePath: string) =>
+      isLocal ? dockerCp(exec, localFile, containerName, remotePath) : scpFile(exec, localFile, host, remotePath);
+    const remoteSync = (localDir: string, remoteDir: string) =>
+      isLocal ? dockerSyncDir(exec, localDir, containerName, remoteDir) : rsyncDir(exec, localDir, host, remoteDir);
+
+    const displayHost = isLocal ? containerName : host;
+    ui.log.info(`${pc.bold(agent.displayName)} (${agent.role}) — ${displayHost}`);
 
     let needsRestart = false;
 
@@ -201,7 +260,7 @@ export const pushTool: ToolImplementation<PushOptions> = async (
         const identity = fetchIdentitySync(agent.identity, identityCacheDir);
 
         // Ensure remote workspace dir exists
-        sshExec(exec, host, `mkdir -p ${REMOTE_WORKSPACE}`);
+        remoteExec(`mkdir -p ${REMOTE_WORKSPACE}`);
 
         // Write identity files to a temp dir for transfer
         const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "push-identity-"));
@@ -218,7 +277,7 @@ export const pushTool: ToolImplementation<PushOptions> = async (
           let wsOk = true;
           for (const relPath of topFiles) {
             const localFile = path.join(tmpDir, relPath);
-            const result = scpFile(exec, localFile, host, `${REMOTE_WORKSPACE}/${relPath}`);
+            const result = remoteCp(localFile, `${REMOTE_WORKSPACE}/${relPath}`);
             if (!result.ok) {
               console.log(`    ${pc.red("FAIL")}  workspace file ${relPath}: ${result.output.substring(0, 100)}`);
               wsOk = false;
@@ -234,8 +293,8 @@ export const pushTool: ToolImplementation<PushOptions> = async (
         if (doSkills) {
           const skillsLocalDir = path.join(tmpDir, "skills");
           if (fs.existsSync(skillsLocalDir)) {
-            sshExec(exec, host, `mkdir -p ${REMOTE_SKILLS}`);
-            const result = rsyncDir(exec, skillsLocalDir, host, REMOTE_SKILLS);
+            remoteExec(`mkdir -p ${REMOTE_SKILLS}`);
+            const result = remoteSync(skillsLocalDir, REMOTE_SKILLS);
             if (result.ok) {
               console.log(`    ${pc.green("OK")}  skills synced`);
             } else {
@@ -248,7 +307,7 @@ export const pushTool: ToolImplementation<PushOptions> = async (
           const { public: publicSkills } = classifySkills(identity.manifest.skills);
           for (const skill of publicSkills) {
             const cmd = `export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && clawhub install ${skill.slug}`;
-            const result = sshExec(exec, host, cmd);
+            const result = remoteExec(cmd);
             if (result.ok) {
               console.log(`    ${pc.green("OK")}  clawhub skill installed: ${skill.slug}`);
             } else {
@@ -263,7 +322,7 @@ export const pushTool: ToolImplementation<PushOptions> = async (
             for (const dep of resolved) {
               if (!dep.entry.postInstallScript) continue;
               const cmd = dep.entry.postInstallScript;
-              const result = sshExec(exec, host, cmd);
+              const result = remoteExec(cmd);
               if (result.ok) {
                 console.log(`    ${pc.green("OK")}  dep post-install: ${dep.name}`);
               } else {
@@ -285,7 +344,7 @@ export const pushTool: ToolImplementation<PushOptions> = async (
     // 3. Memory reset
     if (options.memoryReset) {
       const cmd = `rm -rf ${REMOTE_WORKSPACE}/memory ${REMOTE_WORKSPACE}/MEMORY.md`;
-      const result = sshExec(exec, host, cmd);
+      const result = remoteExec(cmd);
       if (result.ok) {
         console.log(`    ${pc.green("OK")}  memory reset`);
       } else {
@@ -297,7 +356,7 @@ export const pushTool: ToolImplementation<PushOptions> = async (
     // 4. OpenClaw upgrade
     if (options.openclaw) {
       const cmd = `npm install -g openclaw@latest 2>&1`;
-      const result = sshExec(exec, host, cmd);
+      const result = remoteExec(cmd);
       if (result.ok) {
         console.log(`    ${pc.green("OK")}  openclaw upgraded`);
         needsRestart = true;
@@ -309,22 +368,14 @@ export const pushTool: ToolImplementation<PushOptions> = async (
 
     // 5. Config push
     if (options.pushConfig) {
-      const localConfig = path.join(
-        `/home/${SSH_USER}/.openclaw`,
-        "openclaw.json"
-      );
-      // The local config is on the operator's machine at ~/.openclaw/openclaw.json
-      // However, this should reference the operator's local file
       const operatorConfig = path.join(
         process.env.HOME ?? "",
         ".openclaw",
         "openclaw.json"
       );
       if (fs.existsSync(operatorConfig)) {
-        const result = scpFile(
-          exec,
+        const result = remoteCp(
           operatorConfig,
-          host,
           `/home/${SSH_USER}/.openclaw/openclaw.json`
         );
         if (result.ok) {
@@ -342,7 +393,10 @@ export const pushTool: ToolImplementation<PushOptions> = async (
 
     // 6. Restart gateway if needed
     if (needsRestart) {
-      const result = sshExec(exec, host, "systemctl --user restart openclaw-gateway");
+      const restartCmd = isLocal
+        ? "kill -HUP $(pgrep -f 'openclaw daemon') 2>/dev/null || true"
+        : "systemctl --user restart openclaw-gateway";
+      const result = remoteExec(restartCmd);
       if (result.ok) {
         console.log(`    ${pc.green("OK")}  gateway restarted`);
       } else {

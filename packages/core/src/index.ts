@@ -23,6 +23,7 @@ export {
   CONFIG_DIR,
   COST_ESTIMATES,
   HETZNER_COST_ESTIMATES,
+  LOCAL_COST_ESTIMATES,
   HETZNER_LOCATIONS,
   HETZNER_SERVER_TYPES_EU,
   HETZNER_SERVER_TYPES_US,
@@ -37,6 +38,7 @@ export {
   hetznerServerTypes,
   slackAppManifest,
   tailscaleHostname,
+  dockerContainerName,
 } from "./constants";
 
 // Plugin registry

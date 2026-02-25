@@ -5,7 +5,7 @@
 import * as p from "@clack/prompts";
 import { requireManifest } from "../lib/config";
 import { getConfig, selectOrCreateStack } from "../lib/pulumi";
-import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "@clawup/core";
+import { AGENT_ALIASES, SSH_USER, tailscaleHostname, dockerContainerName } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { exitWithError } from "../lib/ui";
 import { requireTailscale } from "../lib/tailscale";
@@ -16,8 +16,6 @@ interface SshOptions {
 }
 
 export async function sshCommand(agentNameOrAlias: string, commandArgs: string[], opts: SshOptions): Promise<void> {
-  requireTailscale();
-
   // Ensure workspace is set up (no-op in dev mode)
   const wsResult = ensureWorkspace();
   if (!wsResult.ok) {
@@ -60,6 +58,29 @@ export async function sshCommand(agentNameOrAlias: string, commandArgs: string[]
       `Unknown agent: "${agentNameOrAlias}"\nValid identifiers (any of these work):\n  ${validNames}`
     );
   }
+
+  // Local provider: use docker exec instead of SSH
+  if (manifest.provider === "local") {
+    const containerName = dockerContainerName(manifest.stackName, agent.name);
+    const user = opts.user ?? SSH_USER;
+    p.log.info(`Connecting to ${agent.displayName} (${containerName})...`);
+
+    const dockerArgs = ["exec", "-it", "-u", user, containerName];
+    if (commandArgs.length > 0) {
+      dockerArgs.push("bash", "-c", commandArgs.join(" "));
+    } else {
+      dockerArgs.push("bash");
+    }
+
+    const child = spawn("docker", dockerArgs, { stdio: "inherit" });
+    child.on("close", (code) => {
+      process.exit(code ?? 0);
+    });
+    return;
+  }
+
+  // Cloud providers: use Tailscale SSH
+  requireTailscale();
 
   // Get tailnet DNS name
   const tailnetDnsName = getConfig("tailnetDnsName", cwd);

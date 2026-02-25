@@ -267,11 +267,14 @@ export function buildManifestSecrets(opts: SecretsBuilderOpts): ManifestSecrets 
 
   // Always required
   global.anthropicApiKey = "${env:ANTHROPIC_API_KEY}";
-  global.tailscaleAuthKey = "${env:TAILSCALE_AUTH_KEY}";
-  global.tailnetDnsName = "${env:TAILNET_DNS_NAME}";
 
-  // Optional global
-  global.tailscaleApiKey = "${env:TAILSCALE_API_KEY}";
+  if (opts.provider !== "local") {
+    global.tailscaleAuthKey = "${env:TAILSCALE_AUTH_KEY}";
+    global.tailnetDnsName = "${env:TAILNET_DNS_NAME}";
+
+    // Optional global
+    global.tailscaleApiKey = "${env:TAILSCALE_API_KEY}";
+  }
 
   if (opts.provider === "hetzner") {
     global.hcloudToken = "${env:HCLOUD_TOKEN}";

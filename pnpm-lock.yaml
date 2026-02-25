@@ -73,6 +73,9 @@ importers:
       '@pulumi/aws':
         specifier: ^6.0.0
         version: 6.83.2(typescript@5.9.3)
+      '@pulumi/docker':
+        specifier: ^4.0.0
+        version: 4.11.0(typescript@5.9.3)
       '@pulumi/hcloud':
         specifier: ^1.32.0
         version: 1.32.0(typescript@5.9.3)
@@ -929,6 +932,9 @@ packages:
 
   '@pulumi/aws@6.83.2':
     resolution: {integrity: sha512-FggAx+LxANUwD9KPlKy4U8uvVjhR8B6vw+doDq7zP3bRWz7CCCd4sXZT2k/ou0erZN78MTzOXYa1nsN0TBEDJg==}
+
+  '@pulumi/docker@4.11.0':
+    resolution: {integrity: sha512-NUXMCWL3VBtlclC4u7G9LcToCQGiR/wOuRdKHzAqbn0nzaVuPV3NlDZIz7CpcHL/mGGIQ00/HnLGCA8lC1kSFA==}
 
   '@pulumi/hcloud@1.32.0':
     resolution: {integrity: sha512-XarPd3Yez6+HxHx8BwX7eRKxqmGWLPvA9W+fvXs4XTZBgslwJqky9fxVat06xzKrYJQUp4AwithCM5TuO+gwCw==}
@@ -3558,6 +3564,10 @@ packages:
   scheduler@0.23.2:
     resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
 
+  semver@5.7.2:
+    resolution: {integrity: sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g==}
+    hasBin: true
+
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
     hasBin: true
@@ -4837,6 +4847,15 @@ snapshots:
     dependencies:
       '@pulumi/pulumi': 3.219.0(typescript@5.9.3)
       mime: 2.6.0
+    transitivePeerDependencies:
+      - supports-color
+      - ts-node
+      - typescript
+
+  '@pulumi/docker@4.11.0(typescript@5.9.3)':
+    dependencies:
+      '@pulumi/pulumi': 3.219.0(typescript@5.9.3)
+      semver: 5.7.2
     transitivePeerDependencies:
       - supports-color
       - ts-node
@@ -7484,6 +7503,8 @@ snapshots:
   scheduler@0.23.2:
     dependencies:
       loose-envify: 1.4.0
+
+  semver@5.7.2: {}
 
   semver@6.3.1: {}
 

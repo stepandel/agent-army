@@ -6,7 +6,7 @@
 
 import type { RuntimeAdapter, ToolImplementation } from "../adapters";
 import { requireManifest, syncManifestToProject } from "../lib/config";
-import { COST_ESTIMATES, HETZNER_COST_ESTIMATES } from "@clawup/core";
+import { COST_ESTIMATES, HETZNER_COST_ESTIMATES, LOCAL_COST_ESTIMATES } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { isTailscaleInstalled, isTailscaleRunning, cleanupTailscaleDevices, ensureMagicDns, ensureTailscaleFunnel } from "../lib/tailscale";
 import { getConfig, verifyStackOwnership, stampStackFingerprint } from "../lib/tool-helpers";
@@ -70,6 +70,7 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
 
   // Calculate estimated cost
   const totalCost = manifest.agents.reduce((sum, a) => {
+    if (manifest.provider === "local") return sum;
     const costs = manifest.provider === "hetzner" ? HETZNER_COST_ESTIMATES : COST_ESTIMATES;
       return sum + (costs[a.instanceType ?? manifest.instanceType] ?? 30);
   }, 0);
@@ -104,42 +105,45 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
   // Sync instanceType from manifest to Pulumi config
   exec.capture("pulumi", ["config", "set", "instanceType", manifest.instanceType], cwd);
 
-  // Clean up stale Tailscale devices before deploying
-  // This prevents duplicates when Pulumi replaces servers (create-before-delete)
-  const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
-  const tailscaleApiKey = getConfig(exec, "tailscaleApiKey", cwd);
+  // Tailscale setup (skip for local Docker provider)
+  if (manifest.provider !== "local") {
+    // Clean up stale Tailscale devices before deploying
+    // This prevents duplicates when Pulumi replaces servers (create-before-delete)
+    const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
+    const tailscaleApiKey = getConfig(exec, "tailscaleApiKey", cwd);
 
-  if (tailnetDnsName && tailscaleApiKey) {
-    const spinner = ui.spinner("Cleaning up stale Tailscale devices...");
-    const { cleaned, failed } = cleanupTailscaleDevices(
-      tailscaleApiKey, tailnetDnsName, manifest.stackName, manifest.agents
-    );
-    if (cleaned.length > 0) {
-      spinner.stop(`Removed ${cleaned.length} stale Tailscale device(s)`);
-    } else {
-      spinner.stop("No stale Tailscale devices found");
-    }
-    if (failed.length > 0) {
-      ui.log.warn(
-        `Could not remove some devices: ${failed.join(", ")}. Check https://login.tailscale.com/admin/machines`
+    if (tailnetDnsName && tailscaleApiKey) {
+      const spinner = ui.spinner("Cleaning up stale Tailscale devices...");
+      const { cleaned, failed } = cleanupTailscaleDevices(
+        tailscaleApiKey, tailnetDnsName, manifest.stackName, manifest.agents
       );
+      if (cleaned.length > 0) {
+        spinner.stop(`Removed ${cleaned.length} stale Tailscale device(s)`);
+      } else {
+        spinner.stop("No stale Tailscale devices found");
+      }
+      if (failed.length > 0) {
+        ui.log.warn(
+          `Could not remove some devices: ${failed.join(", ")}. Check https://login.tailscale.com/admin/machines`
+        );
+      }
     }
-  }
 
-  // Ensure MagicDNS is enabled (required for Tailscale hostname resolution)
-  if (tailscaleApiKey) {
-    const spinner = ui.spinner("Ensuring Tailscale MagicDNS is enabled...");
-    const magicDnsChanged = ensureMagicDns(tailscaleApiKey);
-    spinner.stop(magicDnsChanged ? "MagicDNS enabled" : "MagicDNS OK");
-  }
+    // Ensure MagicDNS is enabled (required for Tailscale hostname resolution)
+    if (tailscaleApiKey) {
+      const spinner = ui.spinner("Ensuring Tailscale MagicDNS is enabled...");
+      const magicDnsChanged = ensureMagicDns(tailscaleApiKey);
+      spinner.stop(magicDnsChanged ? "MagicDNS enabled" : "MagicDNS OK");
+    }
 
-  // Ensure Tailscale Funnel prerequisites (identity plugins may need webhooks)
-  if (tailscaleApiKey) {
-    const spinner = ui.spinner("Ensuring Tailscale Funnel prerequisites...");
-    const funnel = ensureTailscaleFunnel(tailscaleApiKey);
-    const changes: string[] = [];
-    if (funnel.funnelAcl) changes.push("Funnel ACL enabled");
-    spinner.stop(changes.length > 0 ? changes.join(", ") : "Funnel prerequisites OK");
+    // Ensure Tailscale Funnel prerequisites (identity plugins may need webhooks)
+    if (tailscaleApiKey) {
+      const spinner = ui.spinner("Ensuring Tailscale Funnel prerequisites...");
+      const funnel = ensureTailscaleFunnel(tailscaleApiKey);
+      const changes: string[] = [];
+      if (funnel.funnelAcl) changes.push("Funnel ACL enabled");
+      spinner.stop(changes.length > 0 ? changes.join(", ") : "Funnel prerequisites OK");
+    }
   }
 
   // Deploy
@@ -196,24 +200,29 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
     }
   }
 
-  // Remind user about Tailscale if not connected
-  if (!isTailscaleInstalled()) {
-    const hint =
-      process.platform === "darwin"
-        ? "Install from the Mac App Store or https://tailscale.com/download"
-        : "Install from https://tailscale.com/download";
-    ui.log.warn(
-      `Tailscale is required to connect to agents.\n  ${hint}\n  Then run: ${pc.cyan("tailscale up")}`
+  if (manifest.provider === "local") {
+    ui.log.info("Agents are running in local Docker containers.");
+    ui.outro("Run `clawup validate` to check agent health.");
+  } else {
+    // Remind user about Tailscale if not connected
+    if (!isTailscaleInstalled()) {
+      const hint =
+        process.platform === "darwin"
+          ? "Install from the Mac App Store or https://tailscale.com/download"
+          : "Install from https://tailscale.com/download";
+      ui.log.warn(
+        `Tailscale is required to connect to agents.\n  ${hint}\n  Then run: ${pc.cyan("tailscale up")}`
+      );
+    } else if (!isTailscaleRunning()) {
+      ui.log.warn(
+        `Tailscale is not running. Start it before validating agents.\n  Open the Tailscale app or run: ${pc.cyan("tailscale up")}`
+      );
+    }
+
+    ui.log.info(
+      `Run ${pc.cyan("clawup webhooks setup")} to configure Linear webhooks for your agents.`
     );
-  } else if (!isTailscaleRunning()) {
-    ui.log.warn(
-      `Tailscale is not running. Start it before validating agents.\n  Open the Tailscale app or run: ${pc.cyan("tailscale up")}`
-    );
+
+    ui.outro("Agents will be ready in 3-5 minutes. Run `clawup validate` to check.");
   }
-
-  ui.log.info(
-    `Run ${pc.cyan("clawup webhooks setup")} to configure Linear webhooks for your agents.`
-  );
-
-  ui.outro("Agents will be ready in 3-5 minutes. Run `clawup validate` to check.");
 };
