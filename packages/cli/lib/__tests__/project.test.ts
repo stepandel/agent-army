@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { MANIFEST_FILE } from "@clawup/core";
@@ -97,7 +97,8 @@ describe("getProjectRoot", () => {
   let originalCwd: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "get-project-root-test-"));
+    // realpathSync resolves macOS /var → /private/var symlink so paths match process.cwd()
+    tmpDir = realpathSync(mkdtempSync(join(tmpdir(), "get-project-root-test-")));
     originalCwd = process.cwd();
   });
 
