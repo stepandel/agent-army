@@ -246,10 +246,13 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
     }
   }
 
-  if (missingSecrets.length > 0) {
+  // linearUserUuid is auto-fetched from Linear API — don't require it in .env
+  const requiredMissing = missingSecrets.filter((m) => m.key !== "linearUserUuid");
+
+  if (requiredMissing.length > 0) {
     console.log();
     p.log.error("Missing secrets in .env:");
-    for (const m of missingSecrets) {
+    for (const m of requiredMissing) {
       const hint = getValidatorHint(m.key);
       const agentLabel = m.agent
         ? ` — Agent: ${agents.find((a) => a.name === m.agent)?.displayName ?? m.agent}`
