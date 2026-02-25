@@ -110,8 +110,9 @@ function dockerExec(
   containerName: string,
   command: string,
 ): { ok: boolean; output: string } {
+  const escaped = command.replace(/"/g, '\\"');
   const result = exec.capture("docker", [
-    "exec", containerName, "bash", "-c", command,
+    "exec", containerName, "bash", "-c", `"${escaped}"`,
   ]);
   return { ok: result.exitCode === 0, output: result.stdout || result.stderr };
 }
@@ -141,7 +142,7 @@ function dockerSyncDir(
   remoteDir: string,
 ): { ok: boolean; output: string } {
   // Remove existing remote dir contents first
-  exec.capture("docker", ["exec", containerName, "bash", "-c", `rm -rf ${remoteDir}/*`]);
+  exec.capture("docker", ["exec", containerName, "bash", "-c", `"rm -rf ${remoteDir}/*"`]);
   // Copy local dir into container
   const result = exec.capture("docker", [
     "cp", `${localDir}/.`, `${containerName}:${remoteDir}/`,

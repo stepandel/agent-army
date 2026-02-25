@@ -380,13 +380,15 @@ echo "============================================"
 echo "OpenClaw agent setup complete!"
 echo "============================================"
 
-# Start OpenClaw daemon in foreground (keeps container alive)
-echo "Starting OpenClaw daemon in foreground..."
+# Start OpenClaw gateway in foreground (keeps container alive)
+# Use "openclaw gateway" instead of "openclaw daemon start" because
+# daemon start requires systemctl which is unavailable in Docker.
+echo "Starting OpenClaw gateway in foreground..."
 exec su - ubuntu -c '
 export HOME=/home/ubuntu
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-exec openclaw daemon start
+exec openclaw gateway
 '` : `# Install daemon service AFTER config patch so gateway token matches
 echo "Installing OpenClaw daemon..."
 sudo -H -u ubuntu XDG_RUNTIME_DIR=/run/user/1000 bash -c '

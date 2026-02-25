@@ -80,8 +80,9 @@ function getGhAuthStatus(exec: ExecAdapter, host: string, timeout: number = 5): 
  * Run a command inside a Docker container (best effort)
  */
 function dockerExecVersion(exec: ExecAdapter, containerName: string, command: string): string {
+  const escaped = command.replace(/"/g, '\\"');
   const result = exec.capture("docker", [
-    "exec", containerName, "bash", "-c", command,
+    "exec", containerName, "bash", "-c", `"${escaped}"`,
   ]);
   if (result.exitCode === 0 && result.stdout?.trim()) {
     return result.stdout.trim();
