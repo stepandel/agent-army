@@ -114,26 +114,45 @@ export const deployTool: ToolImplementation<DeployOptions> = async (
   // Sync instanceType from manifest to Pulumi config
   exec.capture("pulumi", ["config", "set", "instanceType", manifest.instanceType], cwd);
 
-  // --local: auto-configure minimal Pulumi config (no `clawup setup` needed)
+  // --local: auto-configure by copying all config from the cloud stack
   if (options.local) {
+    const cloudStack = qualifiedStackName(manifest.stackName, manifest.organization);
+    const configResult = exec.capture("pulumi", ["config", "--json", "--show-secrets", "--stack", cloudStack], cwd);
+
+    if (configResult.exitCode === 0 && configResult.stdout?.trim()) {
+      try {
+        const cloudConfig = JSON.parse(configResult.stdout) as Record<string, { value: string; secret: boolean }>;
+        const spinner = ui.spinner("Copying config from cloud stack...");
+        let copied = 0;
+        for (const [key, entry] of Object.entries(cloudConfig)) {
+          // Skip Tailscale keys and cloud-specific config
+          if (key.includes("tailscale") || key.includes("tailnet") || key === "clawup:projectFingerprint") continue;
+          // Strip namespace prefix (e.g., "clawup:anthropicApiKey" → "anthropicApiKey")
+          const shortKey = key.includes(":") ? key.split(":").slice(1).join(":") : key;
+          setConfig(exec, shortKey, entry.value, cwd, entry.secret);
+          copied++;
+        }
+        spinner.stop(`Copied ${copied} config values from cloud stack`);
+      } catch {
+        ui.log.warn("Could not parse cloud stack config. Falling back to env var.");
+      }
+    } else {
+      // No cloud stack — fall back to ANTHROPIC_API_KEY env var
+      const anthropicKey = process.env.ANTHROPIC_API_KEY;
+      if (anthropicKey) {
+        setConfig(exec, "anthropicApiKey", anthropicKey, cwd, true);
+      } else {
+        ui.log.warn("No cloud stack found and ANTHROPIC_API_KEY not set. Run `clawup setup` first.");
+      }
+    }
+
+    // Override local-specific values
     setConfig(exec, "provider", "local", cwd);
     setConfig(exec, "instanceType", "local", cwd);
     if (manifest.ownerName) setConfig(exec, "ownerName", manifest.ownerName, cwd);
     if (manifest.timezone) setConfig(exec, "timezone", manifest.timezone, cwd);
     if (manifest.workingHours) setConfig(exec, "workingHours", manifest.workingHours, cwd);
     if (manifest.userNotes) setConfig(exec, "userNotes", manifest.userNotes, cwd);
-
-    // Try to get anthropicApiKey from the cloud stack config, then fall back to env var
-    const cloudStack = qualifiedStackName(manifest.stackName, manifest.organization);
-    const cloudKeyResult = exec.capture("pulumi", ["config", "get", "anthropicApiKey", "--stack", cloudStack], cwd);
-    const anthropicKey = cloudKeyResult.exitCode === 0 && cloudKeyResult.stdout?.trim()
-      ? cloudKeyResult.stdout.trim()
-      : process.env.ANTHROPIC_API_KEY;
-    if (anthropicKey) {
-      setConfig(exec, "anthropicApiKey", anthropicKey, cwd, true);
-    } else {
-      ui.log.warn("No anthropicApiKey found. Set ANTHROPIC_API_KEY env var or run `clawup setup` on the cloud stack first.");
-    }
   }
 
   // Tailscale setup (skip for local Docker provider)
