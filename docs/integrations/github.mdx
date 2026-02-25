@@ -41,17 +41,17 @@ For each agent:
 You can use the same token for all agents if you prefer simpler management. Separate tokens give you better audit trails per agent.
 </Tip>
 
-## Step 2: Provide Tokens During Init
+## Step 2: Add Tokens to `.env`
 
-The `clawup init` wizard prompts for each agent's GitHub token:
+Add each agent's GitHub token to your `.env` file using the `<ROLE>_GITHUB_TOKEN` pattern:
 
+```bash
+PM_GITHUB_TOKEN=ghp_XXXXXXXXXXXX
+ENG_GITHUB_TOKEN=github_pat_XXXXXXXXXXXX
+TESTER_GITHUB_TOKEN=ghp_XXXXXXXXXXXX
 ```
-? GitHub token for Juno (pm) ghp_XXXXXXXXXXXX
-? GitHub token for Titus (eng) github_pat_XXXXXXXXXXXX
-? GitHub token for Scout (tester) ghp_XXXXXXXXXXXX
-```
 
-Tokens are stored encrypted in Pulumi config as secrets (e.g., `pmGithubToken`, `engGithubToken`).
+When you run `clawup setup`, these are validated and stored encrypted in Pulumi config (e.g., `pmGithubToken`, `engGithubToken`).
 
 ## What Gets Installed
 

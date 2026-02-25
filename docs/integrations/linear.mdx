@@ -37,17 +37,17 @@ For each agent account:
 3. Click **"New API key"**
 4. Copy the key — it starts with `lin_api_`
 
-## Step 3: Provide Keys During Init
+## Step 3: Add Keys to `.env`
 
-The `clawup init` wizard prompts you for each agent's Linear API key:
+Add each agent's Linear API key to your `.env` file using the `<ROLE>_LINEAR_API_KEY` pattern:
 
+```bash
+PM_LINEAR_API_KEY=lin_api_XXXXXXXXXXXX
+ENG_LINEAR_API_KEY=lin_api_XXXXXXXXXXXX
+TESTER_LINEAR_API_KEY=lin_api_XXXXXXXXXXXX
 ```
-? Linear API key for Juno (pm) lin_api_XXXXXXXXXXXX
-? Linear API key for Titus (eng) lin_api_XXXXXXXXXXXX
-? Linear API key for Scout (tester) lin_api_XXXXXXXXXXXX
-```
 
-Keys are stored encrypted in Pulumi config as secrets (e.g., `pmLinearApiKey`, `engLinearApiKey`).
+When you run `clawup setup`, these are validated and stored encrypted in Pulumi config (e.g., `pmLinearApiKey`, `engLinearApiKey`).
 
 ## What Gets Installed
 
@@ -98,11 +98,11 @@ Each agent gets a webhook endpoint on your Tailscale network:
 https://<stack>-<agent-name>.<tailnet>/hooks/linear
 ```
 
-During `clawup init`, the CLI collects a **Linear webhook secret** per agent. You need to register the webhook URL in Linear:
+Each agent needs a **Linear webhook secret**. Add them to your `.env` file as `<ROLE>_LINEAR_WEBHOOK_SECRET`. You need to register the webhook URL in Linear:
 
 1. Go to **Linear Settings** > **API** > **Webhooks**
 2. Create a webhook pointing to the agent's endpoint URL
-3. Set the secret to match what you provided during init
+3. Copy the signing secret and add it to `.env`
 4. Enable the **Issues** event type
 
 <Tip>

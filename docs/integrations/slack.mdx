@@ -26,7 +26,7 @@ Repeat this for each agent (Juno, Titus, Scout).
 4. Paste the manifest for the agent you're setting up (expand below)
 
 <Tip>
-The `clawup init` wizard copies the correct manifest to your clipboard automatically when you reach the Slack setup step.
+Use the Slack app manifests below for each agent. Copy and paste them during app creation.
 </Tip>
 
 ### Slack App Manifests
@@ -243,16 +243,16 @@ The `clawup init` wizard copies the correct manifest to your clipboard automatic
 5. Click **"Generate"**
 6. Copy the token — it starts with `xapp-`
 
-## Step 4: Provide Tokens During Init
+## Step 4: Add Tokens to `.env`
 
-The `clawup init` wizard prompts for both tokens per agent:
+Add both tokens per agent to your `.env` file using the `<ROLE>_SLACK_BOT_TOKEN` and `<ROLE>_SLACK_APP_TOKEN` patterns:
 
+```bash
+PM_SLACK_BOT_TOKEN=xoxb-XXXXXXXXXXXX
+PM_SLACK_APP_TOKEN=xapp-XXXXXXXXXXXX
 ```
-? Slack Bot Token for Juno (pm) xoxb-XXXXXXXXXXXX
-? Slack App Token for Juno (pm) xapp-XXXXXXXXXXXX
-```
 
-Tokens are stored encrypted in Pulumi config as secrets (e.g., `pmSlackBotToken`, `pmSlackAppToken`).
+When you run `clawup setup`, these are validated and stored encrypted in Pulumi config (e.g., `pmSlackBotToken`, `pmSlackAppToken`).
 
 ## How Agents Use Slack
 

@@ -143,7 +143,7 @@ clawup config set volumeSize 50 -a scout       # Per-agent volume
 
 ### `clawup secrets set <key> <value>`
 
-Set a Pulumi secret without re-running `init`. Useful for adding or rotating API keys post-setup.
+Set a Pulumi secret directly. Useful for adding or rotating API keys post-setup.
 
 Global keys: `anthropicApiKey`, `tailscaleAuthKey`, `tailscaleApiKey`, `tailnetDnsName`, `braveApiKey`
 
