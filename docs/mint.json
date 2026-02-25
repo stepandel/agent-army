@@ -68,6 +68,7 @@
         "cli/init",
         "cli/setup",
         "cli/deploy",
+        "cli/redeploy",
         "cli/status",
         "cli/ssh",
         "cli/validate",

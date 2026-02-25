@@ -16,6 +16,7 @@ clawup deploy [options]
 | Option | Description |
 |--------|-------------|
 | `-y, --yes` | Skip confirmation prompt |
+| `-l, --local` | Deploy to local Docker containers instead of cloud |
 
 ## What It Does
 
@@ -25,6 +26,16 @@ clawup deploy [options]
 4. Bootstraps each agent with OpenClaw and configured tools
 5. Connects agents to your Tailscale network
 
+## Local Docker Mode
+
+Use `--local` to run agents in local Docker containers for testing:
+
+```bash
+clawup deploy --local
+```
+
+This creates a separate Pulumi stack (`<stackName>-local`), copies config from your cloud stack (skipping Tailscale keys), and runs agents locally. No cloud resources are created.
+
 ## Examples
 
 ```bash
@@ -33,6 +44,9 @@ clawup deploy
 
 # Deploy without confirmation
 clawup deploy --yes
+
+# Deploy to local Docker containers
+clawup deploy --local --yes
 ```
 
 <Note>

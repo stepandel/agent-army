@@ -196,16 +196,17 @@ Run `clawup --help` for the full list.
 | `clawup init` | Generate clawup.yaml scaffold (or refresh from identity changes) |
 | `clawup setup` | Validate secrets from `.env` and configure Pulumi |
 | `clawup deploy` | Deploy agents (`pulumi up` under the hood) |
-| `clawup deploy -y` | Deploy without confirmation prompt |
+| `clawup deploy --local` | Deploy to local Docker containers |
 | `clawup status` | Show agent statuses and outputs |
-| `clawup status --json` | Status in JSON format |
+| `clawup status --local` | Show local Docker container status |
 | `clawup ssh <agent>` | SSH to an agent by name, role, or alias |
-| `clawup ssh <agent> '<cmd>'` | Run a command on an agent remotely |
+| `clawup ssh <agent> --local` | Shell into a local Docker container |
 | `clawup validate` | Health check all agents via Tailscale |
-| `clawup destroy` | Tear down all resources (with confirmation) |
+| `clawup validate --local` | Health check local Docker containers |
 | `clawup redeploy` | Update agents in-place (`pulumi up --refresh`) |
-| `clawup redeploy -y` | Redeploy without confirmation prompt |
-| `clawup destroy -y` | Tear down without confirmation |
+| `clawup redeploy --local` | Redeploy local Docker containers |
+| `clawup destroy` | Tear down all resources (with confirmation) |
+| `clawup destroy --local` | Destroy local Docker containers only |
 | `clawup list` | Show project config |
 | `clawup config show` | Display current config |
 | `clawup config show --json` | Config in JSON format |
@@ -323,6 +324,12 @@ clawup redeploy
 ```
 
 This runs `pulumi up --refresh` to sync cloud state and apply changes. If the stack doesn't exist yet, it falls back to a fresh deploy automatically.
+
+For local Docker containers:
+
+```bash
+clawup redeploy --local
+```
 
 For a clean rebuild (when in-place update can't recover):
 

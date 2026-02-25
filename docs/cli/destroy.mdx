@@ -16,6 +16,7 @@ clawup destroy [options]
 | Option | Description |
 |--------|-------------|
 | `-y, --yes` | Skip confirmation prompts (dangerous!) |
+| `--local` | Destroy local Docker containers only |
 
 ## Examples
 
@@ -25,6 +26,9 @@ clawup destroy
 
 # Skip confirmation (use with caution)
 clawup destroy --yes
+
+# Destroy local Docker containers only
+clawup destroy --local
 ```
 
 <Warning>

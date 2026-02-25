@@ -51,6 +51,7 @@ Deploy your agents with `pulumi up`. Runs prerequisite checks before deploying.
 ```bash
 clawup deploy             # Deploy with confirmation prompt
 clawup deploy -y          # Skip confirmation
+clawup deploy --local     # Deploy to local Docker containers
 ```
 
 ### `clawup status`
@@ -60,6 +61,7 @@ Show agent statuses from Pulumi stack outputs.
 ```bash
 clawup status             # Pretty-printed output
 clawup status --json      # JSON output
+clawup status --local     # Local Docker container status
 ```
 
 ### `clawup ssh <agent>`
@@ -91,6 +93,7 @@ Health check all agents via Tailscale SSH.
 ```bash
 clawup validate            # Default 30-second timeout
 clawup validate -t 60      # 60-second timeout
+clawup validate --local    # Validate local Docker containers
 ```
 
 ### `clawup destroy`
@@ -100,6 +103,7 @@ Tear down all resources with safety confirmations.
 ```bash
 clawup destroy             # With confirmation prompts
 clawup destroy -y          # Skip confirmations (dangerous!)
+clawup destroy --local     # Destroy local Docker containers only
 ```
 
 ### `clawup redeploy`
@@ -109,6 +113,7 @@ Update agents in-place without destroying infrastructure. Runs `pulumi up --refr
 ```bash
 clawup redeploy             # With confirmation prompt
 clawup redeploy -y          # Skip confirmation
+clawup redeploy --local     # Redeploy local Docker containers
 ```
 
 ### `clawup config show`
