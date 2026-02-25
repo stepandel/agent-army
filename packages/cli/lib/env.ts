@@ -201,10 +201,10 @@ export function buildEnvDict(envFilePath: string): Record<string, string> {
 }
 
 // ---------------------------------------------------------------------------
-// Well-known env var name mappings (for wizard mode)
+// Well-known env var name mappings
 // ---------------------------------------------------------------------------
 
-/** Standard env var names used when no manifest secrets section exists yet (wizard mode). */
+/** Standard env var names used when no manifest secrets section exists yet. */
 export const WELL_KNOWN_ENV_VARS: Record<string, string> = {
   anthropicApiKey: "ANTHROPIC_API_KEY",
   tailscaleAuthKey: "TAILSCALE_AUTH_KEY",
@@ -235,7 +235,7 @@ export function camelToScreamingSnake(str: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Secrets section builder (for generating manifest secrets after wizard)
+// Secrets section builder (for generating manifest secrets from identity data)
 // ---------------------------------------------------------------------------
 
 interface SecretsBuilderOpts {

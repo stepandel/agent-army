@@ -14,16 +14,6 @@ export function showBanner(): void {
 }
 
 /**
- * Handle user cancellation (Ctrl+C)
- */
-export function handleCancel(value: unknown): void {
-  if (p.isCancel(value)) {
-    p.cancel("Operation cancelled.");
-    process.exit(0);
-  }
-}
-
-/**
  * Show an error and exit
  */
 export function exitWithError(message: string): never {

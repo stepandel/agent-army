@@ -157,7 +157,7 @@ export default function Home() {
                 <span className="text-accent-emerald">$</span>{" "}
                 <span className="text-foreground">clawup init</span>
                 {"      "}
-                <span className="text-muted-foreground/50"># interactive setup wizard</span>
+                <span className="text-muted-foreground/50"># generate config scaffold</span>
               </div>
               <div>
                 <span className="text-accent-emerald">$</span>{" "}
