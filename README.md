@@ -154,20 +154,33 @@ The wizard walks you through:
 - **Prerequisites check** — verifies Pulumi, Node.js, cloud provider CLI, and Tailscale
 - **Cloud provider** — AWS or Hetzner Cloud
 - **Region & instance type** — with cost estimates shown inline
-- **Secrets** — Anthropic API key, Tailscale auth key (auto-loaded from `.env` if present)
 - **Agent selection** — pick from built-in identities, point to a Git repo or local directory, or mix both
-- **Optional integrations** — Slack, Linear, GitHub per agent
 - **Review & confirm** — see full config and estimated monthly cost
 
-This generates a `clawup.yaml` manifest and `.env.example` in your project directory and sets all Pulumi config values automatically. If a `.env` file exists, secrets are loaded from it — skipping interactive prompts for pre-populated values.
+This generates a `clawup.yaml` manifest and `.env.example` in your project directory.
 
-### 3. Deploy
+### 3. Fill in Secrets
+
+```bash
+cp .env.example .env
+# Edit .env and fill in your API keys
+```
+
+### 4. Validate & Configure
+
+```bash
+clawup setup
+```
+
+Validates all secrets from `.env`, fetches Linear user UUIDs, and configures Pulumi. If any secrets are missing, it prints exactly what's needed.
+
+### 5. Deploy
 
 ```bash
 clawup deploy
 ```
 
-### 4. Validate
+### 6. Validate
 
 Wait 3-5 minutes for cloud-init to complete, then:
 
@@ -175,7 +188,7 @@ Wait 3-5 minutes for cloud-init to complete, then:
 clawup validate
 ```
 
-### 5. Access Your Agents
+### 7. Access Your Agents
 
 ```bash
 clawup ssh <agent-name>    # SSH by name, role, or alias
@@ -187,7 +200,8 @@ Run `clawup --help` for the full list.
 
 | Command | Description |
 |---------|-------------|
-| `clawup init` | Interactive setup wizard |
+| `clawup init` | Interactive wizard — configure infrastructure and agents |
+| `clawup setup` | Validate secrets from `.env` and configure Pulumi |
 | `clawup deploy` | Deploy agents (`pulumi up` under the hood) |
 | `clawup deploy -y` | Deploy without confirmation prompt |
 | `clawup status` | Show agent statuses and outputs |

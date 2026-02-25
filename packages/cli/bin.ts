@@ -12,6 +12,7 @@ import * as path from "path";
 import { Command } from "commander";
 import { setupGracefulShutdown } from "./lib/process";
 import { initCommand } from "./commands/init";
+import { setupCommand } from "./commands/setup";
 import { deployCommand } from "./commands/deploy";
 import { statusCommand } from "./commands/status";
 import { sshCommand } from "./commands/ssh";
@@ -42,12 +43,20 @@ program
 
 program
   .command("init")
-  .description("Interactive setup wizard — configure stack, secrets, and agents")
-  .option("--deploy", "Deploy immediately after init")
-  .option("-y, --yes", "Skip confirmation prompt (for deploy)")
-  .option("--env-file <path>", "Load secrets from .env file")
+  .description("Interactive wizard — configure infrastructure and agents (writes clawup.yaml + .env.example)")
+  .option("-y, --yes", "Skip overwrite confirmation if clawup.yaml exists")
   .action(async (opts) => {
     await initCommand(opts);
+  });
+
+program
+  .command("setup")
+  .description("Validate secrets from .env and configure Pulumi (non-interactive)")
+  .option("--env-file <path>", "Path to .env file (defaults to .env in project root)")
+  .option("--deploy", "Deploy immediately after setup")
+  .option("-y, --yes", "Skip confirmation prompt (for deploy)")
+  .action(async (opts) => {
+    await setupCommand(opts);
   });
 
 program

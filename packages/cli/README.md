@@ -18,24 +18,36 @@ npx clawup init
 
 ### `clawup init`
 
-Interactive setup wizard that walks you through the full configuration:
+Interactive setup wizard for infrastructure and agent team configuration:
 
 1. **Prerequisites check** — verifies Pulumi CLI, Node.js, cloud provider CLI, and Tailscale are installed
 2. **Cloud provider** — AWS or Hetzner Cloud
 3. **Region & instance type** — with cost estimates shown inline
-4. **Secrets** — Anthropic API key, Tailscale auth key (auto-loaded from `.env` if present)
+4. **Owner info** — name, timezone, working hours
 5. **Agent selection** — choose from built-in identities, point to a Git repo or local directory, or mix both
-6. **Optional integrations** — Slack, Linear, GitHub per agent
-7. **Identity secrets** — any additional secrets declared by identities via `requiredSecrets`
-8. **Summary & confirmation** — review config and estimated cost before proceeding
+6. **Summary & confirmation** — review config and estimated cost before proceeding
 
-Outputs a `clawup.yaml` manifest and `.env.example` in the current directory and sets all Pulumi config values. Pulumi state and workspace files are stored in a `.clawup/` directory alongside the manifest. If a `.env` file exists, secrets are loaded from it — skipping interactive prompts for pre-populated values.
+Outputs a `clawup.yaml` manifest and `.env.example` in the current directory. No secrets are prompted — fill them in `.env` and run `clawup setup`.
 
 ```bash
 clawup init              # Interactive wizard
-clawup init --deploy     # Deploy immediately after setup
-clawup init --deploy -y  # Deploy without confirmation
-clawup init --env-file /path/to/.env  # Custom .env file location
+clawup init -y           # Skip overwrite confirmation
+```
+
+### `clawup setup`
+
+Non-interactive command that validates secrets from `.env` and configures the Pulumi stack.
+
+1. Reads `clawup.yaml` and `.env`
+2. Validates all required secrets are present (exits with a list of missing ones if not)
+3. Auto-fetches Linear user UUIDs via the API
+4. Configures Pulumi with all resolved secrets
+
+```bash
+clawup setup                            # Standard setup
+clawup setup --env-file /path/to/.env   # Custom .env location
+clawup setup --deploy                   # Setup + immediate deploy
+clawup setup --deploy -y                # Setup + deploy without confirmation
 ```
 
 ### `clawup deploy`

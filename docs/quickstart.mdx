@@ -40,9 +40,25 @@ The interactive wizard walks you through:
 6. **Agent selection** — Pick from built-in identities, point to a Git repo or local directory, or mix both
 7. **Review** — Confirm config and estimated costs
 
-This generates a `clawup.yaml` manifest and sets all Pulumi config values automatically.
+This generates a `clawup.yaml` manifest and `.env.example` in your project directory.
 
-## 4. Deploy
+## 4. Fill in Secrets
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in your API keys (Anthropic, Tailscale, etc.).
+
+## 5. Setup
+
+```bash
+clawup setup
+```
+
+Validates all secrets are present, fetches Linear user UUIDs (if needed), and configures the Pulumi stack. If any secrets are missing, it prints exactly what's needed.
+
+## 6. Deploy
 
 ```bash
 clawup deploy
@@ -54,7 +70,7 @@ Pulumi provisions your agents: dedicated servers, persistent storage, networking
 First deployment takes 3-5 minutes. Subsequent deployments are incremental.
 </Note>
 
-## 5. Connect
+## 7. Connect
 
 ```bash
 # Check status

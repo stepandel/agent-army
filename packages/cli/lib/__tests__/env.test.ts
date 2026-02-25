@@ -340,6 +340,7 @@ describe("buildManifestSecrets", () => {
     expect(result.perAgent["agent-eng"]).toEqual({
       linearApiKey: "${env:ENG_LINEAR_API_KEY}",
       linearWebhookSecret: "${env:ENG_LINEAR_WEBHOOK_SECRET}",
+      linearUserUuid: "${env:ENG_LINEAR_USER_UUID}",
     });
   });
 
@@ -492,6 +493,26 @@ describe("generateEnvExample", () => {
     expect(result).toContain("TAILSCALE_AUTH_KEY=");
     expect(result).toContain("# ── Agent: Juno (pm)");
     expect(result).toContain("PM_SLACK_BOT_TOKEN=");
+  });
+
+  it("outputs linearUserUuid as a commented line", () => {
+    const result = generateEnvExample({
+      globalSecrets: { anthropicApiKey: "${env:ANTHROPIC_API_KEY}" },
+      agents: [
+        { name: "agent-eng", displayName: "Titus", role: "eng" },
+      ],
+      perAgentSecrets: {
+        "agent-eng": {
+          linearApiKey: "${env:ENG_LINEAR_API_KEY}",
+          linearUserUuid: "${env:ENG_LINEAR_USER_UUID}",
+        },
+      },
+    });
+
+    expect(result).toContain("ENG_LINEAR_API_KEY=");
+    // linearUserUuid should be commented out (optional, auto-fetched)
+    expect(result).toMatch(/# ENG_LINEAR_USER_UUID=/);
+    expect(result).toContain("auto-fetched");
   });
 
   it("skips agents with no secrets", () => {

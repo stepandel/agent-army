@@ -297,6 +297,7 @@ export function buildManifestSecrets(opts: SecretsBuilderOpts): ManifestSecrets 
     if (plugins?.has("openclaw-linear")) {
       agentSecrets.linearApiKey = `\${env:${roleUpper}_LINEAR_API_KEY}`;
       agentSecrets.linearWebhookSecret = `\${env:${roleUpper}_LINEAR_WEBHOOK_SECRET}`;
+      agentSecrets.linearUserUuid = `\${env:${roleUpper}_LINEAR_USER_UUID}`;
     }
 
     if (deps?.has("gh")) {
@@ -361,9 +362,15 @@ export function generateEnvExample(opts: EnvExampleOpts): string {
 
     lines.push("");
     lines.push(`# ── Agent: ${agent.displayName} (${agent.role}) ──────────────────────`);
-    for (const ref of Object.values(agentSecrets)) {
+    for (const [key, ref] of Object.entries(agentSecrets)) {
       const varName = extractEnvVarName(ref);
-      if (varName) lines.push(`${varName}=`);
+      if (!varName) continue;
+      if (key === "linearUserUuid") {
+        // Optional — auto-fetched by `clawup setup` if Linear API key is set
+        lines.push(`# ${varName}=  # auto-fetched if ${agent.role.toUpperCase()}_LINEAR_API_KEY is set`);
+      } else {
+        lines.push(`${varName}=`);
+      }
     }
   }
 

@@ -3,7 +3,7 @@ title: "init"
 description: "Interactive setup wizard for configuring your agent team"
 ---
 
-Interactive setup wizard that walks you through configuring your cloud provider, secrets, and agent team.
+Interactive setup wizard that walks you through configuring your cloud provider, instance type, owner info, and agent team. Writes `clawup.yaml` and `.env.example` — no secrets are prompted during init.
 
 ## Usage
 
@@ -15,9 +15,7 @@ clawup init [options]
 
 | Option | Description |
 |--------|-------------|
-| `--deploy` | Deploy immediately after init completes |
-| `-y, --yes` | Skip confirmation prompt (used with `--deploy`) |
-| `--env-file <path>` | Path to `.env` file (defaults to `.env` in project root) |
+| `-y, --yes` | Skip overwrite confirmation if `clawup.yaml` already exists |
 
 ## Wizard Steps
 
@@ -47,10 +45,7 @@ Select server size. Affects performance and cost.
 ### 6. Agent Selection
 Pick from built-in identities, point to a Git repo or local directory, or mix both.
 
-### 7. API Keys & Secrets
-Configure required credentials (Anthropic API key, provider keys, etc.).
-
-### 8. Review & Confirm
+### 7. Review & Confirm
 Review your full configuration with cost estimates before saving.
 
 ## Examples
@@ -59,21 +54,24 @@ Review your full configuration with cost estimates before saving.
 # Standard interactive init
 clawup init
 
-# Init and deploy immediately
-clawup init --deploy
-
-# Init, deploy, skip confirmation
-clawup init --deploy --yes
+# Init, skip overwrite confirmation
+clawup init -y
 ```
-
-## `.env` File Support
-
-If a `.env` file exists in the project root (or is specified via `--env-file`), the wizard loads it before prompting for secrets. Any values found in the `.env` file are used automatically, skipping the interactive prompt for that secret.
-
-The init command also generates a `.env.example` alongside `clawup.yaml`, listing all required env var names with empty values. Copy it to `.env` and fill in values for a prompt-free experience on subsequent runs.
-
-See [Environment Variables](/configuration/environment) for full details on the `${env:VAR}` reference system.
 
 ## Output
 
-Creates `clawup.yaml` in your current directory with the full manifest, along with a `.clawup/` workspace directory and `.env.example` file (`.clawup/` and `.env` are added to `.gitignore` automatically).
+Creates in your current directory:
+- `clawup.yaml` — deployment manifest with `${env:VAR}` secret references
+- `.env.example` — all required env var names with empty values
+
+The `.clawup/` directory and `.env` are added to `.gitignore` automatically.
+
+## Next Steps
+
+After `init` completes:
+
+1. Copy `.env.example` to `.env` and fill in your secrets
+2. Run [`clawup setup`](/cli/setup) to validate secrets and configure Pulumi
+3. Run [`clawup deploy`](/cli/deploy) to deploy your agents
+
+See [Environment Variables](/configuration/environment) for full details on the `${env:VAR}` reference system.

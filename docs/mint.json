@@ -66,6 +66,7 @@
       "pages": [
         "cli/overview",
         "cli/init",
+        "cli/setup",
         "cli/deploy",
         "cli/status",
         "cli/ssh",
