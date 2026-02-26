@@ -59,9 +59,9 @@ vi.mock("../lib/project", () => ({
 
 // Mock workspace to use dev mode (Pulumi runs from repo root)
 vi.mock("../lib/workspace", () => ({
-  getWorkspaceDir: vi.fn(() => undefined),
+  getWorkspaceDir: vi.fn(() => path.join(tempDir, ".clawup")),
   ensureWorkspace: vi.fn(() => ({ ok: true })),
-  isDevMode: vi.fn(() => true),
+  isDevMode: vi.fn(() => false),
 }));
 
 // ---------------------------------------------------------------------------
@@ -105,6 +105,18 @@ describe("Plugin Lifecycle: deploy → validate → destroy (Slack + Linear)", (
 
     // Create temp directory
     tempDir = fs.mkdtempSync(path.join(require("os").tmpdir(), "clawup-e2e-plugin-"));
+
+    // Set up workspace directory for project mode
+    const workspaceDir = path.join(tempDir, ".clawup");
+    fs.mkdirSync(workspaceDir, { recursive: true });
+    
+    // Copy Pulumi.yaml to workspace
+    const repoRoot = path.resolve(__dirname, "../..");
+    fs.copyFileSync(path.join(repoRoot, "Pulumi.yaml"), path.join(workspaceDir, "Pulumi.yaml"));
+    
+    // Copy Pulumi dist
+    const distSrc = path.join(repoRoot, "packages/pulumi/dist");
+    fs.cpSync(distSrc, path.join(workspaceDir, "dist"), { recursive: true });
 
     // Set env vars for Pulumi
     process.env.PULUMI_CONFIG_PASSPHRASE = "test";

@@ -83,12 +83,17 @@ function processTemplates(
 // Load Manifest (YAML)
 // -----------------------------------------------------------------------------
 
-// Pulumi sets cwd to the project root (where Pulumi.yaml lives)
-const manifestPath = path.join(process.cwd(), "clawup.yaml");
+// Pulumi sets cwd to where Pulumi.yaml lives
+// In dev mode: repo root (clawup.yaml is also there)
+// In project mode: <projectRoot>/.clawup (clawup.yaml is in parent dir)
+let manifestPath = path.join(process.cwd(), "clawup.yaml");
 if (!fs.existsSync(manifestPath)) {
-  throw new Error(
-    "clawup.yaml not found. Run `clawup init` to create it."
-  );
+  manifestPath = path.join(process.cwd(), "../clawup.yaml");
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error(
+      "clawup.yaml not found. Run `clawup init` to create it."
+    );
+  }
 }
 
 // Cast as partial — old manifests may omit `provider` (defaults to "aws" below)
