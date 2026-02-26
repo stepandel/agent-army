@@ -41,14 +41,25 @@ interface CreateTestProjectOptions {
   dir: string;
   /** Custom ANTHROPIC_API_KEY (defaults to dummy) */
   anthropicApiKey?: string;
+  /** Custom identity fixture directory (defaults to fixtures/identity) */
+  identityDir?: string;
+  /** Custom agent name (defaults to "agent-e2e-test") */
+  agentName?: string;
+  /** Custom display name (defaults to "TestBot") */
+  displayName?: string;
+  /** Custom role (defaults to "tester") */
+  role?: string;
+  /** Additional .env content lines (e.g., plugin secrets) */
+  extraEnvLines?: string[];
 }
 
 /**
  * Create a minimal test project directory with clawup.yaml and .env.
  */
 export function createTestProject(options: CreateTestProjectOptions): void {
-  const { stackName, dir, anthropicApiKey } = options;
+  const { stackName, dir, anthropicApiKey, identityDir, agentName, displayName, role, extraEnvLines } = options;
   const apiKey = anthropicApiKey ?? process.env.ANTHROPIC_API_KEY ?? "sk-ant-fake-key-for-e2e";
+  const identity = identityDir ?? FIXTURE_IDENTITY_DIR;
 
   fs.mkdirSync(dir, { recursive: true });
 
@@ -66,10 +77,10 @@ export function createTestProject(options: CreateTestProjectOptions): void {
     },
     agents: [
       {
-        name: "agent-e2e-test",
-        displayName: "TestBot",
-        role: "tester",
-        identity: FIXTURE_IDENTITY_DIR,
+        name: agentName ?? "agent-e2e-test",
+        displayName: displayName ?? "TestBot",
+        role: role ?? "tester",
+        identity,
         volumeSize: 10,
       },
     ],
@@ -81,9 +92,13 @@ export function createTestProject(options: CreateTestProjectOptions): void {
   );
 
   // Write .env
+  const envLines = [`ANTHROPIC_API_KEY=${apiKey}`];
+  if (extraEnvLines) {
+    envLines.push(...extraEnvLines);
+  }
   fs.writeFileSync(
     path.join(dir, ".env"),
-    `ANTHROPIC_API_KEY=${apiKey}\n`,
+    envLines.join("\n") + "\n",
     "utf-8",
   );
 
