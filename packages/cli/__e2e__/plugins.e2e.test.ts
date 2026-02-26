@@ -241,11 +241,20 @@ describe("Plugin Lifecycle: deploy → validate → destroy (Slack + Linear)", (
       // Assert: UI shows success message
       expect(ui.hasLog("success", "Deployment complete!")).toBe(true);
 
-      // Read openclaw.json from the container
-      const configResult = execSync(
-        `docker exec ${containerName} cat /home/ubuntu/.openclaw/openclaw.json`,
-        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-      );
+      // Read openclaw.json from the container (may take a moment for cloud-init)
+      let configResult: string = "";
+      for (let attempt = 0; attempt < 10; attempt++) {
+        try {
+          configResult = execSync(
+            `docker exec ${containerName} cat /home/ubuntu/.openclaw/openclaw.json`,
+            { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+          );
+          break;
+        } catch {
+          if (attempt === 9) throw new Error("openclaw.json not found after 10 retries");
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
       const config = JSON.parse(configResult);
 
       // Assert: Slack channel config exists (channels-based plugin)
