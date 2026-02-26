@@ -31,7 +31,7 @@ node -e "
   const pulumiPkg = require('$ROOT/packages/pulumi/package.json');
   const corePkg = require('$ROOT/packages/core/package.json');
   const deps = {};
-  for (const name of ['@pulumi/pulumi', '@pulumi/aws', '@pulumi/hcloud', '@pulumi/tls', 'yaml']) {
+  for (const name of ['@pulumi/pulumi', '@pulumi/aws', '@pulumi/docker', '@pulumi/hcloud', '@pulumi/tls', 'yaml']) {
     if (pulumiPkg.dependencies[name]) deps[name] = pulumiPkg.dependencies[name];
   }
   // Include @clawup/core's runtime deps (zod, etc.) since core is manually copied
