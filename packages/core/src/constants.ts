@@ -152,6 +152,57 @@ export function getProviderForModel(modelString: string): string {
 }
 
 /**
+ * Map of provider key → camelCase Pulumi config key for API keys.
+ * e.g., "openai" → "openaiApiKey", "anthropic" → "anthropicApiKey"
+ */
+export const PROVIDER_CONFIG_KEYS: Record<string, string> = Object.fromEntries(
+  Object.entries(MODEL_PROVIDERS).map(([key, def]) => {
+    const camel = def.envVar
+      .toLowerCase()
+      .split("_")
+      .map((part: string, i: number) => (i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+      .join("");
+    return [key, camel];
+  })
+);
+
+/**
+ * Deduplicate provider keys from an array of model strings.
+ * e.g., ["openai/gpt-4o", "anthropic/claude-sonnet-4-5", "openai/o3"] → Set{"openai", "anthropic"}
+ */
+export function getRequiredProviders(models: string[]): Set<string> {
+  const providers = new Set<string>();
+  for (const model of models) {
+    providers.add(getProviderForModel(model));
+  }
+  return providers;
+}
+
+/**
+ * Get the camelCase Pulumi config key for a provider's API key.
+ * e.g., "openai" → "openaiApiKey"
+ */
+export function getProviderConfigKey(providerKey: string): string {
+  const configKey = PROVIDER_CONFIG_KEYS[providerKey];
+  if (!configKey) {
+    throw new Error(`Unknown provider "${providerKey}". Supported: ${Object.keys(MODEL_PROVIDERS).join(", ")}`);
+  }
+  return configKey;
+}
+
+/**
+ * Get the environment variable name for a provider's API key.
+ * e.g., "openai" → "OPENAI_API_KEY"
+ */
+export function getProviderEnvVar(providerKey: string): string {
+  const providerDef = MODEL_PROVIDERS[providerKey as keyof typeof MODEL_PROVIDERS];
+  if (!providerDef) {
+    throw new Error(`Unknown provider "${providerKey}". Supported: ${Object.keys(MODEL_PROVIDERS).join(", ")}`);
+  }
+  return providerDef.envVar;
+}
+
+/**
  * Build the Tailscale hostname for an agent.
  * Includes the stack name to avoid conflicts across deployments.
  * Example: "dev-agent-pm", "prod-agent-eng"

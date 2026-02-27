@@ -7,7 +7,7 @@
  */
 
 import * as fs from "fs";
-import { resolvePlugin, PLUGIN_MANIFEST_REGISTRY } from "@clawup/core";
+import { resolvePlugin, PLUGIN_MANIFEST_REGISTRY, MODEL_PROVIDERS, getRequiredProviders, getProviderConfigKey, getProviderEnvVar } from "@clawup/core";
 
 // ---------------------------------------------------------------------------
 // Validators — shared prefix/suffix checks for well-known secret types
@@ -15,9 +15,17 @@ import { resolvePlugin, PLUGIN_MANIFEST_REGISTRY } from "@clawup/core";
 
 /** Infrastructure validators — always present regardless of plugins */
 export const VALIDATORS: Record<string, (val: string) => string | undefined> = {
-  anthropicApiKey: (val) => {
-    if (!val.startsWith("sk-ant-")) return "Must start with sk-ant-";
-  },
+  // Per-provider API key validators (generated from MODEL_PROVIDERS)
+  ...Object.fromEntries(
+    Object.entries(MODEL_PROVIDERS)
+      .filter(([, def]) => def.keyPrefix)
+      .map(([key, def]) => {
+        const configKey = getProviderConfigKey(key);
+        return [configKey, (val: string) => {
+          if (!val.startsWith(def.keyPrefix)) return `Must start with ${def.keyPrefix}`;
+        }];
+      })
+  ),
   tailscaleAuthKey: (val) => {
     if (!val.startsWith("tskey-auth-")) return "Must start with tskey-auth-";
   },
@@ -255,6 +263,8 @@ interface SecretsBuilderOpts {
   allDepNames: Set<string>;
   agentPlugins: Map<string, Set<string>>;
   agentDeps: Map<string, Set<string>>;
+  /** All model strings across all agents (primary + backup). Used to determine required provider API keys. */
+  allModels?: string[];
 }
 
 export interface ManifestSecrets {
@@ -270,8 +280,18 @@ export function buildManifestSecrets(opts: SecretsBuilderOpts): ManifestSecrets 
   const global: Record<string, string> = {};
   const perAgent: Record<string, Record<string, string>> = {};
 
-  // Always required
-  global.anthropicApiKey = "${env:ANTHROPIC_API_KEY}";
+  // Per-provider API keys — only require keys for providers actually used
+  if (opts.allModels && opts.allModels.length > 0) {
+    const requiredProviders = getRequiredProviders(opts.allModels);
+    for (const providerKey of requiredProviders) {
+      const configKey = getProviderConfigKey(providerKey);
+      const envVar = getProviderEnvVar(providerKey);
+      global[configKey] = `\${env:${envVar}}`;
+    }
+  } else {
+    // Fallback: default to anthropic if no models specified
+    global.anthropicApiKey = "${env:ANTHROPIC_API_KEY}";
+  }
 
   if (opts.provider !== "local") {
     global.tailscaleAuthKey = "${env:TAILSCALE_AUTH_KEY}";

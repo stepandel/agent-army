@@ -69,7 +69,7 @@ describe("generateConfigPatchScript — provider-aware config", () => {
     expect(script).toContain('"openai/o3"');
   });
 
-  it("handles backup model with different provider", () => {
+  it("handles backup model with same provider", () => {
     const script = generateConfigPatchScript({
       ...BASE_OPTIONS,
       model: "openai/gpt-4o",
@@ -78,6 +78,29 @@ describe("generateConfigPatchScript — provider-aware config", () => {
     expect(script).toContain('"openai/gpt-4o"');
     expect(script).toContain('"openai/o4-mini"');
     expect(script).toContain('OPENAI_API_KEY');
+  });
+
+  it("handles backup model with different provider (cross-provider fallback)", () => {
+    const script = generateConfigPatchScript({
+      ...BASE_OPTIONS,
+      model: "openai/gpt-4o",
+      backupModel: "anthropic/claude-sonnet-4-5",
+    });
+    expect(script).toContain('"openai/gpt-4o"');
+    expect(script).toContain('"anthropic/claude-sonnet-4-5"');
+    expect(script).toContain('OPENAI_API_KEY');
+    // Should also set ANTHROPIC_API_KEY for the backup provider
+    expect(script).toContain('ANTHROPIC_API_KEY');
+    expect(script).toContain("Backup model provider");
+  });
+
+  it("does not add backup provider section when same as primary", () => {
+    const script = generateConfigPatchScript({
+      ...BASE_OPTIONS,
+      model: "anthropic/claude-opus-4-6",
+      backupModel: "anthropic/claude-sonnet-4-5",
+    });
+    expect(script).not.toContain("Backup model provider");
   });
 });
 

@@ -49,7 +49,7 @@ export interface HetznerOpenClawAgentArgs extends BaseOpenClawAgentArgs {
  * @example
  * ```typescript
  * const agent = new HetznerOpenClawAgent("my-agent", {
- *   anthropicApiKey: config.requireSecret("anthropicApiKey"),
+ *   providerApiKeys: { anthropic: config.requireSecret("anthropicApiKey") },
  *   tailscaleAuthKey: config.requireSecret("tailscaleAuthKey"),
  *   tailnetDnsName: config.require("tailnetDnsName"),
  * });

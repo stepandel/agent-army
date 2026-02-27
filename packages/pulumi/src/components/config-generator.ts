@@ -321,6 +321,14 @@ export function generateConfigPatchScript(options: OpenClawConfigOptions): strin
     throw new Error(`Unknown model provider "${providerKey}" from model "${model}". Supported: ${Object.keys(MODEL_PROVIDERS).join(", ")}`);
   }
 
+  // Determine backup model provider (may differ from primary)
+  const backupProviderKey = backupModel ? getProviderForModel(backupModel) : undefined;
+  const backupProviderDef = backupProviderKey
+    ? MODEL_PROVIDERS[backupProviderKey as keyof typeof MODEL_PROVIDERS] as
+      | (typeof MODEL_PROVIDERS)[keyof typeof MODEL_PROVIDERS]
+      | undefined
+    : undefined;
+
   // Build cliBackends config from coding agent registry
   const codingAgentName = options.codingAgent ?? "claude-code";
   const codingAgentEntry = CODING_AGENT_REGISTRY[codingAgentName];
@@ -353,26 +361,26 @@ config["gateway"]["auth"] = {
     "token": os.environ["GATEWAY_TOKEN"]
 }
 
-# Configure environment variables for child processes (model provider API key)
+# Configure environment variables for child processes (model provider API keys)
+config.setdefault("env", {})
 ${providerKey === "anthropic" ? `# Anthropic: auto-detect credential type (OAuth token vs API key)
 anthropic_cred = os.environ.get("ANTHROPIC_API_KEY", "")
 if anthropic_cred.startswith("sk-ant-oat"):
     # OAuth token from Claude Pro/Max subscription (use with CLAUDE_CODE_OAUTH_TOKEN)
-    config["env"] = {
-        "CLAUDE_CODE_OAUTH_TOKEN": anthropic_cred
-    }
+    config["env"]["CLAUDE_CODE_OAUTH_TOKEN"] = anthropic_cred
     print("Configured environment variables: CLAUDE_CODE_OAUTH_TOKEN (OAuth/subscription)")
 else:
     # API key from Anthropic Console (use with ANTHROPIC_API_KEY)
-    config["env"] = {
-        "ANTHROPIC_API_KEY": anthropic_cred
-    }
+    config["env"]["ANTHROPIC_API_KEY"] = anthropic_cred
     print("Configured environment variables: ANTHROPIC_API_KEY (API key)")` : `# ${providerDef?.name ?? providerKey}: set provider API key env var
 provider_key = os.environ.get("${providerDef?.envVar ?? "MODEL_API_KEY"}", "")
-config["env"] = {
-    "${providerDef?.envVar ?? "MODEL_API_KEY"}": provider_key
-}
+config["env"]["${providerDef?.envVar ?? "MODEL_API_KEY"}"] = provider_key
 print("Configured environment variables: ${providerDef?.envVar ?? "MODEL_API_KEY"}")`}
+${backupProviderKey && backupProviderKey !== providerKey && backupProviderDef ? `# Backup model provider: ${backupProviderDef.name} — set ${backupProviderDef.envVar}
+backup_provider_key = os.environ.get("${backupProviderDef.envVar}", "")
+if backup_provider_key:
+    config["env"]["${backupProviderDef.envVar}"] = backup_provider_key
+    print("Configured backup provider env: ${backupProviderDef.envVar}")` : ""}
 
 # Configure heartbeat (proactive mode)
 config.setdefault("agents", {})

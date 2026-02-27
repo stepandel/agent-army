@@ -9,7 +9,7 @@ import { describe, it, expect } from "vitest";
 import { generateCloudInit, type CloudInitConfig } from "../cloud-init";
 
 const BASE_CONFIG: CloudInitConfig = {
-  anthropicApiKey: "test-api-key",
+  providerApiKeys: { anthropic: "test-api-key" },
   tailscaleAuthKey: "tskey-auth-test",
   gatewayToken: "gw-token-test",
   model: "anthropic/claude-opus-4-6",
@@ -36,6 +36,7 @@ describe("generateCloudInit — provider-aware env vars", () => {
   it("exports OPENAI_API_KEY for openai provider", () => {
     const script = generateCloudInit({
       ...BASE_CONFIG,
+      providerApiKeys: { openai: "sk-test-openai" },
       modelProvider: "openai",
       model: "openai/gpt-4o",
     });
@@ -47,6 +48,7 @@ describe("generateCloudInit — provider-aware env vars", () => {
   it("exports GOOGLE_API_KEY for google provider", () => {
     const script = generateCloudInit({
       ...BASE_CONFIG,
+      providerApiKeys: { google: "google-test-key" },
       modelProvider: "google",
       model: "google/gemini-2.5-pro",
     });
@@ -58,6 +60,7 @@ describe("generateCloudInit — provider-aware env vars", () => {
   it("exports OPENROUTER_API_KEY for openrouter provider", () => {
     const script = generateCloudInit({
       ...BASE_CONFIG,
+      providerApiKeys: { openrouter: "sk-or-test" },
       modelProvider: "openrouter",
       model: "openrouter/auto",
     });
@@ -66,19 +69,37 @@ describe("generateCloudInit — provider-aware env vars", () => {
     expect(script).not.toContain("Auto-detect Anthropic");
   });
 
-  it("throws on unknown model provider", () => {
-    expect(() =>
-      generateCloudInit({
-        ...BASE_CONFIG,
-        modelProvider: "unknown-provider",
-      })
-    ).toThrow(/Unknown model provider "unknown-provider"/);
-  });
-
   it("uses anthropic flow when modelProvider is undefined", () => {
     const config = { ...BASE_CONFIG };
     delete config.modelProvider;
     const script = generateCloudInit(config);
     expect(script).toContain("Auto-detect Anthropic credential type");
+  });
+
+  it("exports env vars for multiple providers (primary + backup)", () => {
+    const script = generateCloudInit({
+      ...BASE_CONFIG,
+      providerApiKeys: { openai: "sk-openai-test", anthropic: "sk-ant-test" },
+      modelProvider: "openai",
+      model: "openai/gpt-4o",
+      backupModel: "anthropic/claude-sonnet-4-5",
+    });
+    expect(script).toContain("OPENAI_API_KEY");
+    expect(script).toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("works with openai-only deploy (no anthropic key)", () => {
+    const script = generateCloudInit({
+      providerApiKeys: { openai: "sk-openai-test" },
+      tailscaleAuthKey: "tskey-auth-test",
+      gatewayToken: "gw-token-test",
+      model: "openai/gpt-4o",
+      modelProvider: "openai",
+      codingAgent: "claude-code",
+      workspaceFiles: {},
+      skipTailscale: true,
+    });
+    expect(script).toContain("OPENAI_API_KEY");
+    expect(script).not.toContain("Auto-detect Anthropic");
   });
 });

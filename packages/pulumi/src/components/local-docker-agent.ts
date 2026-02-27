@@ -39,7 +39,7 @@ export interface LocalDockerOpenClawAgentArgs extends BaseOpenClawAgentArgs {
  * @example
  * ```typescript
  * const agent = new LocalDockerOpenClawAgent("my-agent", {
- *   anthropicApiKey: config.requireSecret("anthropicApiKey"),
+ *   providerApiKeys: { anthropic: config.requireSecret("anthropicApiKey") },
  *   tailscaleAuthKey: pulumi.secret("not-used"),
  *   tailnetDnsName: "localhost",
  *   gatewayPort: 18789,

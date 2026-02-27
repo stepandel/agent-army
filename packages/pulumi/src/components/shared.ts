@@ -9,7 +9,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as tls from "@pulumi/tls";
 import * as crypto from "crypto";
 import { generateCloudInit, interpolateCloudInit, compressCloudInit, CloudInitConfig } from "./cloud-init";
-import { getProviderForModel } from "@clawup/core";
+import { getProviderForModel, getProviderEnvVar } from "@clawup/core";
 import type { BaseOpenClawAgentArgs } from "./types";
 
 /**
@@ -81,16 +81,27 @@ export function buildCloudInitUserData(
   const depSecretEntries = Object.entries(args.depSecrets ?? {});
   const depSecretOutputs = depSecretEntries.map(([, v]) => pulumi.output(v));
 
+  // Resolve provider API keys
+  const providerKeyEntries = Object.entries(args.providerApiKeys);
+  const providerKeyOutputs = providerKeyEntries.map(([, v]) => pulumi.output(v));
+
   // Stage 1: resolve all string secrets (same type, safe in one pulumi.all)
   return pulumi
     .all([
       args.tailscaleAuthKey,
-      args.anthropicApiKey,
       gatewayTokenValue,
+      ...providerKeyOutputs,
       ...pluginSecretOutputs,
       ...depSecretOutputs,
     ])
-    .apply(([tsAuthKey, apiKey, gwToken, ...secretValues]) => {
+    .apply(([tsAuthKey, gwToken, ...secretValues]) => {
+      // Split resolved secret values back into their groups
+      const resolvedProviderKeys: Record<string, string> = {};
+      providerKeyEntries.forEach(([providerKey], idx) => {
+        resolvedProviderKeys[providerKey] = secretValues[idx] as string;
+      });
+      const remainingSecrets = secretValues.slice(providerKeyEntries.length);
+
       // Stage 2: resolve mixed-type Input<> config values
       return pulumi
         .all([
@@ -102,17 +113,24 @@ export function buildCloudInitUserData(
         .apply(([gatewayPort, browserPort, model, enableSandbox]) => {
           const tsHostname = `${pulumi.getStack()}-${name}`;
 
-          // Build additional secrets map from plugin secrets + dep secrets
+          // Build additional secrets map from plugin secrets + dep secrets + provider API keys
           const additionalSecrets: Record<string, string> = {};
+
+          // Add all provider API keys as env var placeholders for interpolation
+          for (const [providerKey, value] of Object.entries(resolvedProviderKeys)) {
+            const envVar = getProviderEnvVar(providerKey);
+            additionalSecrets[envVar] = value;
+          }
+
           pluginSecretEntries.forEach(([envVar], idx) => {
-            additionalSecrets[envVar] = secretValues[idx] as string;
+            additionalSecrets[envVar] = remainingSecrets[idx] as string;
           });
           depSecretEntries.forEach(([envVar], idx) => {
-            additionalSecrets[envVar] = secretValues[pluginSecretEntries.length + idx] as string;
+            additionalSecrets[envVar] = remainingSecrets[pluginSecretEntries.length + idx] as string;
           });
 
           const cloudInitConfig: CloudInitConfig = {
-            anthropicApiKey: apiKey,
+            providerApiKeys: resolvedProviderKeys,
             tailscaleAuthKey: tsAuthKey,
             gatewayToken: gwToken,
             gatewayPort: gatewayPort as number,
@@ -139,7 +157,6 @@ export function buildCloudInitUserData(
 
           const script = generateCloudInit(cloudInitConfig);
           const interpolated = interpolateCloudInit(script, {
-            anthropicApiKey: apiKey,
             tailscaleAuthKey: tsAuthKey,
             gatewayToken: gwToken,
             additionalSecrets,

@@ -22,6 +22,8 @@ import {
   PLUGIN_MANIFEST_REGISTRY,
   MODEL_PROVIDERS,
   getProviderForModel,
+  getRequiredProviders,
+  getProviderConfigKey,
 } from "@clawup/core";
 import { resolvePluginSecrets, runLifecycleHook } from "@clawup/core/manifest-hooks";
 import { fetchIdentity } from "@clawup/core/identity";
@@ -141,6 +143,16 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
     }
   }
 
+  // Collect all model strings across all agents (primary + backup)
+  const allModels: string[] = [];
+  for (const fi of fetchedIdentities) {
+    const model = fi.manifest.model ?? "anthropic/claude-opus-4-6";
+    allModels.push(model);
+    if (fi.manifest.backupModel) {
+      allModels.push(fi.manifest.backupModel);
+    }
+  }
+
   // Collect requiredSecrets from identities
   const agentRequiredSecrets: Record<string, string[]> = {};
   for (const fi of fetchedIdentities) {
@@ -215,6 +227,7 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
     allDepNames,
     agentPlugins,
     agentDeps,
+    allModels,
   });
 
   // Merge expected secrets into manifest (add any missing env refs)
@@ -514,12 +527,15 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
   if (manifest.defaultModel) {
     setConfig("defaultModel", manifest.defaultModel, false, cwd);
   }
-  // Set the model provider API key (stored as "anthropicApiKey" in Pulumi for backward compat)
-  const providerDef = MODEL_PROVIDERS[modelProvider as keyof typeof MODEL_PROVIDERS];
-  const providerApiKeyName = providerDef?.envVar
-    ? providerDef.envVar.toLowerCase().split("_").map((p: string, i: number) => i === 0 ? p : p.charAt(0).toUpperCase() + p.slice(1)).join("")
-    : "anthropicApiKey";
-  setConfig("anthropicApiKey", resolvedSecrets.global[providerApiKeyName] ?? resolvedSecrets.global.anthropicApiKey, true, cwd);
+  // Set per-provider API keys — only store keys for providers actually used
+  const requiredProviders = getRequiredProviders(allModels);
+  for (const providerKey of requiredProviders) {
+    const configKey = getProviderConfigKey(providerKey);
+    const value = resolvedSecrets.global[configKey];
+    if (value) {
+      setConfig(configKey, value, true, cwd);
+    }
+  }
   if (manifest.provider !== "local") {
     setConfig("tailscaleAuthKey", resolvedSecrets.global.tailscaleAuthKey, true, cwd);
     setConfig("tailnetDnsName", resolvedSecrets.global.tailnetDnsName, false, cwd);

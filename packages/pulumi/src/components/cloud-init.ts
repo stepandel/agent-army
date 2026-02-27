@@ -5,7 +5,7 @@
 
 import * as zlib from "zlib";
 import { generateConfigPatchScript, PluginEntry } from "./config-generator";
-import { CODING_AGENT_REGISTRY, MODEL_PROVIDERS, type CodingAgentEntry } from "@clawup/core";
+import { CODING_AGENT_REGISTRY, MODEL_PROVIDERS, getProviderForModel, getProviderEnvVar, type CodingAgentEntry } from "@clawup/core";
 
 /**
  * Config for a plugin to be installed on an agent.
@@ -41,8 +41,8 @@ export interface PluginInstallConfig {
 }
 
 export interface CloudInitConfig {
-  /** Model provider API key (named anthropicApiKey for backward compatibility) */
-  anthropicApiKey: string;
+  /** Per-provider API keys: { providerKey: resolvedValue } e.g., { anthropic: "sk-ant-...", openai: "sk-..." } */
+  providerApiKeys: Record<string, string>;
   /** Model provider key (e.g., "anthropic", "openai"). Defaults to "anthropic". */
   modelProvider?: string;
   /** Tailscale auth key */
@@ -295,6 +295,12 @@ tailscale serve --bg ${gatewayPort} || echo "WARNING: tailscale serve failed. En
     ? ` \\\n${pluginSecretEnvVarExports.join(" \\\n")}`
     : "";
 
+  // Determine the primary provider's env var for backward-compatible references
+  const primaryProviderKey = config.modelProvider ?? "anthropic";
+  const primaryEnvVar = (() => {
+    try { return getProviderEnvVar(primaryProviderKey); } catch { return "ANTHROPIC_API_KEY"; }
+  })();
+
   return `#!/bin/bash
 set -e
 
@@ -306,7 +312,6 @@ export DEBIAN_FRONTEND=noninteractive
 # ============================================
 
 # Configuration
-ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY}"
 TAILSCALE_AUTH_KEY="\${TAILSCALE_AUTH_KEY}"
 GATEWAY_TOKEN="\${GATEWAY_TOKEN}"
 GATEWAY_PORT="${gatewayPort}"
@@ -361,26 +366,24 @@ fi
 UBUNTU_SCRIPT
 
 # Set environment variables for ubuntu user (provider-aware)
-${config.modelProvider && config.modelProvider !== "anthropic"
-  ? (() => {
-    const providerDef = MODEL_PROVIDERS[config.modelProvider as keyof typeof MODEL_PROVIDERS];
-    if (!providerDef) {
-      throw new Error(`Unknown model provider "${config.modelProvider}". Supported: ${Object.keys(MODEL_PROVIDERS).join(", ")}`);
-    }
-    return `# ${config.modelProvider} provider: export ${providerDef.envVar}
-echo 'export ${providerDef.envVar}="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
-echo "Configured ${providerDef.envVar} for ${config.modelProvider}"`;
-  })()
-  : `# Auto-detect Anthropic credential type and export the correct variable
-if [[ "\${ANTHROPIC_API_KEY}" =~ ^sk-ant-oat ]]; then
+${Object.entries(config.providerApiKeys).map(([providerKey]) => {
+  const envVar = getProviderEnvVar(providerKey);
+  if (providerKey === "anthropic") {
+    return `# Auto-detect Anthropic credential type and export the correct variable
+if [[ "\${${envVar}}" =~ ^sk-ant-oat ]]; then
   # OAuth token from Claude Pro/Max subscription
-  echo 'export CLAUDE_CODE_OAUTH_TOKEN="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
+  echo 'export CLAUDE_CODE_OAUTH_TOKEN="\${${envVar}}"' >> /home/ubuntu/.bashrc
   echo "Detected OAuth token, exporting as CLAUDE_CODE_OAUTH_TOKEN"
 else
   # API key from Anthropic Console
-  echo 'export ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
-  echo "Detected API key, exporting as ANTHROPIC_API_KEY"
-fi`}
+  echo 'export ${envVar}="\${${envVar}}"' >> /home/ubuntu/.bashrc
+  echo "Detected API key, exporting as ${envVar}"
+fi`;
+  }
+  return `# ${providerKey} provider: export ${envVar}
+echo 'export ${envVar}="\${${envVar}}"' >> /home/ubuntu/.bashrc
+echo "Configured ${envVar} for ${providerKey}"`;
+}).join("\n")}
 ${(config.plugins ?? [])
     .flatMap((p) => Object.values(p.secretEnvVars ?? {}))
     .map((envVar) => `[ -n "\${${envVar}:-}" ] && echo 'export ${envVar}="\${${envVar}:-}"' >> /home/ubuntu/.bashrc`)
@@ -401,7 +404,7 @@ systemctl start user@1000.service`}
 
 # Run OpenClaw onboarding as ubuntu user (skip daemon install, do it separately)
 echo "Running OpenClaw onboarding..."
-sudo -H -u ubuntu ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY}" GATEWAY_PORT="$GATEWAY_PORT" bash -c '
+sudo -H -u ubuntu ${primaryEnvVar}="\${${primaryEnvVar}}" GATEWAY_PORT="$GATEWAY_PORT" bash -c '
 export HOME=/home/ubuntu
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -422,7 +425,10 @@ ${clawhubSkillsScript}
 echo "Configuring OpenClaw gateway..."
 sudo -H -u ubuntu \\
   GATEWAY_TOKEN="\${GATEWAY_TOKEN}" \\
-  ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY}" \\
+${Object.entries(config.providerApiKeys).map(([providerKey]) => {
+  const envVar = getProviderEnvVar(providerKey);
+  return `  ${envVar}="\${${envVar}}"`;
+}).join(" \\\n")} \\
   BRAVE_API_KEY="${braveApiKey ?? ""}" \\
   AGENT_NAME="${config.envVars?.AGENT_NAME ?? ""}" \\
   AGENT_EMOJI="${config.envVars?.AGENT_EMOJI ?? ""}"${pluginSecretEnvLine} \\
@@ -529,25 +535,23 @@ function generateWorkspaceFilesScript(
  * Interpolates environment variables in the cloud-init script.
  * Call this with actual values before passing to EC2 user data.
  *
- * Base secrets (anthropic, tailscale, gateway, slack, github, brave) are always handled.
- * Plugin secrets are passed via the additionalSecrets map.
+ * Base secrets (tailscale, gateway) are always interpolated directly.
+ * Provider API keys, plugin secrets, and dep secrets are all handled via additionalSecrets.
  */
 export function interpolateCloudInit(
   script: string,
   values: {
-    anthropicApiKey: string;
     tailscaleAuthKey: string;
     gatewayToken: string;
-    /** Additional secret env vars from plugins and deps: { envVarName: value } */
+    /** All secret env vars: provider API keys, plugins, deps — { envVarName: value } */
     additionalSecrets?: Record<string, string>;
   }
 ): string {
   let result = script
-    .replace(/\${ANTHROPIC_API_KEY}/g, values.anthropicApiKey)
     .replace(/\${TAILSCALE_AUTH_KEY}/g, values.tailscaleAuthKey)
     .replace(/\${GATEWAY_TOKEN}/g, values.gatewayToken);
 
-  // Plugin and dep secret env vars (includes Slack tokens, Linear keys, GitHub token, etc.)
+  // All secret env vars (provider API keys, plugin tokens, dep keys, etc.)
   if (values.additionalSecrets) {
     for (const [envVar, value] of Object.entries(values.additionalSecrets)) {
       const escaped = value.replace(/\$/g, "$$$$");
