@@ -314,7 +314,12 @@ export function generateConfigPatchScript(options: OpenClawConfigOptions): strin
   const model = options.model ?? "anthropic/claude-opus-4-6";
   const backupModel = options.backupModel;
   const providerKey = getProviderForModel(model);
-  const providerDef = MODEL_PROVIDERS[providerKey as keyof typeof MODEL_PROVIDERS];
+  const providerDef = MODEL_PROVIDERS[providerKey as keyof typeof MODEL_PROVIDERS] as
+    | (typeof MODEL_PROVIDERS)[keyof typeof MODEL_PROVIDERS]
+    | undefined;
+  if (providerKey !== "anthropic" && !providerDef) {
+    throw new Error(`Unknown model provider "${providerKey}" from model "${model}". Supported: ${Object.keys(MODEL_PROVIDERS).join(", ")}`);
+  }
 
   // Build cliBackends config from coding agent registry
   const codingAgentName = options.codingAgent ?? "claude-code";

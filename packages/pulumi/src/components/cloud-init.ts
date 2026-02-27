@@ -362,9 +362,15 @@ UBUNTU_SCRIPT
 
 # Set environment variables for ubuntu user (provider-aware)
 ${config.modelProvider && config.modelProvider !== "anthropic"
-  ? `# ${config.modelProvider} provider: export ${MODEL_PROVIDERS[config.modelProvider as keyof typeof MODEL_PROVIDERS]?.envVar ?? "MODEL_API_KEY"}
-echo 'export ${MODEL_PROVIDERS[config.modelProvider as keyof typeof MODEL_PROVIDERS]?.envVar ?? "MODEL_API_KEY"}="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
-echo "Configured ${MODEL_PROVIDERS[config.modelProvider as keyof typeof MODEL_PROVIDERS]?.envVar ?? "MODEL_API_KEY"} for ${config.modelProvider}"`
+  ? (() => {
+    const providerDef = MODEL_PROVIDERS[config.modelProvider as keyof typeof MODEL_PROVIDERS];
+    if (!providerDef) {
+      throw new Error(`Unknown model provider "${config.modelProvider}". Supported: ${Object.keys(MODEL_PROVIDERS).join(", ")}`);
+    }
+    return `# ${config.modelProvider} provider: export ${providerDef.envVar}
+echo 'export ${providerDef.envVar}="\${ANTHROPIC_API_KEY}"' >> /home/ubuntu/.bashrc
+echo "Configured ${providerDef.envVar} for ${config.modelProvider}"`;
+  })()
   : `# Auto-detect Anthropic credential type and export the correct variable
 if [[ "\${ANTHROPIC_API_KEY}" =~ ^sk-ant-oat ]]; then
   # OAuth token from Claude Pro/Max subscription
