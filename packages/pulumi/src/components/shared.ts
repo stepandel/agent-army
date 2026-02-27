@@ -54,6 +54,12 @@ export interface CloudInitDefaults {
   createUbuntuUser?: boolean;
   /** Compress output for providers with user_data size limits (e.g., Hetzner 32KB) */
   compress?: boolean;
+  /** Skip Docker installation (for local Docker provider) */
+  skipDocker?: boolean;
+  /** Run daemon in foreground instead of systemd (for local Docker provider) */
+  foregroundMode?: boolean;
+  /** Skip Tailscale installation */
+  skipTailscale?: boolean;
 }
 
 /**
@@ -119,6 +125,9 @@ export function buildCloudInitUserData(
             envVars: args.envVars,
             postSetupCommands: args.postSetupCommands,
             createUbuntuUser: defaults?.createUbuntuUser,
+            skipTailscale: defaults?.skipTailscale,
+            skipDocker: defaults?.skipDocker,
+            foregroundMode: defaults?.foregroundMode,
             plugins: args.plugins,
             enableFunnel: args.enableFunnel,
             clawhubSkills: args.clawhubSkills,

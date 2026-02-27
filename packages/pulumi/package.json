@@ -11,6 +11,7 @@
   "dependencies": {
     "@clawup/core": "workspace:*",
     "@pulumi/aws": "^6.0.0",
+    "@pulumi/docker": "^4.0.0",
     "@pulumi/hcloud": "^1.32.0",
     "@pulumi/pulumi": "^3.0.0",
     "@pulumi/tls": "^5.0.0",

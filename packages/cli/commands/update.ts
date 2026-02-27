@@ -13,7 +13,7 @@ interface UpdateOptions {
 }
 
 export async function updateCommand(_opts: UpdateOptions): Promise<void> {
-  p.intro(pc.bgCyan(pc.black(" Agent Army — Update ")));
+  p.intro(pc.bgCyan(pc.black(" Clawup — Update ")));
 
   const s = p.spinner();
   s.start("Checking npm for latest version…");
@@ -69,6 +69,21 @@ export async function updateCommand(_opts: UpdateOptions): Promise<void> {
     p.log.success("You're already on the latest version!");
     p.outro("Done");
     return;
+  }
+
+  // Warn on major version bump
+  const curMajor = parseInt(current.split(".")[0], 10);
+  const latMajor = parseInt(latest.split(".")[0], 10);
+  if (latMajor > curMajor) {
+    p.log.warn(
+      `${pc.yellow("Major version update")} — this may include breaking changes.\n` +
+      `  See ${pc.dim("https://github.com/stepandel/clawup/releases")} for details.\n` +
+      `  Key changes in v${latMajor}.x:\n` +
+      `  • \`clawup init\` is now non-interactive (generates scaffold, edit YAML by hand)\n` +
+      `  • New \`clawup setup\` command required between init and deploy\n` +
+      `  • Run \`clawup init\` on existing projects to refresh your manifest`
+    );
+    console.log();
   }
 
   p.log.step(`Updating ${pc.dim(current)} → ${pc.green(latest)}`);

@@ -9,6 +9,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/dashboard", "/login", "/signup", "/api"],
       },
     ],
-    sitemap: "https://agent-army.ai/sitemap.xml",
+    sitemap: "https://clawup.sh/sitemap.xml",
   };
 }

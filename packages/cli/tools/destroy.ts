@@ -5,18 +5,19 @@
  */
 
 import type { RuntimeAdapter, ToolImplementation } from "../adapters";
-import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
+import { requireManifest, syncManifestToProject } from "../lib/config";
 import { cleanupTailscaleDevices } from "../lib/tailscale";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
-import { getConfig } from "../lib/tool-helpers";
+import { getConfig, verifyStackOwnership } from "../lib/tool-helpers";
 import { formatAgentList } from "../lib/ui";
 import { qualifiedStackName } from "../lib/pulumi";
+import { getProjectRoot } from "../lib/project";
 
 export interface DestroyOptions {
   /** Skip confirmation prompts (dangerous!) */
   yes?: boolean;
-  /** Config name (auto-detected if only one) */
-  config?: string;
+  /** Destroy local Docker containers only */
+  local?: boolean;
 }
 
 /**
@@ -28,7 +29,7 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
 ) => {
   const { ui, exec } = runtime;
 
-  ui.intro("Agent Army");
+  ui.intro("Clawup");
 
   // Ensure workspace is set up (no-op in dev mode)
   const wsResult = ensureWorkspace();
@@ -38,23 +39,24 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name and load manifest
-  let configName: string;
+  // Load manifest
+  let manifest;
   try {
-    configName = resolveConfigName(options.config);
+    manifest = requireManifest();
   } catch (err) {
     ui.log.error((err as Error).message);
     process.exit(1);
   }
 
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    ui.log.error(`Config '${configName}' could not be loaded.`);
-    process.exit(1);
+  // --local: override provider in memory, use separate stack
+  if (options.local) {
+    manifest = { ...manifest, provider: "local" as const };
   }
 
   // Select/create stack (use org-qualified name if organization is set)
-  const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);
+  const stackName = options.local ? `${manifest.stackName}-local` : manifest.stackName;
+  const pulumiStack = qualifiedStackName(stackName, manifest.organization);
+  const projectRoot = getProjectRoot();
   const selectResult = exec.capture("pulumi", ["stack", "select", pulumiStack], cwd);
   if (selectResult.exitCode !== 0) {
     const initResult = exec.capture("pulumi", ["stack", "init", pulumiStack], cwd);
@@ -62,26 +64,47 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
       ui.log.error(`Could not select Pulumi stack "${pulumiStack}".`);
       process.exit(1);
     }
+  } else {
+    const collisionError = verifyStackOwnership(exec, projectRoot, cwd);
+    if (collisionError) {
+      ui.log.error(collisionError);
+      process.exit(1);
+    }
   }
 
   // Show what will be destroyed (provider-aware)
   const manifestProvider = manifest.provider ?? "aws";
-  const resourceLabel = manifestProvider === "hetzner" ? "Hetzner servers" : "EC2 instances";
-  const infraLabel = manifestProvider === "hetzner" ? "Firewall rules" : "VPC, subnet, and security group";
+  const isLocal = manifestProvider === "local";
+  const resourceLabel = isLocal
+    ? "Docker containers"
+    : manifestProvider === "hetzner"
+      ? "Hetzner servers"
+      : "EC2 instances";
+  const infraLabel = isLocal
+    ? "Docker networks"
+    : manifestProvider === "hetzner"
+      ? "Firewall rules"
+      : "VPC, subnet, and security group";
+
+  const destroyItems = [
+    `  - ${manifest.agents.length} ${resourceLabel}`,
+    `  - All workspace data on those ${isLocal ? "containers" : "instances"}`,
+    `  - ${infraLabel}`,
+  ];
+  if (!isLocal) {
+    destroyItems.push(`  - Tailscale device registrations`);
+  }
 
   ui.note(
     [
-      `Stack:  ${manifest.stackName}`,
-      `Region: ${manifest.region}`,
+      `Stack:    ${manifest.stackName}`,
+      isLocal ? `Provider: Local Docker` : `Region:   ${manifest.region}`,
       ``,
       `Agents (${manifest.agents.length}):`,
       formatAgentList(manifest.agents),
       ``,
       `This will PERMANENTLY DESTROY:`,
-      `  - ${manifest.agents.length} ${resourceLabel}`,
-      `  - All workspace data on those instances`,
-      `  - ${infraLabel}`,
-      `  - Tailscale device registrations`,
+      ...destroyItems,
     ].join("\n"),
     "Destruction Plan"
   );
@@ -106,7 +129,7 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
   }
 
   // Sync manifest to project root so the Pulumi program can read it
-  syncManifestToProject(configName, cwd);
+  syncManifestToProject(cwd, options.local ? { provider: "local" as const } : undefined);
 
   // Destroy infrastructure
   ui.log.step("Running pulumi destroy...");
@@ -119,27 +142,29 @@ export const destroyTool: ToolImplementation<DestroyOptions> = async (
     process.exit(1);
   }
 
-  // Clean up Tailscale devices after infrastructure is destroyed
-  const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
-  const tailscaleApiKey = getConfig(exec, "tailscaleApiKey", cwd);
+  // Clean up Tailscale devices after infrastructure is destroyed (skip for local)
+  if (!isLocal) {
+    const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
+    const tailscaleApiKey = getConfig(exec, "tailscaleApiKey", cwd);
 
-  if (tailnetDnsName && tailscaleApiKey) {
-    const spinner = ui.spinner("Removing agents from Tailscale...");
-    const { cleaned, failed } = cleanupTailscaleDevices(
-      tailscaleApiKey, tailnetDnsName, manifest.stackName, manifest.agents
-    );
-    if (failed.length === 0) {
-      spinner.stop(cleaned.length > 0 ? "Tailscale devices cleaned up" : "No Tailscale devices found");
-    } else {
-      spinner.stop("Some Tailscale devices could not be removed");
-      ui.log.warn(
-        `Could not remove: ${failed.join(", ")}. Remove manually from https://login.tailscale.com/admin/machines`
+    if (tailnetDnsName && tailscaleApiKey) {
+      const spinner = ui.spinner("Removing agents from Tailscale...");
+      const { cleaned, failed } = cleanupTailscaleDevices(
+        tailscaleApiKey, tailnetDnsName, manifest.stackName, manifest.agents
       );
+      if (failed.length === 0) {
+        spinner.stop(cleaned.length > 0 ? "Tailscale devices cleaned up" : "No Tailscale devices found");
+      } else {
+        spinner.stop("Some Tailscale devices could not be removed");
+        ui.log.warn(
+          `Could not remove: ${failed.join(", ")}. Remove manually from https://login.tailscale.com/admin/machines`
+        );
+      }
+    } else if (tailnetDnsName && !tailscaleApiKey) {
+      ui.log.warn("No Tailscale API key configured - devices must be removed manually.");
+      console.log("  Remove devices at: https://login.tailscale.com/admin/machines");
+      console.log("  Tip: Set a Tailscale API key (`clawup init`) for automatic cleanup.");
     }
-  } else if (tailnetDnsName && !tailscaleApiKey) {
-    ui.log.warn("No Tailscale API key configured - devices must be removed manually.");
-    console.log("  Remove devices at: https://login.tailscale.com/admin/machines");
-    console.log("  Tip: Set a Tailscale API key (`clawup init`) for automatic cleanup.");
   }
 
   ui.log.success(`Stack "${manifest.stackName}" has been destroyed.`);

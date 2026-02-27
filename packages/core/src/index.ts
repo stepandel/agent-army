@@ -23,6 +23,7 @@ export {
   CONFIG_DIR,
   COST_ESTIMATES,
   HETZNER_COST_ESTIMATES,
+  LOCAL_COST_ESTIMATES,
   HETZNER_LOCATIONS,
   HETZNER_SERVER_TYPES_EU,
   HETZNER_SERVER_TYPES_US,
@@ -38,14 +39,25 @@ export {
   hetznerServerTypes,
   slackAppManifest,
   tailscaleHostname,
+  dockerContainerName,
 } from "./constants";
 
 // Plugin registry
-export type { PluginRegistryEntry } from "./plugin-registry";
-export { PLUGIN_REGISTRY } from "./plugin-registry";
+export type { PluginRegistryEntry, PluginManifest, PluginSecret } from "./plugin-registry";
+export { PLUGIN_REGISTRY, PLUGIN_MANIFEST_REGISTRY, getSecretEnvVars } from "./plugin-registry";
+
+// Plugin loader
+export {
+  resolvePlugin,
+  resolvePlugins,
+  collectPluginSecrets,
+  buildKnownSecrets,
+  buildValidators,
+  isSecretCoveredByPlugin,
+} from "./plugin-loader";
 
 // Coding agent registry
-export type { CodingAgentEntry } from "./coding-agent-registry";
+export type { CodingAgentEntry, CodingAgentSecret } from "./coding-agent-registry";
 export { CODING_AGENT_REGISTRY } from "./coding-agent-registry";
 
 // Dep registry
@@ -69,4 +81,8 @@ export {
   ClawupManifestSchema,
   PluginConfigFileSchema,
   IdentityManifestSchema,
+  PluginManifestSchema,
+  PluginSecretSchema,
+  WebhookSetupSchema,
+  ConfigTransformSchema,
 } from "./schemas";

@@ -16,7 +16,7 @@ clawup validate [options]
 | Option | Description |
 |--------|-------------|
 | `-t, --timeout <seconds>` | SSH timeout in seconds (default: 30) |
-| `-c, --config <name>` | Config name (auto-detected if only one) |
+| `--local` | Validate local Docker containers |
 
 ## Examples
 
@@ -26,4 +26,7 @@ clawup validate
 
 # With custom timeout
 clawup validate --timeout 60
+
+# Validate local Docker containers
+clawup validate --local
 ```

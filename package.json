@@ -6,12 +6,19 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run",
+    "test:e2e": "vitest run --config packages/cli/__e2e__/vitest.e2e.config.ts",
     "build:cli-infra": "bash scripts/bundle-infra.sh"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@scarf/scarf",
+      "esbuild"
+    ]
   },
   "pulumi": {
     "resource": true

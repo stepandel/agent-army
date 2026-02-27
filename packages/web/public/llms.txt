@@ -1,22 +1,25 @@
 # Clawup
 
-> Deploy and manage autonomous AI coding agents on your own cloud infrastructure.
+> Deploy fleets of specialized OpenClaw agents to your cloud infrastructure.
 
-Clawup is an open-source CLI tool that provisions, orchestrates, and monitors AI dev teams. Deploy AI coding agents (Claude, GPT, etc.) to your own AWS infrastructure with a single command.
+Clawup is an open-source CLI tool that deploys, orchestrates, and monitors AI agent teams. Define agent identities in YAML, provision infrastructure with one command, and track changes in git.
 
 ## Key Features
 
-- One-command deployment of AI coding agents to your cloud
-- Support for multiple agent types: Juno (Claude Code), Titus (Aider), Scout (Codex)
+- One-command deployment of OpenClaw agents to AWS or Hetzner Cloud
+- Identity system: composable YAML definitions for agent personality, skills, model, and tools
+- Built-in agents: Juno (PM), Titus (Engineer), Scout (QA)
 - Built-in integrations with Linear, GitHub, and Slack
-- Secure cloud infrastructure provisioned via Pulumi (VPC, EC2, networking)
+- Secure infrastructure via Pulumi (VPC, EC2, networking)
+- Encrypted mesh networking via Tailscale (no public ports)
 - Real-time agent monitoring and SSH access
 - Cost estimation and resource management
 
 ## Links
 
-- [Documentation](https://docs.agent-army.ai)
-- [Quickstart Guide](https://docs.agent-army.ai/quickstart)
+- [Documentation](https://docs.clawup.sh)
+- [Quickstart Guide](https://docs.clawup.sh/quickstart)
 - [GitHub Repository](https://github.com/stepandel/clawup)
-- [CLI Reference](https://docs.agent-army.ai/cli/overview)
-- [Architecture Overview](https://docs.agent-army.ai/architecture/overview)
+- [CLI Reference](https://docs.clawup.sh/cli/overview)
+- [Architecture Overview](https://docs.clawup.sh/architecture/overview)
+- [OpenClaw](https://openclaw.ai)

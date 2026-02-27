@@ -1,44 +1,34 @@
 /**
- * clawup init — Interactive setup wizard
+ * clawup init — Generate clawup.yaml scaffold
  *
- * Identity-driven: every agent must have an identity source.
- * The manifest stores only team composition (which agents to deploy).
- * Plugins, deps, and config come from identities at deploy time.
+ * Completely non-interactive. Generates a template clawup.yaml with sensible
+ * defaults (all built-in agents, AWS us-east-1, t3.medium) and a .env.example.
+ * The user then edits clawup.yaml by hand.
+ *
+ * Two modes:
+ * - Fresh init (no clawup.yaml): scaffold a new manifest with built-in agents
+ * - Repair mode (clawup.yaml exists): re-fetch identities, update secrets/plugins,
+ *   regenerate .env.example — all non-interactively
  */
 
-import { execSync } from "child_process";
+import * as fs from "fs";
 import * as p from "@clack/prompts";
+import YAML from "yaml";
 import type { AgentDefinition, ClawupManifest, IdentityManifest } from "@clawup/core";
 import {
   BUILT_IN_IDENTITIES,
-  PROVIDERS,
-  AWS_REGIONS,
-  HETZNER_LOCATIONS,
-  INSTANCE_TYPES,
-  hetznerServerTypes,
-  COST_ESTIMATES,
-  HETZNER_COST_ESTIMATES,
-  KEY_INSTRUCTIONS,
-  MODEL_PROVIDERS,
-  slackAppManifest,
-  tailscaleHostname,
-  PLUGIN_REGISTRY,
-  DEP_REGISTRY,
-  getProviderForModel,
+  MANIFEST_FILE,
+  ClawupManifestSchema,
 } from "@clawup/core";
 import { fetchIdentity } from "@clawup/core/identity";
 import * as os from "os";
 import * as path from "path";
-import { checkPrerequisites } from "../lib/prerequisites";
-import { selectOrCreateStack, setConfig, qualifiedStackName } from "../lib/pulumi";
-import { saveManifest } from "../lib/config";
-import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
-import { showBanner, handleCancel, exitWithError, formatCost, formatAgentList } from "../lib/ui";
-
-interface InitOptions {
-  deploy?: boolean;
-  yes?: boolean;
-}
+import { showBanner, exitWithError } from "../lib/ui";
+import { findProjectRoot } from "../lib/project";
+import {
+  buildManifestSecrets,
+  generateEnvExample,
+} from "../lib/env";
 
 /** Fetched identity data stored alongside the agent definition */
 interface FetchedIdentity {
@@ -46,286 +36,31 @@ interface FetchedIdentity {
   manifest: IdentityManifest;
 }
 
-export async function initCommand(opts: InitOptions = {}): Promise<void> {
+export async function initCommand(): Promise<void> {
   showBanner();
 
   // -------------------------------------------------------------------------
-  // Step 1: Check prerequisites
+  // Check for existing manifest — enter repair mode if found
   // -------------------------------------------------------------------------
-  p.log.step("Checking prerequisites...");
-  const prereqsOk = await checkPrerequisites();
-  if (!prereqsOk) {
-    exitWithError("Prerequisites not met. Please install the missing tools and try again.");
-  }
-  p.log.success("All prerequisites satisfied!");
-
-  // -------------------------------------------------------------------------
-  // Step 2: Infrastructure config
-  // -------------------------------------------------------------------------
-  const stackName = await p.text({
-    message: "Pulumi stack name",
-    placeholder: "dev",
-    defaultValue: "dev",
-  });
-  handleCancel(stackName);
-
-  const organization = await p.text({
-    message: "Pulumi organization (leave empty for personal account)",
-    placeholder: "my-org",
-    defaultValue: "",
-  });
-  handleCancel(organization);
-
-  const provider = await p.select({
-    message: "Cloud provider",
-    options: PROVIDERS.map((prov) => ({ value: prov.value, label: prov.label, hint: prov.hint })),
-    initialValue: "aws",
-  });
-  handleCancel(provider);
-
-  let region: string;
-  let instanceType: string;
-
-  if (provider === "aws") {
-    const awsRegion = await p.select({
-      message: "AWS region",
-      options: AWS_REGIONS,
-      initialValue: "us-east-1",
-    });
-    handleCancel(awsRegion);
-    region = awsRegion as string;
-
-    const awsInstanceType = await p.select({
-      message: "Default instance type",
-      options: INSTANCE_TYPES,
-      initialValue: "t3.medium",
-    });
-    handleCancel(awsInstanceType);
-    instanceType = awsInstanceType as string;
-  } else {
-    const hetznerLocation = await p.select({
-      message: "Hetzner location",
-      options: HETZNER_LOCATIONS,
-      initialValue: "fsn1",
-    });
-    handleCancel(hetznerLocation);
-    region = hetznerLocation as string;
-
-    const serverTypeOptions = hetznerServerTypes(region);
-    const hetznerServerType = await p.select({
-      message: "Default server type",
-      options: serverTypeOptions,
-      initialValue: serverTypeOptions[0].value,
-    });
-    handleCancel(hetznerServerType);
-    instanceType = hetznerServerType as string;
+  const projectRoot = findProjectRoot();
+  if (projectRoot) {
+    return repairMode(projectRoot);
   }
 
   // -------------------------------------------------------------------------
-  // Step 3: Owner info
+  // Fresh init: scaffold a new clawup.yaml with defaults
   // -------------------------------------------------------------------------
-  const ownerName = await p.text({
-    message: "Owner name (for workspace templates)",
-    placeholder: "Boss",
-    defaultValue: "Boss",
-  });
-  handleCancel(ownerName);
+  p.log.step("Generating clawup.yaml with built-in agents...");
 
-  const timezone = await p.text({
-    message: "Your timezone",
-    placeholder: "PST (America/Los_Angeles)",
-    defaultValue: "PST (America/Los_Angeles)",
-  });
-  handleCancel(timezone);
-
-  const workingHours = await p.text({
-    message: "Your working hours",
-    placeholder: "9am-6pm",
-    defaultValue: "9am-6pm",
-  });
-  handleCancel(workingHours);
-
-  const userNotes = await p.text({
-    message: "Any notes for your agents about you? (optional)",
-    placeholder: "e.g., Prefers concise updates, hates unnecessary meetings",
-    defaultValue: "",
-  });
-  handleCancel(userNotes);
-
-  const orgValue = (organization as string).trim() || undefined;
-
-  const basicConfig = {
-    stackName: stackName as string,
-    organization: orgValue,
-    provider: provider as "aws" | "hetzner",
-    region,
-    instanceType,
-    ownerName: ownerName as string,
-    timezone: timezone as string,
-    workingHours: workingHours as string,
-    userNotes: (userNotes as string) || "No additional notes provided yet.",
-  };
-
-  // -------------------------------------------------------------------------
-  // Step 4: Model provider + API key (dynamic)
-  // -------------------------------------------------------------------------
-  p.log.step("Configure model provider");
-
-  const providerOptions = Object.entries(MODEL_PROVIDERS).map(([key, prov]) => ({
-    value: key,
-    label: prov.name,
-    hint: prov.models.length > 0
-      ? prov.models.map((m) => m.label).join(", ")
-      : "Any model (free-form input)",
-  }));
-
-  const modelProvider = await p.select({
-    message: "Model provider",
-    options: providerOptions,
-    initialValue: "anthropic",
-  });
-  handleCancel(modelProvider);
-
-  const selectedProvider = MODEL_PROVIDERS[modelProvider as keyof typeof MODEL_PROVIDERS];
-
-  // Model selection
-  let selectedModel: string;
-  if (selectedProvider.models.length > 0) {
-    const modelChoice = await p.select({
-      message: "Default model",
-      options: [...selectedProvider.models],
-      initialValue: selectedProvider.models[0].value,
-    });
-    handleCancel(modelChoice);
-    selectedModel = modelChoice as string;
-  } else {
-    // Free-form model input (e.g., OpenRouter)
-    const modelInput = await p.text({
-      message: "Model identifier (e.g., openai/gpt-4o)",
-      placeholder: `${modelProvider as string}/model-name`,
-      validate: (val) => {
-        if (!val.trim()) return "Model identifier is required";
-      },
-    });
-    handleCancel(modelInput);
-    selectedModel = modelInput as string;
-  }
-
-  // API key collection — provider-aware
-  const providerKeyMap: Record<string, keyof typeof KEY_INSTRUCTIONS> = {
-    anthropic: "anthropicApiKey",
-    openai: "openaiApiKey",
-    google: "googleApiKey",
-    openrouter: "openrouterApiKey",
-  };
-  const keyInstructionKey = providerKeyMap[modelProvider as string] ?? "anthropicApiKey";
-  const keyInstruction = KEY_INSTRUCTIONS[keyInstructionKey];
-
-  p.note(keyInstruction.steps.join("\n"), keyInstruction.title);
-
-  const modelApiKey = await p.text({
-    message: `${selectedProvider.name} API key`,
-    placeholder: selectedProvider.keyPrefix ? `${selectedProvider.keyPrefix}...` : "API key",
-    validate: (val) => {
-      if (!val) return "API key is required";
-      if (selectedProvider.keyPrefix && !val.startsWith(selectedProvider.keyPrefix)) {
-        return `Must start with ${selectedProvider.keyPrefix}`;
-      }
-    },
-  });
-  handleCancel(modelApiKey);
-
-  p.log.step("Configure infrastructure secrets");
-
-  p.note(
-    KEY_INSTRUCTIONS.tailscaleAuthKey.steps.join("\n"),
-    KEY_INSTRUCTIONS.tailscaleAuthKey.title
-  );
-
-  const tailscaleAuthKey = await p.password({
-    message: "Tailscale auth key",
-    validate: (val) => {
-      if (!val.startsWith("tskey-auth-")) return "Must start with tskey-auth-";
-    },
-  });
-  handleCancel(tailscaleAuthKey);
-
-  p.note(
-    KEY_INSTRUCTIONS.tailnetDnsName.steps.join("\n"),
-    KEY_INSTRUCTIONS.tailnetDnsName.title
-  );
-
-  const tailnetDnsName = await p.text({
-    message: "Tailnet DNS name",
-    placeholder: "my-tailnet.ts.net",
-    validate: (val) => {
-      if (!val.endsWith(".ts.net")) return "Must end with .ts.net";
-    },
-  });
-  handleCancel(tailnetDnsName);
-
-  p.note(
-    KEY_INSTRUCTIONS.tailscaleApiKey.steps.join("\n"),
-    KEY_INSTRUCTIONS.tailscaleApiKey.title
-  );
-
-  const tailscaleApiKey = await p.text({
-    message: "Tailscale API key (press Enter to skip)",
-    placeholder: "tskey-api-... (optional)",
-    defaultValue: "",
-  });
-  handleCancel(tailscaleApiKey);
-
-  let hcloudToken: string | undefined;
-  if (provider === "hetzner") {
-    p.note(
-      KEY_INSTRUCTIONS.hcloudToken.steps.join("\n"),
-      KEY_INSTRUCTIONS.hcloudToken.title
-    );
-
-    const token = await p.password({
-      message: "Hetzner Cloud API token",
-      validate: (val) => {
-        if (!val) return "API token is required for Hetzner deployments";
-      },
-    });
-    handleCancel(token);
-    hcloudToken = token as string;
-  }
-
-  // -------------------------------------------------------------------------
-  // Step 5: Agent selection (identity-driven, no custom mode)
-  // -------------------------------------------------------------------------
-  p.log.step("Configure agents");
-
-  const agentMode = await p.select({
-    message: "How would you like to configure agents?",
-    options: [
-      { value: "built-in", label: "Built-in agents", hint: "PM (Juno), Eng (Titus), QA (Scout)" },
-      { value: "identity", label: "From identity source", hint: "Load from a Git URL or local path" },
-      { value: "mix", label: "Mix of both", hint: "Pick built-in + add from identity source" },
-    ],
-  });
-  handleCancel(agentMode);
-
-  const fetchedIdentities: FetchedIdentity[] = [];
   const identityCacheDir = path.join(os.homedir(), ".clawup", "identity-cache");
+  const fetchedIdentities: FetchedIdentity[] = [];
 
-  // Collect built-in agents
-  if (agentMode === "built-in" || agentMode === "mix") {
-    const selectedBuiltIns = await p.multiselect({
-      message: "Select agents",
-      options: Object.entries(BUILT_IN_IDENTITIES).map(([key, entry]) => ({
-        value: key,
-        label: entry.label,
-        hint: entry.hint,
-      })),
-      required: agentMode === "built-in",
-    });
-    handleCancel(selectedBuiltIns);
+  // Fetch all built-in identities
+  const spinner = p.spinner();
+  spinner.start("Fetching built-in agent identities...");
 
-    for (const key of selectedBuiltIns as string[]) {
-      const entry = BUILT_IN_IDENTITIES[key];
+  for (const [, entry] of Object.entries(BUILT_IN_IDENTITIES)) {
+    try {
       const identity = await fetchIdentity(entry.path, identityCacheDir);
       const agent: AgentDefinition = {
         name: `agent-${identity.manifest.name}`,
@@ -335,86 +70,26 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
         volumeSize: identity.manifest.volumeSize,
       };
       fetchedIdentities.push({ agent, manifest: identity.manifest });
+    } catch (err) {
+      spinner.stop(`Failed to fetch identity: ${entry.label}`);
+      exitWithError(
+        `Could not fetch identity "${entry.path}": ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      return;
     }
   }
 
-  // Collect identity-source agents
-  if (agentMode === "identity" || agentMode === "mix") {
-    let addMore = true;
-
-    while (addMore) {
-      const identityUrl = await p.text({
-        message: "Identity source (Git URL or local path)",
-        placeholder: "https://github.com/org/identities#agent-name",
-        validate: (val) => {
-          if (!val.trim()) return "Identity source is required";
-        },
-      });
-      handleCancel(identityUrl);
-
-      const spinner = p.spinner();
-      spinner.start("Validating identity...");
-
-      try {
-        const identity = await fetchIdentity(identityUrl as string, identityCacheDir);
-        spinner.stop(
-          `Found: ${identity.manifest.displayName} (${identity.manifest.role}) — ${identity.manifest.description}`
-        );
-
-        // Allow volume size override
-        const volumeOverride = await p.text({
-          message: `Volume size in GB (default: ${identity.manifest.volumeSize})`,
-          placeholder: String(identity.manifest.volumeSize),
-          defaultValue: String(identity.manifest.volumeSize),
-          validate: (val) => {
-            const n = parseInt(val, 10);
-            if (isNaN(n) || n < 8 || n > 500) return "Must be between 8 and 500";
-          },
-        });
-        handleCancel(volumeOverride);
-
-        const agent: AgentDefinition = {
-          name: `agent-${identity.manifest.name}`,
-          displayName: identity.manifest.displayName,
-          role: identity.manifest.role,
-          identity: identityUrl as string,
-          volumeSize: parseInt(volumeOverride as string, 10),
-        };
-        fetchedIdentities.push({ agent, manifest: identity.manifest });
-      } catch (err) {
-        spinner.stop(`Failed to validate identity: ${(err as Error).message}`);
-        p.log.error("Please check the URL and try again.");
-        continue;
-      }
-
-      const more = await p.confirm({
-        message: "Add another identity-based agent?",
-        initialValue: false,
-      });
-      handleCancel(more);
-      addMore = more as boolean;
-    }
-  }
-
-  if (fetchedIdentities.length === 0) {
-    exitWithError("No agents configured. At least one agent is required.");
-  }
+  spinner.stop(`Fetched ${fetchedIdentities.length} agent identities`);
 
   const agents = fetchedIdentities.map((fi) => fi.agent);
 
-  // -------------------------------------------------------------------------
-  // Step 6: Collect template variable values
-  // -------------------------------------------------------------------------
+  // Build plugin/dep maps
+  const { agentPlugins, agentDeps, allPluginNames, allDepNames, identityPluginDefaults } =
+    buildPluginDepMaps(fetchedIdentities);
 
-  // Auto-fillable vars from owner info
-  const autoVars: Record<string, string> = {
-    OWNER_NAME: basicConfig.ownerName,
-    TIMEZONE: basicConfig.timezone,
-    WORKING_HOURS: basicConfig.workingHours,
-    USER_NOTES: basicConfig.userNotes,
-  };
-
-  // Scan all identities for template vars and deduplicate
+  // Collect all template vars declared by identities
   const allTemplateVarNames = new Set<string>();
   for (const fi of fetchedIdentities) {
     for (const v of fi.manifest.templateVars ?? []) {
@@ -422,42 +97,164 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     }
   }
 
-  const templateVars: Record<string, string> = {};
+  const ownerName = "Your Name";
+  const timezone = "America/New_York";
+  const workingHours = "9am-6pm";
+  const userNotes = "Add any notes about yourself for your agents here.";
 
-  // Auto-fill known vars
+  // Populate templateVars so the user can see what's available for {{...}} substitution
+  const templateVars: Record<string, string> = {
+    OWNER_NAME: ownerName,
+    TIMEZONE: timezone,
+    WORKING_HOURS: workingHours,
+    USER_NOTES: userNotes,
+  };
+  // Add any identity-declared vars not already covered
   for (const varName of allTemplateVarNames) {
-    if (autoVars[varName]) {
-      templateVars[varName] = autoVars[varName];
+    if (!templateVars[varName]) {
+      templateVars[varName] = "";
     }
   }
 
-  // Prompt for remaining vars
-  const remainingVars = [...allTemplateVarNames].filter((v) => !templateVars[v]);
-  if (remainingVars.length > 0) {
-    p.log.step("Configure template variables");
-    p.log.info(`Your agents use the following template variables: ${remainingVars.join(", ")}`);
+  // Build manifest with defaults
+  const manifest: ClawupManifest = {
+    stackName: "dev",
+    provider: "aws",
+    region: "us-east-1",
+    instanceType: "t3.medium",
+    ownerName,
+    timezone,
+    workingHours,
+    userNotes,
+    templateVars,
+    agents,
+  };
 
-    for (const varName of remainingVars) {
-      const value = await p.text({
-        message: `Value for ${varName}`,
-        placeholder: varName === "LINEAR_TEAM" ? "e.g., ENG" : varName === "GITHUB_REPO" ? "https://github.com/org/repo" : "",
-        validate: (val) => {
-          if (!val.trim()) return `${varName} is required`;
-        },
-      });
-      handleCancel(value);
-      templateVars[varName] = value as string;
+  // Write manifest + .env.example
+  writeManifest(manifest, fetchedIdentities, agentPlugins, agentDeps, allPluginNames, allDepNames, identityPluginDefaults, process.cwd());
+
+  p.log.success("Created clawup.yaml and .env.example");
+  p.note(
+    [
+      "1. Edit clawup.yaml — set your provider, region, owner info, and agents",
+      "2. Copy .env.example to .env and fill in your secrets",
+      "3. Run `clawup setup` to validate and configure Pulumi",
+      "4. Run `clawup deploy` to deploy your agents",
+    ].join("\n"),
+    "Next steps"
+  );
+  p.outro("Done!");
+}
+
+// ---------------------------------------------------------------------------
+// Repair mode: clawup.yaml exists — refresh identities & update manifest
+// ---------------------------------------------------------------------------
+
+async function repairMode(projectRoot: string): Promise<void> {
+  const manifestPath = path.join(projectRoot, MANIFEST_FILE);
+
+  // Load and validate
+  let validation: ReturnType<typeof ClawupManifestSchema.safeParse>;
+  try {
+    const raw = fs.readFileSync(manifestPath, "utf-8");
+    const parsed = YAML.parse(raw);
+    validation = ClawupManifestSchema.safeParse(parsed);
+  } catch (err) {
+    exitWithError(
+      `Failed to read/parse ${MANIFEST_FILE} at ${manifestPath}: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+    return;
+  }
+  if (!validation.success) {
+    const issues = validation.error.issues.map((i) => i.message).join(", ");
+    exitWithError(`Invalid ${MANIFEST_FILE} at ${manifestPath}: ${issues}`);
+    return;
+  }
+  const manifest = validation.data;
+  const agents = manifest.agents;
+
+  p.log.info(`Refreshing ${MANIFEST_FILE} at ${projectRoot}`);
+  p.log.info(
+    `Stack: ${manifest.stackName} | Provider: ${manifest.provider} | ${agents.length} agent(s)`
+  );
+
+  // Re-fetch identities
+  const identityCacheDir = path.join(os.homedir(), ".clawup", "identity-cache");
+  const fetchedIdentities: FetchedIdentity[] = [];
+
+  const identitySpinner = p.spinner();
+  identitySpinner.start("Resolving agent identities...");
+  for (const agent of agents) {
+    try {
+      const identity = await fetchIdentity(agent.identity, identityCacheDir);
+      fetchedIdentities.push({ agent, manifest: identity.manifest });
+    } catch (err) {
+      identitySpinner.stop(`Failed to resolve identity for ${agent.name}`);
+      exitWithError(
+        `Failed to resolve identity "${agent.identity}": ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      return;
+    }
+  }
+  identitySpinner.stop(
+    `Resolved ${fetchedIdentities.length} agent identit${fetchedIdentities.length === 1 ? "y" : "ies"}`
+  );
+
+  // Ensure auto vars are in templateVars (from top-level fields)
+  const autoVarMap: Record<string, string | undefined> = {
+    OWNER_NAME: manifest.ownerName,
+    TIMEZONE: manifest.timezone,
+    WORKING_HOURS: manifest.workingHours,
+    USER_NOTES: manifest.userNotes,
+  };
+  const existingTemplateVars = manifest.templateVars ?? {};
+  const templateVars: Record<string, string> = { ...existingTemplateVars };
+  for (const [key, value] of Object.entries(autoVarMap)) {
+    if (!templateVars[key] && value) {
+      templateVars[key] = value;
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Step 7: Collect integration credentials (driven by identity plugins/deps)
-  // -------------------------------------------------------------------------
-  p.log.step("Configure integrations");
+  // Check for missing identity-declared vars (warn, don't prompt)
+  const allTemplateVarNames = new Set<string>();
+  for (const fi of fetchedIdentities) {
+    for (const v of fi.manifest.templateVars ?? []) {
+      allTemplateVarNames.add(v);
+    }
+  }
+  const missingVars = [...allTemplateVarNames].filter((v) => !templateVars[v]);
+  if (missingVars.length > 0) {
+    p.log.warn(
+      `Missing template variables in clawup.yaml: ${missingVars.join(", ")}\n` +
+      `Add them under templateVars: in your manifest.`
+    );
+  }
 
-  // Determine which plugins and deps are needed across all identities
-  const agentPlugins = new Map<string, Set<string>>(); // agent name → plugin names
-  const agentDeps = new Map<string, Set<string>>(); // agent name → dep names
+  manifest.templateVars = templateVars;
+
+  // Build plugin/dep maps
+  const { agentPlugins, agentDeps, allPluginNames, allDepNames, identityPluginDefaults } =
+    buildPluginDepMaps(fetchedIdentities);
+
+  // Write updated manifest
+  writeManifest(manifest, fetchedIdentities, agentPlugins, agentDeps, allPluginNames, allDepNames, identityPluginDefaults, projectRoot);
+
+  p.log.success(`${MANIFEST_FILE} and .env.example updated`);
+  p.outro("Run `clawup setup` to validate secrets and configure Pulumi.");
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/** Build plugin/dep maps from fetched identities */
+function buildPluginDepMaps(fetchedIdentities: FetchedIdentity[]) {
+  const agentPlugins = new Map<string, Set<string>>();
+  const agentDeps = new Map<string, Set<string>>();
   const allPluginNames = new Set<string>();
   const allDepNames = new Set<string>();
 
@@ -470,7 +267,6 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     for (const d of deps) allDepNames.add(d);
   }
 
-  // Track identity pluginDefaults per agent name for seeding plugin config files
   const identityPluginDefaults: Record<string, Record<string, Record<string, unknown>>> = {};
   for (const fi of fetchedIdentities) {
     if (fi.manifest.pluginDefaults) {
@@ -478,369 +274,70 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     }
   }
 
-  // Per-agent integration credentials
-  const integrationCredentials: Record<string, {
-    linearApiKey?: string;
-    linearWebhookSecret?: string;
-    linearUserUuid?: string;
-    githubToken?: string;
-  }> = {};
-  for (const agent of agents) {
-    integrationCredentials[agent.role] = {};
-  }
+  return { agentPlugins, agentDeps, allPluginNames, allDepNames, identityPluginDefaults };
+}
 
-  // Slack credentials — only if any identity has the slack plugin
-  const slackCredentials: Record<string, { botToken: string; appToken: string }> = {};
-  if (allPluginNames.has("slack")) {
-    p.note(
-      KEY_INSTRUCTIONS.slackCredentials.steps.join("\n"),
-      KEY_INSTRUCTIONS.slackCredentials.title
-    );
-
-    for (const fi of fetchedIdentities) {
-      if (!agentPlugins.get(fi.agent.name)?.has("slack")) continue;
-
-      const slackManifest = slackAppManifest(fi.agent.displayName);
-      try {
-        execSync(
-          process.platform === "darwin" ? "pbcopy" : "xclip -selection clipboard",
-          { input: slackManifest },
-        );
-        p.log.success(`Slack manifest for ${fi.agent.displayName} copied to clipboard — paste it into Slack`);
-      } catch {
-        p.log.warn(`Could not copy to clipboard. Manifest for ${fi.agent.displayName}:`);
-        console.log(slackManifest);
-      }
-
-      const botToken = await p.password({
-        message: `Slack Bot Token for ${fi.agent.displayName} (${fi.agent.role})`,
-        validate: (val) => {
-          if (!val.startsWith("xoxb-")) return "Must start with xoxb-";
-        },
-      });
-      handleCancel(botToken);
-
-      const appToken = await p.password({
-        message: `Slack App Token for ${fi.agent.displayName} (${fi.agent.role})`,
-        validate: (val) => {
-          if (!val.startsWith("xapp-")) return "Must start with xapp-";
-        },
-      });
-      handleCancel(appToken);
-
-      slackCredentials[fi.agent.role] = {
-        botToken: botToken as string,
-        appToken: appToken as string,
-      };
-    }
-  }
-
-  // Linear credentials — only if any identity has the openclaw-linear plugin
-  if (allPluginNames.has("openclaw-linear")) {
-    p.note(
-      KEY_INSTRUCTIONS.linearApiKey.steps.join("\n"),
-      KEY_INSTRUCTIONS.linearApiKey.title
-    );
-
-    const linearAgents = fetchedIdentities.filter(
-      (fi) => agentPlugins.get(fi.agent.name)?.has("openclaw-linear")
-    );
-
-    for (const fi of linearAgents) {
-      const linearKey = await p.password({
-        message: `Linear API key for ${fi.agent.displayName} (${fi.agent.role})`,
-        validate: (val) => {
-          if (!val.startsWith("lin_api_")) return "Must start with lin_api_";
-        },
-      });
-      handleCancel(linearKey);
-
-      integrationCredentials[fi.agent.role].linearApiKey = linearKey as string;
-
-      // Auto-fetch user UUID from Linear API
-      const s = p.spinner();
-      s.start(`Fetching Linear user ID for ${fi.agent.displayName}...`);
-      try {
-        const res = await fetch("https://api.linear.app/graphql", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: linearKey as string,
-          },
-          body: JSON.stringify({ query: "{ viewer { id } }" }),
-        });
-        const data = (await res.json()) as { data?: { viewer?: { id?: string } } };
-        const uuid = data?.data?.viewer?.id;
-        if (!uuid) throw new Error("No user ID in response");
-        integrationCredentials[fi.agent.role].linearUserUuid = uuid;
-        s.stop(`${fi.agent.displayName}: ${uuid}`);
-      } catch (err) {
-        s.stop(`Could not fetch Linear user ID for ${fi.agent.displayName}`);
-        p.log.warn(`${err instanceof Error ? err.message : String(err)}`);
-        const linearUserUuid = await p.text({
-          message: `Enter Linear user UUID manually for ${fi.agent.displayName}`,
-          placeholder: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-          validate: (val) => {
-            if (!val) return "Linear user UUID is required";
-            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
-              return "Must be a valid UUID format";
-            }
-          },
-        });
-        handleCancel(linearUserUuid);
-        integrationCredentials[fi.agent.role].linearUserUuid = linearUserUuid as string;
-      }
-    }
-
-    // Linear webhook signing secrets
-    p.note(
-      [
-        "Create a webhook in Linear for each agent:",
-        "1. Go to Settings → API → Webhooks → \"New webhook\"",
-        "2. Paste the webhook URL shown below for each agent",
-        "3. Select events to receive (e.g., Issues, Comments)",
-        "4. Copy the \"Signing secret\" shown after creating the webhook",
-      ].join("\n"),
-      "Linear Webhook Setup"
-    );
-
-    for (const fi of linearAgents) {
-      const webhookUrl = `https://${tailscaleHostname(basicConfig.stackName, fi.agent.name)}.${tailnetDnsName as string}/hooks/linear`;
-
-      p.log.info(`${fi.agent.displayName} (${fi.agent.role}): ${webhookUrl}`);
-
-      const webhookSecretInput = await p.password({
-        message: `Signing secret for ${fi.agent.displayName} (${fi.agent.role})`,
-        validate: (val) => {
-          if (!val) return "Webhook signing secret is required";
-        },
-      });
-      handleCancel(webhookSecretInput);
-
-      integrationCredentials[fi.agent.role].linearWebhookSecret = webhookSecretInput as string;
-    }
-  }
-
-  // GitHub token — only if any identity has the gh dep
-  if (allDepNames.has("gh")) {
-    p.note(
-      KEY_INSTRUCTIONS.githubToken.steps.join("\n"),
-      KEY_INSTRUCTIONS.githubToken.title
-    );
-
-    for (const fi of fetchedIdentities) {
-      if (!agentDeps.get(fi.agent.name)?.has("gh")) continue;
-
-      const githubKey = await p.password({
-        message: `GitHub token for ${fi.agent.displayName} (${fi.agent.role})`,
-        validate: (val) => {
-          if (!val.startsWith("ghp_") && !val.startsWith("github_pat_")) {
-            return "Must start with ghp_ or github_pat_";
-          }
-        },
-      });
-      handleCancel(githubKey);
-
-      integrationCredentials[fi.agent.role].githubToken = githubKey as string;
-    }
-  }
-
-  // Brave Search API key — only if any identity has the brave-search dep (global, once)
-  let braveApiKey: string | undefined;
-  if (allDepNames.has("brave-search")) {
-    p.note(
-      KEY_INSTRUCTIONS.braveApiKey.steps.join("\n"),
-      KEY_INSTRUCTIONS.braveApiKey.title
-    );
-
-    const braveKey = await p.password({
-      message: "Brave Search API key",
-      validate: (val) => {
-        if (!val) return "API key is required";
-      },
-    });
-    handleCancel(braveKey);
-    braveApiKey = braveKey as string;
-  }
-
-  // -------------------------------------------------------------------------
-  // Step 8: Summary
-  // -------------------------------------------------------------------------
-  const costEstimates = basicConfig.provider === "aws" ? COST_ESTIMATES : HETZNER_COST_ESTIMATES;
-  const costPerAgent = costEstimates[basicConfig.instanceType] ?? 30;
-  const totalCost = agents.reduce((sum, a) => {
-    const agentCost = costEstimates[a.instanceType ?? basicConfig.instanceType] ?? costPerAgent;
-    return sum + agentCost;
-  }, 0);
-
-  const integrationNames: string[] = [];
-  if (allPluginNames.has("openclaw-linear")) integrationNames.push("Linear");
-  if (allPluginNames.has("slack")) integrationNames.push("Slack");
-  if (allDepNames.has("gh")) integrationNames.push("GitHub CLI");
-  if (allDepNames.has("brave-search")) integrationNames.push("Brave Search");
-
-  const providerLabel = basicConfig.provider === "aws" ? "AWS" : "Hetzner";
-  const regionLabel = basicConfig.provider === "aws" ? "Region" : "Location";
-
-  // Build template vars display (excluding auto-filled owner vars)
-  const customVarEntries = Object.entries(templateVars).filter(
-    ([k]) => !autoVars[k]
-  );
-
-  const summaryLines = [
-    `Stack:          ${basicConfig.stackName}`,
-    `Provider:       ${providerLabel}`,
-    `${regionLabel.padEnd(14, " ")} ${basicConfig.region}`,
-    `Instance type:  ${basicConfig.instanceType}`,
-    `Owner:          ${basicConfig.ownerName}`,
-    `Timezone:       ${basicConfig.timezone}`,
-    `Working hours:  ${basicConfig.workingHours}`,
-  ];
-  if (customVarEntries.length > 0) {
-    for (const [k, v] of customVarEntries) {
-      summaryLines.push(`${k.padEnd(14, " ")} ${v}`);
-    }
-  }
-  if (integrationNames.length > 0) {
-    summaryLines.push(`Integrations:   ${integrationNames.join(", ")}`);
-  }
-  summaryLines.push(
-    ``,
-    `Agents (${agents.length}):`,
-    formatAgentList(agents),
-    ``,
-    `Estimated cost: ${formatCost(totalCost)}`
-  );
-
-  p.note(summaryLines.join("\n"), "Deployment Summary");
-
-  // -------------------------------------------------------------------------
-  // Step 9: Confirm
-  // -------------------------------------------------------------------------
-  const confirmed = await p.confirm({
-    message: "Proceed with setup?",
-  });
-  handleCancel(confirmed);
-  if (!confirmed) {
-    p.cancel("Setup cancelled.");
-    process.exit(0);
-  }
-
-  // -------------------------------------------------------------------------
-  // Step 10: Execute setup
-  // -------------------------------------------------------------------------
+/** Write/update clawup.yaml + .env.example with current identity data */
+function writeManifest(
+  manifest: ClawupManifest,
+  fetchedIdentities: FetchedIdentity[],
+  agentPlugins: Map<string, Set<string>>,
+  agentDeps: Map<string, Set<string>>,
+  allPluginNames: Set<string>,
+  allDepNames: Set<string>,
+  identityPluginDefaults: Record<string, Record<string, Record<string, unknown>>>,
+  outputDir: string,
+): void {
   const s = p.spinner();
+  s.start(`Writing ${MANIFEST_FILE}...`);
 
-  // Set up workspace
-  s.start("Setting up workspace...");
-  const wsResult = ensureWorkspace();
-  if (!wsResult.ok) {
-    s.stop("Failed to set up workspace");
-    exitWithError(wsResult.error ?? "Failed to set up workspace.");
-  }
-  s.stop("Workspace ready");
-  const cwd = getWorkspaceDir();
+  const agents = manifest.agents;
 
-  // Select/create stack (use org-qualified name if organization is set)
-  const pulumiStack = qualifiedStackName(basicConfig.stackName, basicConfig.organization);
-  s.start("Selecting Pulumi stack...");
-  const stackResult = selectOrCreateStack(pulumiStack, cwd);
-  if (!stackResult.ok) {
-    s.stop("Failed to select/create stack");
-    if (stackResult.error) p.log.error(stackResult.error);
-    exitWithError(`Could not select or create Pulumi stack "${pulumiStack}".`);
-  }
-  s.stop("Pulumi stack ready");
+  // Build secrets section
+  const manifestSecrets = buildManifestSecrets({
+    provider: manifest.provider,
+    agents: agents.map((a) => {
+      const fi = fetchedIdentities.find((f) => f.agent.name === a.name);
+      return {
+        name: a.name,
+        role: a.role,
+        displayName: a.displayName,
+        requiredSecrets: fi?.manifest.requiredSecrets,
+      };
+    }),
+    allPluginNames,
+    allDepNames,
+    agentPlugins,
+    agentDeps,
+  });
 
-  // Set Pulumi config
-  s.start("Setting Pulumi configuration...");
-  setConfig("provider", basicConfig.provider, false, cwd);
-  if (basicConfig.provider === "aws") {
-    setConfig("aws:region", basicConfig.region, false, cwd);
-  } else {
-    setConfig("hetzner:location", basicConfig.region, false, cwd);
-    if (hcloudToken) {
-      setConfig("hcloud:token", hcloudToken, true, cwd);
+  // Apply per-agent secrets
+  for (const agent of agents) {
+    const perAgentSec = manifestSecrets.perAgent[agent.name];
+    if (perAgentSec && Object.keys(perAgentSec).length > 0) {
+      agent.secrets = { ...(agent.secrets ?? {}), ...perAgentSec };
     }
   }
-  setConfig("modelProvider", modelProvider as string, false, cwd);
-  setConfig("defaultModel", selectedModel, false, cwd);
-  setConfig(`${selectedProvider.envVar}`, modelApiKey as string, true, cwd);
-  setConfig("tailscaleAuthKey", tailscaleAuthKey as string, true, cwd);
-  setConfig("tailnetDnsName", tailnetDnsName as string, false, cwd);
-  if (tailscaleApiKey) {
-    setConfig("tailscaleApiKey", tailscaleApiKey as string, true, cwd);
-  }
-  setConfig("instanceType", basicConfig.instanceType, false, cwd);
-  setConfig("ownerName", basicConfig.ownerName, false, cwd);
-  setConfig("timezone", basicConfig.timezone, false, cwd);
-  setConfig("workingHours", basicConfig.workingHours, false, cwd);
-  setConfig("userNotes", basicConfig.userNotes, false, cwd);
+  manifest.secrets = { ...(manifest.secrets ?? {}), ...manifestSecrets.global };
 
-  // Set per-agent integration credentials
-  for (const [role, creds] of Object.entries(integrationCredentials)) {
-    if (creds.linearApiKey) setConfig(`${role}LinearApiKey`, creds.linearApiKey, true, cwd);
-    if (creds.linearWebhookSecret) setConfig(`${role}LinearWebhookSecret`, creds.linearWebhookSecret, true, cwd);
-    if (creds.linearUserUuid) setConfig(`${role}LinearUserUuid`, creds.linearUserUuid, false, cwd);
-    if (creds.githubToken) setConfig(`${role}GithubToken`, creds.githubToken, true, cwd);
-  }
-  // Set per-agent Slack credentials
-  for (const [role, creds] of Object.entries(slackCredentials)) {
-    setConfig(`${role}SlackBotToken`, creds.botToken, true, cwd);
-    setConfig(`${role}SlackAppToken`, creds.appToken, true, cwd);
-  }
-  if (braveApiKey) setConfig("braveApiKey", braveApiKey, true, cwd);
-  s.stop("Configuration saved");
-
-  // Write manifest
-  const configName = basicConfig.stackName;
-  s.start(`Writing config to ~/.clawup/configs/${configName}.yaml...`);
-
-  // Only include non-auto template vars in manifest (owner vars are derived at deploy time)
-  const manifestTemplateVars: Record<string, string> = {};
-  for (const [k, v] of Object.entries(templateVars)) {
-    if (!autoVars[k]) {
-      manifestTemplateVars[k] = v;
-    }
-  }
-
-  const manifest: ClawupManifest = {
-    stackName: configName,
-    organization: basicConfig.organization,
-    provider: basicConfig.provider,
-    region: basicConfig.region,
-    instanceType: basicConfig.instanceType,
-    ownerName: basicConfig.ownerName,
-    timezone: basicConfig.timezone,
-    workingHours: basicConfig.workingHours,
-    userNotes: basicConfig.userNotes,
-    templateVars: Object.keys(manifestTemplateVars).length > 0 ? manifestTemplateVars : undefined,
-    agents,
-  };
-  // Inline plugin config into each agent definition
+  // Inline plugin config (minus linearUserUuid — set by setup)
   for (const fi of fetchedIdentities) {
     const rolePlugins = agentPlugins.get(fi.agent.name);
     if (!rolePlugins || rolePlugins.size === 0) continue;
 
     const inlinePlugins: Record<string, Record<string, unknown>> = {};
     const defaults = identityPluginDefaults[fi.agent.name] ?? {};
+    // Preserve existing plugin config (e.g., linearUserUuid from a previous setup run)
+    const existingPlugins = (fi.agent.plugins ?? {}) as Record<string, Record<string, unknown>>;
 
     for (const pluginName of rolePlugins) {
       const pluginDefaults = defaults[pluginName] ?? {};
-      const agentConfig: Record<string, unknown> = {
+      const existingConfig = existingPlugins[pluginName] ?? {};
+      inlinePlugins[pluginName] = {
         ...pluginDefaults,
+        ...existingConfig,
         agentId: fi.agent.name,
       };
-
-      // Layer on user-provided config
-      if (pluginName === "openclaw-linear") {
-        const creds = integrationCredentials[fi.agent.role];
-        if (creds?.linearUserUuid) {
-          agentConfig.linearUserUuid = creds.linearUserUuid;
-        }
-      }
-
-      inlinePlugins[pluginName] = agentConfig;
     }
 
     if (Object.keys(inlinePlugins).length > 0) {
@@ -848,14 +345,34 @@ export async function initCommand(opts: InitOptions = {}): Promise<void> {
     }
   }
 
-  saveManifest(configName, manifest);
-  s.stop("Config saved");
+  // Write manifest
+  const manifestPath = path.join(outputDir, MANIFEST_FILE);
+  fs.writeFileSync(manifestPath, YAML.stringify(manifest), "utf-8");
 
-  if (opts.deploy) {
-    p.log.success("Config saved! Starting deployment...\n");
-    const { deployCommand } = await import("./deploy.js");
-    await deployCommand({ config: configName, yes: opts.yes });
-  } else {
-    p.outro("Setup complete! Run `clawup deploy` to deploy your agents.");
+  // Generate .env.example
+  const perAgentSecrets: Record<string, Record<string, string>> = {};
+  for (const agent of agents) {
+    if (agent.secrets) perAgentSecrets[agent.name] = agent.secrets;
   }
+  const envExampleContent = generateEnvExample({
+    globalSecrets: manifest.secrets ?? {},
+    agents: agents.map((a) => ({ name: a.name, displayName: a.displayName, role: a.role })),
+    perAgentSecrets,
+  });
+  fs.writeFileSync(path.join(outputDir, ".env.example"), envExampleContent, "utf-8");
+
+  // Ensure .clawup/ and .env are in .gitignore
+  const gitignorePath = path.join(outputDir, ".gitignore");
+  const ignoreEntries = [".clawup/", ".env"];
+  if (fs.existsSync(gitignorePath)) {
+    const existing = fs.readFileSync(gitignorePath, "utf-8");
+    const toAdd = ignoreEntries.filter((entry) => !existing.includes(entry));
+    if (toAdd.length > 0) {
+      fs.appendFileSync(gitignorePath, `\n# clawup local state\n${toAdd.join("\n")}\n`);
+    }
+  } else {
+    fs.writeFileSync(gitignorePath, `# clawup local state\n${ignoreEntries.join("\n")}\n`, "utf-8");
+  }
+
+  s.stop("Config saved");
 }

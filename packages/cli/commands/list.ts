@@ -1,57 +1,57 @@
 /**
- * List all saved configs in a table
+ * List project config
  */
 
-import { listManifests, loadManifest, configPath } from "../lib/config";
+import * as path from "path";
+import { MANIFEST_FILE } from "@clawup/core";
+import { loadManifest } from "../lib/config";
+import { findProjectRoot } from "../lib/project";
 
 interface ListOptions {
   json?: boolean;
 }
 
 export async function listCommand(opts: ListOptions): Promise<void> {
-  const configs = listManifests();
-
-  if (configs.length === 0) {
-    console.log("No configs found. Run 'clawup init' to create one.");
+  const projectRoot = findProjectRoot();
+  if (projectRoot === null) {
+    console.log("No clawup.yaml found. Run 'clawup init' to create one, or cd into your project directory.");
     return;
   }
 
-  const data = configs.map((name) => {
-    const manifest = loadManifest(name);
-    return {
-      name,
-      agents: manifest?.agents.length ?? 0,
-      region: manifest?.region ?? "-",
-      stack: manifest?.stackName ?? "-",
-      path: configPath(name),
-    };
-  });
+  const manifest = loadManifest();
+  if (!manifest) {
+    console.log("No clawup.yaml found. Run 'clawup init' to create one, or cd into your project directory.");
+    return;
+  }
+
+  const data = {
+    name: manifest.stackName,
+    agents: manifest.agents.length,
+    region: manifest.region ?? "-",
+    stack: manifest.stackName ?? "-",
+    path: path.join(projectRoot, MANIFEST_FILE),
+  };
 
   if (opts.json) {
-    console.log(JSON.stringify(data, null, 2));
+    console.log(JSON.stringify([data], null, 2));
     return;
   }
 
-  // Calculate column widths
-  const nameWidth = Math.max(6, ...data.map((d) => d.name.length));
-  const agentsWidth = 6;
-  const regionWidth = Math.max(6, ...data.map((d) => d.region.length));
-  const stackWidth = Math.max(5, ...data.map((d) => d.stack.length));
-
   // Print header
+  const nameWidth = Math.max(6, data.name.length);
+  const agentsWidth = 6;
+  const regionWidth = Math.max(6, data.region.length);
+  const stackWidth = Math.max(5, data.stack.length);
+
   console.log(
     `${"NAME".padEnd(nameWidth)}  ${"AGENTS".padEnd(agentsWidth)}  ${"REGION".padEnd(regionWidth)}  ${"STACK".padEnd(stackWidth)}`
   );
   console.log(
     `${"-".repeat(nameWidth)}  ${"-".repeat(agentsWidth)}  ${"-".repeat(regionWidth)}  ${"-".repeat(stackWidth)}`
   );
+  console.log(
+    `${data.name.padEnd(nameWidth)}  ${String(data.agents).padEnd(agentsWidth)}  ${data.region.padEnd(regionWidth)}  ${data.stack.padEnd(stackWidth)}`
+  );
 
-  // Print rows
-  for (const row of data) {
-    console.log(
-      `${row.name.padEnd(nameWidth)}  ${String(row.agents).padEnd(agentsWidth)}  ${row.region.padEnd(regionWidth)}  ${row.stack.padEnd(stackWidth)}`
-    );
-  }
-
-  console.log(`\n${data.length} config(s) found`);
+  console.log(`\n1 config found`);
 }

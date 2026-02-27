@@ -1,188 +1,124 @@
 /**
- * Load/save clawup manifests from ~/.clawup/configs/
+ * Load/save clawup manifests from the project root (clawup.yaml).
+ *
+ * Every deployment lives in a project directory with clawup.yaml at its root.
  */
 
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
 import YAML from "yaml";
-import type { ClawupManifest, PluginConfigFile } from "@clawup/core";
-import { CONFIG_DIR, MANIFEST_FILE, PLUGINS_DIR } from "@clawup/core";
+import type { ClawupManifest } from "@clawup/core";
+import { MANIFEST_FILE } from "@clawup/core";
+import { findProjectRoot } from "./project";
 
 /**
- * Get the configs directory path (~/.clawup/configs/)
+ * Rewrite relative identity paths (starting with ./ or ../) in agent definitions
+ * to absolute paths resolved against projectRoot. Git URLs and already-absolute
+ * paths are left unchanged.
  */
-export function configsDir(): string {
-  return path.join(os.homedir(), CONFIG_DIR);
-}
+export function resolveIdentityPaths(manifest: ClawupManifest, projectRoot: string): ClawupManifest {
+  if (!manifest.agents) return manifest;
 
-/**
- * Ensure the configs directory exists
- */
-export function ensureConfigsDir(): void {
-  const dir = configsDir();
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-}
-
-/**
- * Get the path to a config file by name
- */
-export function configPath(name: string): string {
-  return path.join(configsDir(), `${name}.yaml`);
-}
-
-/**
- * Copy a named config to clawup.yaml so the Pulumi program can read it.
- * When projectDir is provided, writes there instead of process.cwd().
- */
-export function syncManifestToProject(name: string, projectDir?: string): void {
-  const src = configPath(name);
-  const dest = path.join(projectDir ?? process.cwd(), MANIFEST_FILE);
-  fs.copyFileSync(src, dest);
-}
-
-/**
- * Check if a config exists by name
- */
-export function manifestExists(name: string): boolean {
-  return fs.existsSync(configPath(name));
-}
-
-/**
- * Load a manifest by name. Returns null if not found or invalid.
- */
-export function loadManifest(name: string): ClawupManifest | null {
-  const filePath = configPath(name);
-  if (!fs.existsSync(filePath)) return null;
-
-  try {
-    const raw = fs.readFileSync(filePath, "utf-8");
-    return YAML.parse(raw) as ClawupManifest;
-  } catch (err) {
-    console.warn(`[config] Failed to load manifest '${name}' at ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return null;
-  }
-}
-
-/**
- * Save a manifest by name
- */
-export function saveManifest(name: string, manifest: ClawupManifest): void {
-  ensureConfigsDir();
-  const filePath = configPath(name);
-  fs.writeFileSync(filePath, YAML.stringify(manifest), "utf-8");
-}
-
-/**
- * List all saved config names
- */
-export function listManifests(): string[] {
-  const dir = configsDir();
-  if (!fs.existsSync(dir)) return [];
-
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith(".yaml"))
-    .map((f) => f.replace(/\.yaml$/, ""))
-    .sort();
-}
-
-/**
- * Delete a config by name. Returns true if deleted, false if not found.
- */
-export function deleteManifest(name: string): boolean {
-  const filePath = configPath(name);
-  if (!fs.existsSync(filePath)) return false;
-
-  fs.unlinkSync(filePath);
-  return true;
-}
-
-/**
- * Resolve a config name: auto-selects if only one config exists,
- * errors with list if ambiguous or none found.
- * @param name Optional explicit config name
- * @returns The resolved config name
- * @throws Error if no configs exist or multiple configs exist without explicit name
- */
-export function resolveConfigName(name?: string): string {
-  if (name) {
-    if (!manifestExists(name)) {
-      const available = listManifests();
-      if (available.length === 0) {
-        throw new Error(`Config '${name}' not found. No configs exist. Run 'clawup init' to create one.`);
+  return {
+    ...manifest,
+    agents: manifest.agents.map((agent) => {
+      if (agent.identity.startsWith("./") || agent.identity.startsWith("../")) {
+        return {
+          ...agent,
+          identity: path.resolve(projectRoot, agent.identity),
+        };
       }
-      throw new Error(
-        `Config '${name}' not found. Available configs:\n  ${available.join("\n  ")}`
-      );
-    }
-    return name;
-  }
-
-  const configs = listManifests();
-
-  if (configs.length === 0) {
-    throw new Error("No configs found. Run 'clawup init' to create one.");
-  }
-
-  if (configs.length === 1) {
-    return configs[0];
-  }
-
-  throw new Error(
-    `Multiple configs found. Specify one with --config:\n  ${configs.join("\n  ")}`
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Plugin config helpers (deprecated — plugin config is now inline in manifest)
-// These remain for backward compat and the `config migrate` command.
-// ---------------------------------------------------------------------------
-
-/**
- * Get the plugins directory for a stack (~/.clawup/configs/<stackName>/plugins/)
- * @deprecated Plugin config is now inline in the manifest. Use `clawup config migrate` to upgrade.
- */
-export function pluginsDir(stackName: string): string {
-  return path.join(configsDir(), stackName, PLUGINS_DIR);
+      return agent;
+    }),
+  };
 }
 
 /**
- * Ensure the plugins directory exists for a stack
- * @deprecated Plugin config is now inline in the manifest.
+ * Copy the manifest so the Pulumi program can read it.
+ *
+ * Reads <projectRoot>/clawup.yaml, resolves relative identity paths,
+ * and writes to <projectDir|cwd>/clawup.yaml (the .clawup/ workspace).
+ *
+ * When `overrides` is provided, the resolved manifest is shallow-merged
+ * with the overrides before writing. This allows --local to inject
+ * `{ provider: "local" }` without modifying the user's manifest file.
  */
-export function ensurePluginsDir(stackName: string): void {
-  const dir = pluginsDir(stackName);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+export function syncManifestToProject(
+  projectDir?: string,
+  overrides?: Partial<ClawupManifest>,
+): void {
+  const projectRoot = findProjectRoot();
+  if (projectRoot === null) {
+    throw new Error("syncManifestToProject: no project root found (no clawup.yaml in current directory or ancestors).");
   }
+
+  const src = path.join(projectRoot, MANIFEST_FILE);
+  const dest = path.join(projectDir ?? process.cwd(), MANIFEST_FILE);
+
+  const raw = fs.readFileSync(src, "utf-8");
+  const manifest = YAML.parse(raw) as ClawupManifest;
+  const resolved = resolveIdentityPaths(manifest, projectRoot);
+  const final = overrides ? { ...resolved, ...overrides } : resolved;
+  fs.writeFileSync(dest, YAML.stringify(final), "utf-8");
 }
 
 /**
- * Load a plugin config file. Returns null if not found or invalid.
- * @deprecated Plugin config is now inline in the manifest. Use `clawup config migrate` to upgrade.
+ * Check if a clawup.yaml exists in the project root.
  */
-export function loadPluginConfig(stackName: string, pluginName: string): PluginConfigFile | null {
-  const filePath = path.join(pluginsDir(stackName), `${pluginName}.yaml`);
+export function manifestExists(): boolean {
+  const projectRoot = findProjectRoot();
+  return projectRoot !== null && fs.existsSync(path.join(projectRoot, MANIFEST_FILE));
+}
+
+/**
+ * Load the manifest from the project root. Returns null if not found or invalid.
+ * Resolves relative identity paths.
+ */
+export function loadManifest(): ClawupManifest | null {
+  const projectRoot = findProjectRoot();
+  if (projectRoot === null) return null;
+  const filePath = path.join(projectRoot, MANIFEST_FILE);
   if (!fs.existsSync(filePath)) return null;
-
   try {
     const raw = fs.readFileSync(filePath, "utf-8");
-    return YAML.parse(raw) as PluginConfigFile;
+    const manifest = YAML.parse(raw) as ClawupManifest;
+    return resolveIdentityPaths(manifest, projectRoot);
   } catch (err) {
-    console.warn(`[config] Failed to load plugin config '${pluginName}' for stack '${stackName}': ${err instanceof Error ? err.message : String(err)}`);
+    console.warn(`[config] Failed to load project manifest at ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
 
 /**
- * Save a plugin config file
- * @deprecated Plugin config is now inline in the manifest. Use `clawup config migrate` to upgrade.
+ * Load the manifest from the project root, or throw a descriptive error.
+ * Replaces the resolveConfigName() + loadManifest() + null check pattern.
  */
-export function savePluginConfig(stackName: string, pluginName: string, data: PluginConfigFile): void {
-  ensurePluginsDir(stackName);
-  const filePath = path.join(pluginsDir(stackName), `${pluginName}.yaml`);
-  fs.writeFileSync(filePath, YAML.stringify(data), "utf-8");
+export function requireManifest(): ClawupManifest {
+  const projectRoot = findProjectRoot();
+  if (projectRoot === null) {
+    throw new Error("No clawup.yaml found. Run 'clawup init' to create one, or cd into your project directory.");
+  }
+  const filePath = path.join(projectRoot, MANIFEST_FILE);
+  if (!fs.existsSync(filePath)) {
+    throw new Error("No clawup.yaml found. Run 'clawup init' to create one, or cd into your project directory.");
+  }
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const manifest = YAML.parse(raw) as ClawupManifest;
+    return resolveIdentityPaths(manifest, projectRoot);
+  } catch (err) {
+    throw new Error(`Failed to load clawup.yaml: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Save a manifest to the project root.
+ */
+export function saveManifest(manifest: ClawupManifest): void {
+  const projectRoot = findProjectRoot();
+  if (projectRoot === null) {
+    throw new Error("Cannot save manifest: no project root found (no clawup.yaml in current directory or ancestors).");
+  }
+  const filePath = path.join(projectRoot, MANIFEST_FILE);
+  fs.writeFileSync(filePath, YAML.stringify(manifest), "utf-8");
 }

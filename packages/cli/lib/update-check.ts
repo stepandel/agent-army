@@ -121,11 +121,25 @@ export async function checkForUpdates(currentVersion: string): Promise<void> {
   }
 }
 
+function isMajorBump(current: string, latest: string): boolean {
+  const curMajor = parseInt(current.split(".")[0], 10);
+  const latMajor = parseInt(latest.split(".")[0], 10);
+  return latMajor > curMajor;
+}
+
 function printUpdateNotice(current: string, latest: string): void {
   console.log();
   console.log(
     `  Update available: ${pc.dim(current)} ${pc.dim("→")} ${pc.green(latest)}`
   );
+  if (isMajorBump(current, latest)) {
+    console.log(
+      `  ${pc.yellow("⚠ Major version update — review breaking changes before upgrading")}`
+    );
+    console.log(
+      `  ${pc.dim("See: https://github.com/stepandel/clawup/releases")}`
+    );
+  }
   console.log(`  Run ${pc.cyan("clawup update")} to install`);
   console.log();
 }

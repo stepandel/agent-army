@@ -107,6 +107,10 @@ templateVars:
   - TIMEZONE
   - WORKING_HOURS
   - USER_NOTES
+
+# Additional secrets not covered by plugins/deps
+requiredSecrets:
+  - notionApiKey       # → <ROLE>_NOTION_API_KEY in .env
 ```
 
 ### Built-in Identities
@@ -140,30 +144,36 @@ See the [`examples/identity/`](./examples/identity/) directory for a complete, m
 npm install -g clawup
 ```
 
-### 2. Run the Setup Wizard
+### 2. Generate Config
 
 ```bash
 clawup init
 ```
 
-The wizard walks you through:
-- **Prerequisites check** — verifies Pulumi, Node.js, cloud provider CLI, and Tailscale
-- **Cloud provider** — AWS or Hetzner Cloud
-- **Region & instance type** — with cost estimates shown inline
-- **Secrets** — Anthropic API key, Tailscale auth key (with instructions for each)
-- **Agent selection** — pick from built-in identities, point to a Git repo or local directory, or mix both
-- **Optional integrations** — Slack, Linear, GitHub per agent
-- **Review & confirm** — see full config and estimated monthly cost
+Scaffolds a `clawup.yaml` manifest and `.env.example` with sensible defaults (AWS, us-east-1, all built-in agents). Edit `clawup.yaml` by hand to customize your provider, region, instance type, owner info, and agents.
 
-This generates a `clawup.yaml` manifest and sets all Pulumi config values automatically.
+### 3. Fill in Secrets
 
-### 3. Deploy
+```bash
+cp .env.example .env
+# Edit .env and fill in your API keys
+```
+
+### 4. Validate & Configure
+
+```bash
+clawup setup
+```
+
+Validates all secrets from `.env`, fetches Linear user UUIDs, and configures Pulumi. If any secrets are missing, it prints exactly what's needed.
+
+### 5. Deploy
 
 ```bash
 clawup deploy
 ```
 
-### 4. Validate
+### 6. Validate
 
 Wait 3-5 minutes for cloud-init to complete, then:
 
@@ -171,7 +181,7 @@ Wait 3-5 minutes for cloud-init to complete, then:
 clawup validate
 ```
 
-### 5. Access Your Agents
+### 7. Access Your Agents
 
 ```bash
 clawup ssh <agent-name>    # SSH by name, role, or alias
@@ -183,24 +193,25 @@ Run `clawup --help` for the full list.
 
 | Command | Description |
 |---------|-------------|
-| `clawup init` | Interactive setup wizard |
+| `clawup init` | Generate clawup.yaml scaffold (or refresh from identity changes) |
+| `clawup setup` | Validate secrets from `.env` and configure Pulumi |
 | `clawup deploy` | Deploy agents (`pulumi up` under the hood) |
-| `clawup deploy -y` | Deploy without confirmation prompt |
+| `clawup deploy --local` | Deploy to local Docker containers |
 | `clawup status` | Show agent statuses and outputs |
-| `clawup status --json` | Status in JSON format |
+| `clawup status --local` | Show local Docker container status |
 | `clawup ssh <agent>` | SSH to an agent by name, role, or alias |
-| `clawup ssh <agent> '<cmd>'` | Run a command on an agent remotely |
+| `clawup ssh <agent> --local` | Shell into a local Docker container |
 | `clawup validate` | Health check all agents via Tailscale |
-| `clawup destroy` | Tear down all resources (with confirmation) |
+| `clawup validate --local` | Health check local Docker containers |
 | `clawup redeploy` | Update agents in-place (`pulumi up --refresh`) |
-| `clawup redeploy -y` | Redeploy without confirmation prompt |
-| `clawup destroy -y` | Tear down without confirmation |
-| `clawup list` | List saved configurations |
+| `clawup redeploy --local` | Redeploy local Docker containers |
+| `clawup destroy` | Tear down all resources (with confirmation) |
+| `clawup destroy --local` | Destroy local Docker containers only |
+| `clawup list` | Show project config |
 | `clawup config show` | Display current config |
 | `clawup config show --json` | Config in JSON format |
 | `clawup config set <key> <value>` | Update a config value |
 | `clawup config set <key> <value> -a <agent>` | Update a per-agent config value |
-| `clawup config migrate` | Migrate old plugin config files into manifest |
 | `clawup secrets set <key> <value>` | Set a Pulumi secret (e.g. API keys) |
 | `clawup secrets list` | Show which secrets are configured (redacted) |
 | `clawup push` | Push workspace files, skills, and config to running agents |
@@ -245,7 +256,7 @@ All agents share a single VPC/network for cost optimization.
 
 ## Dependencies
 
-You need the following installed on your **local machine** before running `clawup init`. The init wizard checks for these and will tell you what's missing.
+You need the following installed on your **local machine** before running `clawup init`.
 
 ### Required (all providers)
 
@@ -314,6 +325,12 @@ clawup redeploy
 
 This runs `pulumi up --refresh` to sync cloud state and apply changes. If the stack doesn't exist yet, it falls back to a fresh deploy automatically.
 
+For local Docker containers:
+
+```bash
+clawup redeploy --local
+```
+
 For a clean rebuild (when in-place update can't recover):
 
 ```bash
@@ -354,12 +371,20 @@ instanceType: t3.medium
 ownerName: Your Name
 timezone: America/New_York
 workingHours: 9am-6pm
+secrets:
+  anthropicApiKey: "${env:ANTHROPIC_API_KEY}"
+  tailscaleAuthKey: "${env:TAILSCALE_AUTH_KEY}"
+  tailnetDnsName: "${env:TAILNET_DNS_NAME}"
+  tailscaleApiKey: "${env:TAILSCALE_API_KEY}"
 agents:
   - name: agent-pm
     displayName: Juno
     role: pm
     identity: "https://github.com/your-org/army-identities#pm"
     volumeSize: 30
+    secrets:
+      slackBotToken: "${env:PM_SLACK_BOT_TOKEN}"
+      slackAppToken: "${env:PM_SLACK_APP_TOKEN}"
     plugins:
       - openclaw-linear
       - slack
@@ -373,11 +398,11 @@ agents:
     volumeSize: 20
 ```
 
-Model, backup model, and coding agent are configured in the identity (not the manifest). The manifest defines _which_ agents to deploy and _where_.
+The `secrets` section uses `${env:VAR}` references — actual values are loaded from a `.env` file at init time. A `.env.example` is generated alongside the manifest. Model, backup model, and coding agent are configured in the identity (not the manifest). The manifest defines _which_ agents to deploy and _where_.
 
 ### Pulumi Config
 
-Secrets are stored encrypted in Pulumi config, set automatically by the init wizard. You can also manage them directly:
+Secrets are stored encrypted in Pulumi config, set automatically by `clawup setup`. You can also manage them directly:
 
 ```bash
 pulumi config set --secret anthropicApiKey sk-ant-xxxxx

@@ -5,8 +5,8 @@
  */
 
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
-import { loadManifest, resolveConfigName } from "../lib/config";
-import { SSH_USER, tailscaleHostname } from "@clawup/core";
+import { requireManifest } from "../lib/config";
+import { SSH_USER, tailscaleHostname, dockerContainerName } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { isTailscaleRunning } from "../lib/tailscale";
 import { getConfig, getStackOutputs } from "../lib/tool-helpers";
@@ -15,8 +15,8 @@ import { qualifiedStackName } from "../lib/pulumi";
 export interface StatusOptions {
   /** Output as JSON */
   json?: boolean;
-  /** Config name (auto-detected if only one) */
-  config?: string;
+  /** Show status of local Docker containers */
+  local?: boolean;
 }
 
 /**
@@ -77,6 +77,20 @@ function getGhAuthStatus(exec: ExecAdapter, host: string, timeout: number = 5): 
 }
 
 /**
+ * Run a command inside a Docker container (best effort)
+ */
+function dockerExecVersion(exec: ExecAdapter, containerName: string, command: string): string {
+  const escaped = command.replace(/"/g, '\\"');
+  const result = exec.capture("docker", [
+    "exec", containerName, "bash", "-c", `"${escaped}"`,
+  ]);
+  if (result.exitCode === 0 && result.stdout?.trim()) {
+    return result.stdout.trim();
+  }
+  return "—";
+}
+
+/**
  * Status tool implementation
  */
 export const statusTool: ToolImplementation<StatusOptions> = async (
@@ -86,7 +100,7 @@ export const statusTool: ToolImplementation<StatusOptions> = async (
   const { ui, exec } = runtime;
 
   if (!options.json) {
-    ui.intro("Agent Army");
+    ui.intro("Clawup");
   }
 
   // Ensure workspace is set up (no-op in dev mode)
@@ -97,23 +111,23 @@ export const statusTool: ToolImplementation<StatusOptions> = async (
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name and load manifest
-  let configName: string;
+  // Load manifest
+  let manifest;
   try {
-    configName = resolveConfigName(options.config);
+    manifest = requireManifest();
   } catch (err) {
     ui.log.error((err as Error).message);
     process.exit(1);
   }
 
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    ui.log.error(`Config '${configName}' could not be loaded.`);
-    process.exit(1);
+  // --local: override provider in memory, use separate stack
+  if (options.local) {
+    manifest = { ...manifest, provider: "local" as const };
   }
 
   // Select/create stack (use org-qualified name if organization is set)
-  const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);
+  const stackName = options.local ? `${manifest.stackName}-local` : manifest.stackName;
+  const pulumiStack = qualifiedStackName(stackName, manifest.organization);
   const selectResult = exec.capture("pulumi", ["stack", "select", pulumiStack], cwd);
   if (selectResult.exitCode !== 0) {
     const initResult = exec.capture("pulumi", ["stack", "init", pulumiStack], cwd);
@@ -133,24 +147,39 @@ export const statusTool: ToolImplementation<StatusOptions> = async (
     process.exit(1);
   }
 
-  // Get tailnet DNS name for SSH connections
-  const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
+  const isLocal = manifest.provider === "local";
+
+  // Get tailnet DNS name for SSH connections (not needed for local)
+  const tailnetDnsName = isLocal ? null : getConfig(exec, "tailnetDnsName", cwd);
 
   // Warn if Tailscale is not running (SSH version columns will show "—")
-  const tailscaleUp = isTailscaleRunning();
-  if (!tailscaleUp && !options.json) {
-    ui.log.warn(
-      "Tailscale is not running — CLI version columns will show \"—\".\n" +
-      "  Open the Tailscale app or run: tailscale up"
-    );
+  if (!isLocal) {
+    const tailscaleUp = isTailscaleRunning();
+    if (!tailscaleUp && !options.json) {
+      ui.log.warn(
+        "Tailscale is not running — CLI version columns will show \"—\".\n" +
+        "  Open the Tailscale app or run: tailscale up"
+      );
+    }
   }
 
-  // Build status data with Claude Code and GitHub CLI versions (fetched via SSH)
+  // Build status data with Claude Code and GitHub CLI versions
   const statusData = manifest.agents.map((agent) => {
     let claudeCodeVersion = "—";
     let ghVersion = "—";
     let ghAuth = "—";
-    if (tailnetDnsName) {
+
+    if (isLocal) {
+      // Local Docker: use docker exec
+      const container = dockerContainerName(stackName, agent.name);
+      claudeCodeVersion = dockerExecVersion(exec, container, `/home/${SSH_USER}/.local/bin/claude --version 2>/dev/null || echo ''`);
+      ghVersion = dockerExecVersion(exec, container, `gh --version 2>/dev/null | head -n1 | awk '{print $3}' || echo ''`);
+      if (ghVersion !== "—") {
+        const authResult = dockerExecVersion(exec, container, `gh auth status 2>&1 >/dev/null && echo 'OK' || echo 'no'`);
+        ghAuth = authResult === "OK" ? "✓" : "—";
+      }
+    } else if (tailnetDnsName) {
+      // Cloud providers: use SSH
       const tsHost = tailscaleHostname(manifest.stackName, agent.name);
       const host = `${tsHost}.${tailnetDnsName}`;
       claudeCodeVersion = getClaudeCodeVersion(exec, host);
@@ -159,6 +188,7 @@ export const statusTool: ToolImplementation<StatusOptions> = async (
         ghAuth = getGhAuthStatus(exec, host);
       }
     }
+
     return {
       name: agent.displayName,
       role: agent.role,
@@ -178,7 +208,7 @@ export const statusTool: ToolImplementation<StatusOptions> = async (
   }
 
   // Table output
-  ui.log.step(`Stack: ${manifest.stackName} | Region: ${manifest.region}`);
+  ui.log.step(`Stack: ${manifest.stackName} | ${isLocal ? "Provider: Local Docker" : `Region: ${manifest.region}`}`);
   console.log();
 
   // Header
@@ -228,12 +258,13 @@ export const statusTool: ToolImplementation<StatusOptions> = async (
 
   console.log();
 
-  // Show Tailscale URLs
+  // Show URLs (Gateway URLs for local, Tailscale URLs for cloud)
+  const urlLabel = isLocal ? "Gateway URLs" : "Tailscale URLs";
   const urlLines = statusData
     .filter((s) => s.tailscaleUrl !== "—")
     .map((s) => `  ${s.name}: ${s.tailscaleUrl}`);
 
   if (urlLines.length > 0) {
-    ui.note(urlLines.join("\n"), "Tailscale URLs");
+    ui.note(urlLines.join("\n"), urlLabel);
   }
 };

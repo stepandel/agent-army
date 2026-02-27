@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/clawup)](https://www.npmjs.com/package/clawup)
 
-Interactive command-line tool for deploying and managing your fleet of [OpenClaw](https://openclaw.bot/) AI agents on **AWS** or **Hetzner Cloud**.
+Command-line tool for deploying and managing your fleet of [OpenClaw](https://openclaw.bot/) AI agents on **AWS** or **Hetzner Cloud**.
 
 ## Installation
 
@@ -18,22 +18,30 @@ npx clawup init
 
 ### `clawup init`
 
-Interactive setup wizard that walks you through the full configuration:
+Generates a `clawup.yaml` manifest and `.env.example` in the current directory. Non-interactive — edit the YAML by hand to configure your deployment.
 
-1. **Prerequisites check** — verifies Pulumi CLI, Node.js, cloud provider CLI, and Tailscale are installed
-2. **Cloud provider** — AWS or Hetzner Cloud
-3. **Region & instance type** — with cost estimates shown inline
-4. **Secrets** — Anthropic API key, Tailscale auth key (with inline instructions for each)
-5. **Agent selection** — choose from presets, define custom agents, or mix both
-6. **Optional integrations** — Slack, Linear, GitHub per agent
-7. **Summary & confirmation** — review config and estimated cost before proceeding
+**Fresh init** (no `clawup.yaml`): scaffolds a new manifest with all built-in agents (Juno, Titus, Scout) and sensible defaults (AWS, us-east-1, t3.medium).
 
-Outputs a `clawup.yaml` manifest and sets all Pulumi config values.
+**Repair mode** (existing `clawup.yaml`): re-fetches identities, updates secrets/plugins/deps from latest identity data, regenerates `.env.example`. Existing manifest values are preserved.
 
 ```bash
-clawup init              # Interactive wizard
-clawup init --deploy     # Deploy immediately after setup
-clawup init --deploy -y  # Deploy without confirmation
+clawup init              # Generate scaffold (or refresh if clawup.yaml exists)
+```
+
+### `clawup setup`
+
+Non-interactive command that validates secrets from `.env` and configures the Pulumi stack.
+
+1. Reads `clawup.yaml` and `.env`
+2. Validates all required secrets are present (exits with a list of missing ones if not)
+3. Auto-fetches Linear user UUIDs via the API
+4. Configures Pulumi with all resolved secrets
+
+```bash
+clawup setup                            # Standard setup
+clawup setup --env-file /path/to/.env   # Custom .env location
+clawup setup --deploy                   # Setup + immediate deploy
+clawup setup --deploy -y                # Setup + deploy without confirmation
 ```
 
 ### `clawup deploy`
@@ -43,7 +51,7 @@ Deploy your agents with `pulumi up`. Runs prerequisite checks before deploying.
 ```bash
 clawup deploy             # Deploy with confirmation prompt
 clawup deploy -y          # Skip confirmation
-clawup deploy -c staging  # Deploy a specific config
+clawup deploy --local     # Deploy to local Docker containers
 ```
 
 ### `clawup status`
@@ -53,7 +61,7 @@ Show agent statuses from Pulumi stack outputs.
 ```bash
 clawup status             # Pretty-printed output
 clawup status --json      # JSON output
-clawup status -c staging  # Status for a specific config
+clawup status --local     # Local Docker container status
 ```
 
 ### `clawup ssh <agent>`
@@ -77,7 +85,6 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `-u, --user <user>` | SSH user (default: `ubuntu`) |
-| `-c, --config <name>` | Config name (auto-detected if only one) |
 
 ### `clawup validate`
 
@@ -86,7 +93,7 @@ Health check all agents via Tailscale SSH.
 ```bash
 clawup validate            # Default 30-second timeout
 clawup validate -t 60      # 60-second timeout
-clawup validate -c staging # Validate a specific config
+clawup validate --local    # Validate local Docker containers
 ```
 
 ### `clawup destroy`
@@ -96,7 +103,7 @@ Tear down all resources with safety confirmations.
 ```bash
 clawup destroy             # With confirmation prompts
 clawup destroy -y          # Skip confirmations (dangerous!)
-clawup destroy -c staging  # Destroy a specific config
+clawup destroy --local     # Destroy local Docker containers only
 ```
 
 ### `clawup redeploy`
@@ -106,7 +113,7 @@ Update agents in-place without destroying infrastructure. Runs `pulumi up --refr
 ```bash
 clawup redeploy             # With confirmation prompt
 clawup redeploy -y          # Skip confirmation
-clawup redeploy -c staging  # Redeploy a specific config
+clawup redeploy --local     # Redeploy local Docker containers
 ```
 
 ### `clawup config show`
@@ -116,7 +123,6 @@ Display current configuration in a human-readable format.
 ```bash
 clawup config show             # Pretty-printed output
 clawup config show --json      # Full JSON output
-clawup config show -c staging  # Show a specific config
 ```
 
 ### `clawup config set <key> <value>`
@@ -136,7 +142,7 @@ clawup config set volumeSize 50 -a scout       # Per-agent volume
 
 ### `clawup secrets set <key> <value>`
 
-Set a Pulumi secret without re-running `init`. Useful for adding or rotating API keys post-setup.
+Set a Pulumi secret directly. Useful for adding or rotating API keys post-setup.
 
 Global keys: `anthropicApiKey`, `tailscaleAuthKey`, `tailscaleApiKey`, `tailnetDnsName`, `braveApiKey`
 
@@ -144,9 +150,8 @@ Per-agent keys (use `--agent`): `slackBotToken`, `slackAppToken`, `linearApiKey`
 
 ```bash
 clawup secrets set braveApiKey BSA_xxx
-clawup secrets set braveApiKey BSA_xxx -c team-h3
 clawup secrets set slackBotToken xoxb-xxx --agent eng
-clawup secrets set githubToken ghp_xxx --agent pm -c staging
+clawup secrets set githubToken ghp_xxx --agent pm
 ```
 
 ### `clawup secrets list`
@@ -154,13 +159,12 @@ clawup secrets set githubToken ghp_xxx --agent pm -c staging
 Show which secrets are configured (values redacted).
 
 ```bash
-clawup secrets list              # Auto-detect config
-clawup secrets list -c team-h3   # Specific config
+clawup secrets list
 ```
 
 ### `clawup list`
 
-List all saved configurations.
+Show the project configuration.
 
 ```bash
 clawup list          # Pretty-printed output
@@ -181,9 +185,18 @@ You can also define fully custom agents during `init`.
 
 ## Configuration
 
+Clawup uses a project-based configuration model. All commands auto-detect the project root by walking up from the current directory looking for `clawup.yaml`. Run commands from anywhere inside your project directory.
+
+```
+my-project/
+├── clawup.yaml          # Deployment manifest (created by clawup init)
+├── .clawup/             # Pulumi state, workspace files (git-ignored)
+└── ...
+```
+
 ### `clawup.yaml`
 
-The `init` command generates a `clawup.yaml` manifest:
+The `init` command generates a `clawup.yaml` manifest at the project root:
 
 ```yaml
 stackName: dev
@@ -191,12 +204,19 @@ provider: aws
 region: us-east-1
 instanceType: t3.medium
 ownerName: Your Name
+secrets:
+  anthropicApiKey: "${env:ANTHROPIC_API_KEY}"
+  tailscaleAuthKey: "${env:TAILSCALE_AUTH_KEY}"
+  tailnetDnsName: "${env:TAILNET_DNS_NAME}"
 agents:
   - name: agent-pm
     displayName: Juno
     role: pm
     identity: "https://github.com/your-org/army-identities#pm"
     volumeSize: 30
+    secrets:
+      slackBotToken: "${env:PM_SLACK_BOT_TOKEN}"
+      slackAppToken: "${env:PM_SLACK_APP_TOKEN}"
     plugins:
       openclaw-linear:
         agentId: agent-pm
@@ -204,7 +224,7 @@ agents:
         mode: socket
 ```
 
-This manifest is read by the Pulumi program at deploy time to dynamically create the agent stack.
+The `secrets` section uses `${env:VAR}` references — actual values come from a `.env` file. This manifest is read by the Pulumi program at deploy time to dynamically create the agent stack.
 
 ### Pulumi Config
 
@@ -226,6 +246,7 @@ packages/cli/
 ├── tools/              # Tool implementations (adapter-based: deploy, destroy, redeploy, status, validate, push, webhooks)
 ├── lib/                # CLI-only utilities
 │   ├── config.ts       # Load/save clawup.yaml manifest
+│   ├── env.ts          # .env parser, ${env:VAR} resolver, secret builder
 │   ├── exec.ts         # Shell command execution
 │   ├── prerequisites.ts # Prerequisite checks
 │   ├── process.ts      # Graceful shutdown handling

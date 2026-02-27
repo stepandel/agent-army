@@ -45,7 +45,7 @@ export interface LogEntry {
 
 /** Accumulated API response */
 export interface APIResponse {
-  /** Fields that need user input (wizard mode) */
+  /** Fields that need user input */
   fields: FieldDescriptor[];
   /** Log messages accumulated during execution */
   logs: LogEntry[];
@@ -287,7 +287,7 @@ export class APIAdapterCancelError extends Error {
 /**
  * Create an API runtime adapter for HTTP request handling.
  *
- * @param inputs - Key-value pairs from the request body providing answers to wizard fields
+ * @param inputs - Key-value pairs from the request body providing answers to input fields
  * @returns A tuple of [RuntimeAdapter, APIResponse] — use the response to send back to the client
  *
  * @example

@@ -37,6 +37,7 @@ export const AGENT_ALIASES: Record<string, string> = {
 export const PROVIDERS = [
   { value: "aws", label: "AWS", hint: "Amazon Web Services EC2 instances" },
   { value: "hetzner", label: "Hetzner", hint: "Hetzner Cloud servers (EU/US)" },
+  { value: "local", label: "Local Docker", hint: "Run agents in Docker containers locally (for testing)" },
 ] as const;
 
 /** Common AWS regions for selection */
@@ -108,6 +109,19 @@ export const HETZNER_COST_ESTIMATES: Record<string, number> = {
   cpx31: 9,
   cpx41: 16,
 };
+
+/** Estimated monthly cost for local Docker (always free) */
+export const LOCAL_COST_ESTIMATES: Record<string, number> = {
+  local: 0,
+};
+
+/**
+ * Build the Docker container name for a local agent.
+ * Example: "clawup-dev-agent-pm"
+ */
+export function dockerContainerName(stackName: string, agentName: string): string {
+  return `clawup-${stackName}-${agentName}`;
+}
 
 /** Manifest filename */
 export const MANIFEST_FILE = "clawup.yaml";
@@ -245,28 +259,9 @@ export const KEY_INSTRUCTIONS = {
       "3. It looks like \"tailXXXXX.ts.net\" or a custom domain",
     ],
   },
-  slackCredentials: {
-    title: "Slack App Setup",
-    steps: [
-      "Create a Slack app for each agent using the manifest shown below:",
-      "1. Go to https://api.slack.com/apps → \"Create New App\" → \"From a manifest\"",
-      "2. Select your workspace, paste the JSON manifest, and create the app",
-      "3. Go to \"OAuth & Permissions\" — copy the Bot Token (xoxb-...)",
-      "4. Under \"Basic Information\" → \"App-Level Tokens\", generate a token",
-      "   with the connections:write scope — copy it (xapp-...)",
-    ],
-  },
-  linearApiKey: {
-    title: "Linear API Key",
-    steps: [
-      "Create a separate Linear account for each agent (used by openclaw-linear plugin):",
-      "1. Invite you+agentname@domain.com to your Linear workspace",
-      "   (plus-addressing forwards to your inbox — no new email needed)",
-      "   Follow the link in the invite email to create the account and join the org",
-      "2. Go to Settings → Security & Access → Personal API keys → \"New API key\"",
-      "3. Copy the key (starts with lin_api_)",
-    ],
-  },
+  // Plugin-specific instructions (slackCredentials, linearApiKey) have been
+  // moved to the enriched plugin registry in plugin-registry.ts.
+  // Access them via: PLUGIN_MANIFEST_REGISTRY["slack"].secrets.botToken.instructions
   githubToken: {
     title: "GitHub Token",
     steps: [

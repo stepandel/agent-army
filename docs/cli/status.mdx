@@ -16,7 +16,7 @@ clawup status [options]
 | Option | Description |
 |--------|-------------|
 | `--json` | Output as JSON |
-| `-c, --config <name>` | Config name (auto-detected if only one) |
+| `--local` | Show status of local Docker containers |
 
 ## Examples
 
@@ -27,6 +27,6 @@ clawup status
 # JSON output for scripting
 clawup status --json
 
-# Specific config
-clawup status -c production
+# Show local Docker container status
+clawup status --local
 ```

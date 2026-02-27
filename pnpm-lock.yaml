@@ -23,6 +23,9 @@ importers:
       '@clack/prompts':
         specifier: ^0.9
         version: 0.9.1
+      '@scarf/scarf':
+        specifier: ^1.4.0
+        version: 1.4.0
       commander:
         specifier: ^13.0
         version: 13.1.0
@@ -70,6 +73,9 @@ importers:
       '@pulumi/aws':
         specifier: ^6.0.0
         version: 6.83.2(typescript@5.9.3)
+      '@pulumi/docker':
+        specifier: ^4.0.0
+        version: 4.11.0(typescript@5.9.3)
       '@pulumi/hcloud':
         specifier: ^1.32.0
         version: 1.32.0(typescript@5.9.3)
@@ -119,6 +125,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      geist:
+        specifier: ^1.7.0
+        version: 1.7.0(next@14.2.35(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@18.3.1)
@@ -923,6 +932,9 @@ packages:
 
   '@pulumi/aws@6.83.2':
     resolution: {integrity: sha512-FggAx+LxANUwD9KPlKy4U8uvVjhR8B6vw+doDq7zP3bRWz7CCCd4sXZT2k/ou0erZN78MTzOXYa1nsN0TBEDJg==}
+
+  '@pulumi/docker@4.11.0':
+    resolution: {integrity: sha512-NUXMCWL3VBtlclC4u7G9LcToCQGiR/wOuRdKHzAqbn0nzaVuPV3NlDZIz7CpcHL/mGGIQ00/HnLGCA8lC1kSFA==}
 
   '@pulumi/hcloud@1.32.0':
     resolution: {integrity: sha512-XarPd3Yez6+HxHx8BwX7eRKxqmGWLPvA9W+fvXs4XTZBgslwJqky9fxVat06xzKrYJQUp4AwithCM5TuO+gwCw==}
@@ -1770,6 +1782,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@scarf/scarf@1.4.0':
+    resolution: {integrity: sha512-xxeapPiUXdZAE3che6f3xogoJPeZgig6omHEy1rIY5WVsB3H2BHNnZH+gHG6x91SCWyQCzWGsuL2Hh3ClO5/qQ==}
+
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
 
@@ -2544,6 +2559,11 @@ packages:
 
   fzf@0.5.2:
     resolution: {integrity: sha512-Tt4kuxLXFKHy8KT40zwsUPUkg1CrsgY25FxA2U/j/0WgEDCk3ddc/zLTCCcbSHX9FcKtLuVaDGtGE/STWC+j3Q==}
+
+  geist@1.7.0:
+    resolution: {integrity: sha512-ZaoiZwkSf0DwwB1ncdLKp+ggAldqxl5L1+SXaNIBGkPAqcu+xjVJLxlf3/S8vLt9UHx1xu5fz3lbzKCj5iOVdQ==}
+    peerDependencies:
+      next: '>=13.2.0'
 
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
@@ -3543,6 +3563,10 @@ packages:
 
   scheduler@0.23.2:
     resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
+
+  semver@5.7.2:
+    resolution: {integrity: sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g==}
+    hasBin: true
 
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
@@ -4828,6 +4852,15 @@ snapshots:
       - ts-node
       - typescript
 
+  '@pulumi/docker@4.11.0(typescript@5.9.3)':
+    dependencies:
+      '@pulumi/pulumi': 3.219.0(typescript@5.9.3)
+      semver: 5.7.2
+    transitivePeerDependencies:
+      - supports-color
+      - ts-node
+      - typescript
+
   '@pulumi/hcloud@1.32.0(typescript@5.9.3)':
     dependencies:
       '@pulumi/pulumi': 3.219.0(typescript@5.9.3)
@@ -5701,6 +5734,8 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.57.1':
     optional: true
 
+  '@scarf/scarf@1.4.0': {}
+
   '@sec-ant/readable-stream@0.4.1': {}
 
   '@sigstore/bundle@4.0.0':
@@ -6448,6 +6483,10 @@ snapshots:
   fuzzysort@3.1.0: {}
 
   fzf@0.5.2: {}
+
+  geist@1.7.0(next@14.2.35(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)):
+    dependencies:
+      next: 14.2.35(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
   gensync@1.0.0-beta.2: {}
 
@@ -7464,6 +7503,8 @@ snapshots:
   scheduler@0.23.2:
     dependencies:
       loose-envify: 1.4.0
+
+  semver@5.7.2: {}
 
   semver@6.3.1: {}
 

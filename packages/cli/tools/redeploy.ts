@@ -6,19 +6,21 @@
  */
 
 import type { RuntimeAdapter, ToolImplementation } from "../adapters";
-import { loadManifest, resolveConfigName, syncManifestToProject } from "../lib/config";
+import { requireManifest, syncManifestToProject } from "../lib/config";
+import type { ClawupManifest } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { isTailscaleInstalled, isTailscaleRunning, cleanupTailscaleDevices, ensureMagicDns, ensureTailscaleFunnel } from "../lib/tailscale";
-import { getConfig } from "../lib/tool-helpers";
+import { getConfig, setConfig, verifyStackOwnership, stampStackFingerprint } from "../lib/tool-helpers";
 import { formatAgentList } from "../lib/ui";
 import { qualifiedStackName } from "../lib/pulumi";
+import { getProjectRoot } from "../lib/project";
 import pc from "picocolors";
 
 export interface RedeployOptions {
   /** Skip confirmation prompt */
   yes?: boolean;
-  /** Config name (auto-detected if only one) */
-  config?: string;
+  /** Run in local Docker containers */
+  local?: boolean;
 }
 
 /**
@@ -30,7 +32,7 @@ export const redeployTool: ToolImplementation<RedeployOptions> = async (
 ) => {
   const { ui, exec } = runtime;
 
-  ui.intro("Agent Army");
+  ui.intro("Clawup");
 
   // Ensure workspace is set up
   const wsResult = ensureWorkspace();
@@ -40,23 +42,25 @@ export const redeployTool: ToolImplementation<RedeployOptions> = async (
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name and load manifest
-  let configName: string;
+  // Load manifest
+  let manifest;
   try {
-    configName = resolveConfigName(options.config);
+    manifest = requireManifest();
   } catch (err) {
     ui.log.error((err as Error).message);
     process.exit(1);
   }
 
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    ui.log.error(`Config '${configName}' could not be loaded.`);
-    process.exit(1);
+  // --local: override provider in memory, use separate stack
+  const isLocal = !!options.local;
+  if (isLocal) {
+    manifest = { ...manifest, provider: "local" } as ClawupManifest;
   }
 
   // Try to select existing stack (use org-qualified name if organization is set)
-  const pulumiStack = qualifiedStackName(manifest.stackName, manifest.organization);
+  const stackName = isLocal ? `${manifest.stackName}-local` : manifest.stackName;
+  const pulumiStack = qualifiedStackName(stackName, manifest.organization);
+  const projectRoot = getProjectRoot();
   const selectResult = exec.capture("pulumi", ["stack", "select", pulumiStack], cwd);
   const stackExists = selectResult.exitCode === 0;
 
@@ -69,20 +73,29 @@ export const redeployTool: ToolImplementation<RedeployOptions> = async (
       ui.log.error(initResult.stderr || `Could not create Pulumi stack "${pulumiStack}".`);
       process.exit(1);
     }
+    stampStackFingerprint(exec, projectRoot, cwd);
+  } else {
+    const collisionError = verifyStackOwnership(exec, projectRoot, cwd);
+    if (collisionError) {
+      ui.log.error(collisionError);
+      process.exit(1);
+    }
   }
 
   // Show redeploy summary
   ui.note(
     [
       `Stack:    ${manifest.stackName}`,
-      `Region:   ${manifest.region}`,
+      isLocal ? `Provider: Local Docker` : `Region:   ${manifest.region}`,
       `Mode:     ${stackExists ? "In-place update (--refresh)" : "Fresh deploy (new stack)"}`,
       ``,
       `Agents (${manifest.agents.length}):`,
       formatAgentList(manifest.agents),
       ``,
       stackExists
-        ? `This will update resources in-place where possible.\nTailscale devices will be preserved.`
+        ? isLocal
+          ? `This will update local Docker containers in-place.`
+          : `This will update resources in-place where possible.\nTailscale devices will be preserved.`
         : `This will create all resources from scratch.`,
     ].join("\n"),
     "Redeploy Summary"
@@ -100,7 +113,7 @@ export const redeployTool: ToolImplementation<RedeployOptions> = async (
   }
 
   // Sync manifest to project root so the Pulumi program can read it
-  syncManifestToProject(configName, cwd);
+  syncManifestToProject(cwd, isLocal ? { provider: "local" as const } : undefined);
 
   // Sync instanceType from manifest to Pulumi config
   const configSetResult = exec.capture("pulumi", ["config", "set", "instanceType", manifest.instanceType], cwd);
@@ -109,45 +122,89 @@ export const redeployTool: ToolImplementation<RedeployOptions> = async (
     process.exit(1);
   }
 
-  // Clean up stale Tailscale devices before deploying
-  // This prevents duplicates when Pulumi replaces servers (create-before-delete)
-  const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
-  const tailscaleApiKey = getConfig(exec, "tailscaleApiKey", cwd);
+  // --local: auto-configure by copying all config from the cloud stack
+  if (isLocal) {
+    const cloudStack = qualifiedStackName(manifest.stackName, manifest.organization);
+    const configResult = exec.capture("pulumi", ["config", "--json", "--show-secrets", "--stack", cloudStack], cwd);
 
-  if (tailnetDnsName && tailscaleApiKey) {
-    const spinner = ui.spinner("Cleaning up stale Tailscale devices...");
-    const { cleaned, failed } = cleanupTailscaleDevices(
-      tailscaleApiKey, tailnetDnsName, manifest.stackName, manifest.agents
-    );
-    if (cleaned.length > 0) {
-      spinner.stop(`Removed ${cleaned.length} stale Tailscale device(s)`);
+    if (configResult.exitCode === 0 && configResult.stdout?.trim()) {
+      try {
+        const cloudConfig = JSON.parse(configResult.stdout) as Record<string, { value: string; secret: boolean }>;
+        const spinner = ui.spinner("Copying config from cloud stack...");
+        let copied = 0;
+        for (const [key, entry] of Object.entries(cloudConfig)) {
+          // Skip Tailscale keys and cloud-specific config
+          if (key.includes("tailscale") || key.includes("tailnet") || key === "clawup:projectFingerprint") continue;
+          // Strip namespace prefix (e.g., "clawup:anthropicApiKey" → "anthropicApiKey")
+          const shortKey = key.includes(":") ? key.split(":").slice(1).join(":") : key;
+          setConfig(exec, shortKey, entry.value, cwd, entry.secret);
+          copied++;
+        }
+        spinner.stop(`Copied ${copied} config values from cloud stack`);
+      } catch {
+        ui.log.warn("Could not parse cloud stack config. Falling back to env var.");
+      }
     } else {
-      spinner.stop("No stale Tailscale devices found");
+      // No cloud stack — fall back to ANTHROPIC_API_KEY env var
+      const anthropicKey = process.env.ANTHROPIC_API_KEY;
+      if (anthropicKey) {
+        setConfig(exec, "anthropicApiKey", anthropicKey, cwd, true);
+      } else {
+        ui.log.warn("No cloud stack found and ANTHROPIC_API_KEY not set. Run `clawup setup` first.");
+      }
     }
-    if (failed.length > 0) {
-      ui.log.warn(
-        `Could not remove some devices: ${failed.join(", ")}. Check https://login.tailscale.com/admin/machines`
+
+    // Override local-specific values
+    setConfig(exec, "provider", "local", cwd);
+    setConfig(exec, "instanceType", "local", cwd);
+    if (manifest.ownerName) setConfig(exec, "ownerName", manifest.ownerName, cwd);
+    if (manifest.timezone) setConfig(exec, "timezone", manifest.timezone, cwd);
+    if (manifest.workingHours) setConfig(exec, "workingHours", manifest.workingHours, cwd);
+    if (manifest.userNotes) setConfig(exec, "userNotes", manifest.userNotes, cwd);
+  }
+
+  // Tailscale setup (skip for local Docker provider)
+  if (!isLocal) {
+    // Clean up stale Tailscale devices before deploying
+    // This prevents duplicates when Pulumi replaces servers (create-before-delete)
+    const tailnetDnsName = getConfig(exec, "tailnetDnsName", cwd);
+    const tailscaleApiKey = getConfig(exec, "tailscaleApiKey", cwd);
+
+    if (tailnetDnsName && tailscaleApiKey) {
+      const spinner = ui.spinner("Cleaning up stale Tailscale devices...");
+      const { cleaned, failed } = cleanupTailscaleDevices(
+        tailscaleApiKey, tailnetDnsName, manifest.stackName, manifest.agents
       );
+      if (cleaned.length > 0) {
+        spinner.stop(`Removed ${cleaned.length} stale Tailscale device(s)`);
+      } else {
+        spinner.stop("No stale Tailscale devices found");
+      }
+      if (failed.length > 0) {
+        ui.log.warn(
+          `Could not remove some devices: ${failed.join(", ")}. Check https://login.tailscale.com/admin/machines`
+        );
+      }
     }
-  }
 
-  // Ensure MagicDNS is enabled (required for Tailscale hostname resolution)
-  if (tailscaleApiKey) {
-    const spinner = ui.spinner("Ensuring Tailscale MagicDNS is enabled...");
-    const magicDnsChanged = ensureMagicDns(tailscaleApiKey);
-    spinner.stop(magicDnsChanged ? "MagicDNS enabled" : "MagicDNS OK");
-  }
+    // Ensure MagicDNS is enabled (required for Tailscale hostname resolution)
+    if (tailscaleApiKey) {
+      const spinner = ui.spinner("Ensuring Tailscale MagicDNS is enabled...");
+      const magicDnsChanged = ensureMagicDns(tailscaleApiKey);
+      spinner.stop(magicDnsChanged ? "MagicDNS enabled" : "MagicDNS OK");
+    }
 
-  // Ensure Tailscale Funnel prerequisites if any agent uses Linear
-  const hasLinearAgents = manifest.agents.some(
-    (a) => !!getConfig(exec, `${a.role}LinearApiKey`, cwd)
-  );
-  if (hasLinearAgents && tailscaleApiKey) {
-    const spinner = ui.spinner("Ensuring Tailscale Funnel prerequisites...");
-    const funnel = ensureTailscaleFunnel(tailscaleApiKey);
-    const changes: string[] = [];
-    if (funnel.funnelAcl) changes.push("Funnel ACL enabled");
-    spinner.stop(changes.length > 0 ? changes.join(", ") : "Funnel prerequisites OK");
+    // Ensure Tailscale Funnel prerequisites if any agent uses Linear
+    const hasLinearAgents = manifest.agents.some(
+      (a) => !!getConfig(exec, `${a.role}LinearApiKey`, cwd)
+    );
+    if (hasLinearAgents && tailscaleApiKey) {
+      const spinner = ui.spinner("Ensuring Tailscale Funnel prerequisites...");
+      const funnel = ensureTailscaleFunnel(tailscaleApiKey);
+      const changes: string[] = [];
+      if (funnel.funnelAcl) changes.push("Funnel ACL enabled");
+      spinner.stop(changes.length > 0 ? changes.join(", ") : "Funnel prerequisites OK");
+    }
   }
 
   // Run pulumi up with --refresh to read actual cloud state first
@@ -201,20 +258,25 @@ export const redeployTool: ToolImplementation<RedeployOptions> = async (
     }
   }
 
-  // Remind user about Tailscale if not connected
-  if (!isTailscaleInstalled()) {
-    const hint =
-      process.platform === "darwin"
-        ? "Install from the Mac App Store or https://tailscale.com/download"
-        : "Install from https://tailscale.com/download";
-    ui.log.warn(
-      `Tailscale is required to connect to agents.\n  ${hint}\n  Then run: ${pc.cyan("tailscale up")}`
-    );
-  } else if (!isTailscaleRunning()) {
-    ui.log.warn(
-      `Tailscale is not running. Start it before validating agents.\n  Open the Tailscale app or run: ${pc.cyan("tailscale up")}`
-    );
-  }
+  if (isLocal) {
+    ui.log.info("Agents are running in local Docker containers.");
+    ui.outro("Run `clawup validate` to check agent health.");
+  } else {
+    // Remind user about Tailscale if not connected
+    if (!isTailscaleInstalled()) {
+      const hint =
+        process.platform === "darwin"
+          ? "Install from the Mac App Store or https://tailscale.com/download"
+          : "Install from https://tailscale.com/download";
+      ui.log.warn(
+        `Tailscale is required to connect to agents.\n  ${hint}\n  Then run: ${pc.cyan("tailscale up")}`
+      );
+    } else if (!isTailscaleRunning()) {
+      ui.log.warn(
+        `Tailscale is not running. Start it before validating agents.\n  Open the Tailscale app or run: ${pc.cyan("tailscale up")}`
+      );
+    }
 
-  ui.outro("Agents updated. Run `clawup validate` to verify.");
+    ui.outro("Agents updated. Run `clawup validate` to verify.");
+  }
 };

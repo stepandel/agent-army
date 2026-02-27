@@ -6,21 +6,11 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 
 /**
- * Display the Agent Army banner
+ * Display the Clawup banner
  */
 export function showBanner(): void {
   console.log();
-  p.intro(pc.bgCyan(pc.black(" Agent Army ")));
-}
-
-/**
- * Handle user cancellation (Ctrl+C)
- */
-export function handleCancel(value: unknown): void {
-  if (p.isCancel(value)) {
-    p.cancel("Operation cancelled.");
-    process.exit(0);
-  }
+  p.intro(pc.bgCyan(pc.black(" Clawup ")));
 }
 
 /**

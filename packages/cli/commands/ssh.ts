@@ -3,22 +3,21 @@
  */
 
 import * as p from "@clack/prompts";
-import { loadManifest, resolveConfigName } from "../lib/config";
+import { requireManifest } from "../lib/config";
 import { getConfig, selectOrCreateStack } from "../lib/pulumi";
-import { AGENT_ALIASES, SSH_USER, tailscaleHostname } from "@clawup/core";
+import { AGENT_ALIASES, SSH_USER, tailscaleHostname, dockerContainerName } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
-import { showBanner, exitWithError } from "../lib/ui";
+import { exitWithError } from "../lib/ui";
 import { requireTailscale } from "../lib/tailscale";
 import { spawn } from "child_process";
 
 interface SshOptions {
   user?: string;
-  config?: string;
+  /** Connect to local Docker container */
+  local?: boolean;
 }
 
 export async function sshCommand(agentNameOrAlias: string, commandArgs: string[], opts: SshOptions): Promise<void> {
-  requireTailscale();
-
   // Ensure workspace is set up (no-op in dev mode)
   const wsResult = ensureWorkspace();
   if (!wsResult.ok) {
@@ -26,24 +25,24 @@ export async function sshCommand(agentNameOrAlias: string, commandArgs: string[]
   }
   const cwd = getWorkspaceDir();
 
-  // Resolve config name
-  let configName: string;
+  // Load manifest
+  let manifest;
   try {
-    configName = resolveConfigName(opts.config);
+    manifest = requireManifest();
   } catch (err) {
     exitWithError((err as Error).message);
   }
 
-  // Load manifest
-  const manifest = loadManifest(configName);
-  if (!manifest) {
-    exitWithError(`Config '${configName}' could not be loaded.`);
+  // --local: override provider in memory, use separate stack
+  if (opts.local) {
+    manifest = { ...manifest, provider: "local" as const };
   }
 
   // Select stack
-  const stackResult = selectOrCreateStack(manifest.stackName, cwd);
+  const stackName = opts.local ? `${manifest.stackName}-local` : manifest.stackName;
+  const stackResult = selectOrCreateStack(stackName, cwd);
   if (!stackResult.ok) {
-    exitWithError(`Could not select Pulumi stack "${manifest.stackName}".`);
+    exitWithError(`Could not select Pulumi stack "${stackName}".`);
   }
 
   // Resolve agent name/alias
@@ -67,6 +66,29 @@ export async function sshCommand(agentNameOrAlias: string, commandArgs: string[]
       `Unknown agent: "${agentNameOrAlias}"\nValid identifiers (any of these work):\n  ${validNames}`
     );
   }
+
+  // Local provider: use docker exec instead of SSH
+  if (manifest.provider === "local") {
+    const containerName = dockerContainerName(stackName, agent.name);
+    const user = opts.user ?? SSH_USER;
+    p.log.info(`Connecting to ${agent.displayName} (${containerName})...`);
+
+    const dockerArgs = ["exec", "-it", "-u", user, containerName];
+    if (commandArgs.length > 0) {
+      dockerArgs.push("bash", "-c", commandArgs.join(" "));
+    } else {
+      dockerArgs.push("bash");
+    }
+
+    const child = spawn("docker", dockerArgs, { stdio: "inherit" });
+    child.on("close", (code) => {
+      process.exit(code ?? 0);
+    });
+    return;
+  }
+
+  // Cloud providers: use Tailscale SSH
+  requireTailscale();
 
   // Get tailnet DNS name
   const tailnetDnsName = getConfig("tailnetDnsName", cwd);

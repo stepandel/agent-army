@@ -22,6 +22,16 @@ export interface PluginInstallConfig {
   secretEnvVars?: Record<string, string>;
   /** false for built-in plugins like Slack that don't need `openclaw plugins install` */
   installable?: boolean;
+  /** Where this plugin's config lives in openclaw.json: "plugins.entries" or "channels" */
+  configPath?: "plugins.entries" | "channels";
+  /** Keys that are clawup-internal metadata and should NOT be written to OpenClaw config */
+  internalKeys?: string[];
+  /** Config transforms to apply before writing (e.g., dm flattening for Slack) */
+  configTransforms?: Array<{
+    sourceKey: string;
+    targetKeys: Record<string, string>;
+    removeSource: boolean;
+  }>;
 }
 
 export interface CloudInitConfig {
@@ -63,6 +73,10 @@ export interface CloudInitConfig {
   tailscaleHostname?: string;
   /** Skip Tailscale installation (default: false) */
   skipTailscale?: boolean;
+  /** Skip Docker installation (default: false) — for local Docker where Docker is the host */
+  skipDocker?: boolean;
+  /** Run OpenClaw daemon in foreground instead of systemd (default: false) — keeps container alive */
+  foregroundMode?: boolean;
   /** Create ubuntu user (for Hetzner which uses root) */
   createUbuntuUser?: boolean;
   /** Plugins to install and configure */
@@ -93,6 +107,9 @@ export function generateCloudInit(config: CloudInitConfig): string {
     enabled: true,
     config: p.config ?? {},
     secretEnvVars: p.secretEnvVars,
+    configPath: p.configPath,
+    internalKeys: p.internalKeys,
+    configTransforms: p.configTransforms,
   }));
 
   // Extract braveApiKey from depSecrets for config-generator (special case)
@@ -186,9 +203,14 @@ echo "Clawhub skills installation complete"
     ? config.postSetupCommands.join("\n")
     : "";
 
-  // Create ubuntu user section (for Hetzner)
+  // Create ubuntu user section (for Hetzner / local Docker)
   const createUserSection = config.createUbuntuUser
-    ? `
+    ? config.skipDocker
+      ? `
+# Create ubuntu user (local Docker — no docker group)
+useradd -m -s /bin/bash ubuntu || true
+`
+      : `
 # Create ubuntu user (Hetzner uses root by default)
 useradd -m -s /bin/bash -G docker ubuntu || true
 `
@@ -260,15 +282,15 @@ echo "Starting OpenClaw agent provisioning..."
 echo "Updating system packages..."
 apt-get update
 apt-get upgrade -y
-apt-get install -y unzip build-essential
+apt-get install -y unzip build-essential sudo python3
 
-# Install Docker
+${config.skipDocker ? "" : `# Install Docker
 echo "Installing Docker..."
 curl -fsSL https://get.docker.com | sh
 systemctl enable docker
-systemctl start docker
+systemctl start docker`}
 ${createUserSection}
-usermod -aG docker ubuntu
+${config.skipDocker ? "" : "usermod -aG docker ubuntu"}
 ${tailscaleSection}
 ${depInstallScript}
 
@@ -327,11 +349,11 @@ ${additionalEnvVars}
 ${depPostInstallScript}
 ${codingClisInstallScript}
 
-# Enable systemd linger for ubuntu user (required for user services to run at boot)
+${config.foregroundMode ? "" : `# Enable systemd linger for ubuntu user (required for user services to run at boot)
 loginctl enable-linger ubuntu
 
 # Start user's systemd instance (required for user services during cloud-init)
-systemctl start user@1000.service
+systemctl start user@1000.service`}
 
 # Run OpenClaw onboarding as ubuntu user (skip daemon install, do it separately)
 echo "Running OpenClaw onboarding..."
@@ -363,7 +385,30 @@ sudo -H -u ubuntu \\
 ${configPatchScript}
 PYTHON_SCRIPT
 ${tailscaleProxySection}
-# Install daemon service AFTER config patch so gateway token matches
+${config.foregroundMode ? `# Run openclaw doctor before starting daemon in foreground
+echo "Running openclaw doctor..."
+sudo -H -u ubuntu bash -c '
+export HOME=/home/ubuntu
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+openclaw doctor --fix --non-interactive || echo "WARNING: openclaw doctor failed"
+'
+
+${postSetupScript}
+echo "============================================"
+echo "OpenClaw agent setup complete!"
+echo "============================================"
+
+# Start OpenClaw gateway in foreground (keeps container alive)
+# Use "openclaw gateway" instead of "openclaw daemon start" because
+# daemon start requires systemctl which is unavailable in Docker.
+echo "Starting OpenClaw gateway in foreground..."
+exec su - ubuntu -c '
+export HOME=/home/ubuntu
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+exec openclaw gateway
+'` : `# Install daemon service AFTER config patch so gateway token matches
 echo "Installing OpenClaw daemon..."
 sudo -H -u ubuntu XDG_RUNTIME_DIR=/run/user/1000 bash -c '
 export HOME=/home/ubuntu
@@ -385,7 +430,7 @@ openclaw doctor --fix --non-interactive || echo "WARNING: openclaw doctor failed
 ${postSetupScript}
 echo "============================================"
 echo "OpenClaw agent setup complete!"
-echo "============================================"
+echo "============================================"`}
 `;
 }
 

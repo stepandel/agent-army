@@ -1,7 +1,7 @@
 {
   "name": "clawup",
-  "version": "1.0.18",
-  "description": "Deploy and manage a fleet of OpenClaw AI agents on AWS",
+  "version": "2.1.6",
+  "description": "Deploy and manage a fleet of OpenClaw AI agents on AWS or Hetzner",
   "bin": {
     "clawup": "dist/bin.js"
   },
@@ -12,13 +12,14 @@
   ],
   "scripts": {
     "build": "tsc",
-    "build:bundle": "node scripts/bundle.mjs",
-    "prepublishOnly": "node scripts/bundle.mjs",
+    "build:bundle": "node scripts/bundle.mjs && node scripts/sync-infra.mjs",
+    "prepublishOnly": "node scripts/bundle.mjs && node scripts/sync-infra.mjs",
     "watch": "tsc --watch",
     "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^0.9",
+    "@scarf/scarf": "^1.4.0",
     "commander": "^13.0",
     "picocolors": "^1.1",
     "yaml": "^2.7.0"
@@ -38,7 +39,7 @@
     "url": "https://github.com/stepandel/clawup.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://agent-army.ai",
+  "homepage": "https://clawup.sh",
   "exports": {
     "./lib/constants": "./dist/lib/constants.js",
     "./types": "./dist/types.js"

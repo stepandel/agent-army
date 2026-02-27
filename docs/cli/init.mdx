@@ -1,70 +1,66 @@
 ---
 title: "init"
-description: "Interactive setup wizard for configuring your agent team"
+description: "Generate a clawup.yaml scaffold for your agent deployment"
 ---
 
-Interactive setup wizard that walks you through configuring your cloud provider, secrets, and agent team.
+Generates a `clawup.yaml` manifest and `.env.example` in the current directory. Completely non-interactive — edit the YAML by hand to configure your deployment.
 
 ## Usage
 
 ```bash
-clawup init [options]
+clawup init
 ```
 
-## Options
+## Two Modes
 
-| Option | Description |
-|--------|-------------|
-| `--deploy` | Deploy immediately after init completes |
-| `-y, --yes` | Skip confirmation prompt (used with `--deploy`) |
+### Fresh Init (no `clawup.yaml`)
 
-## Wizard Steps
+Scaffolds a new manifest with all built-in agents and sensible defaults:
 
-### 1. Stack Name
-Choose a unique name for your deployment (e.g., `dev`, `prod`, `staging`). This becomes part of your Tailscale hostnames and resource tags.
+- **Provider**: AWS
+- **Region**: us-east-1
+- **Instance type**: t3.medium
+- **Agents**: Juno (PM), Titus (Engineer), Scout (QA)
 
-### 2. Cloud Provider
-Select your cloud provider:
-- **AWS** — Amazon Web Services EC2 instances
-- **Hetzner** — Hetzner Cloud servers (EU/US)
+The generated `clawup.yaml` includes `${env:VAR}` secret references, inline plugin config from identities, and per-agent secrets. Edit the values directly in the YAML file to match your setup.
 
-### 3. Region
-Choose a deployment region. Options are provider-specific:
+### Repair Mode (existing `clawup.yaml`)
 
-**AWS:** us-east-1, us-east-2, us-west-2, eu-west-1, eu-central-1, ap-southeast-1, ap-northeast-1
+When `clawup.yaml` already exists, init enters **repair mode** — a non-interactive refresh that:
 
-**Hetzner:** fsn1 (Falkenstein), nbg1 (Nuremberg), hel1 (Helsinki), ash (Ashburn)
+1. Re-fetches all agent identities (picks up upstream changes)
+2. Updates the secrets section with any new plugins, deps, or `requiredSecrets`
+3. Refreshes inline plugin config with latest `pluginDefaults` from identities
+4. Warns about any missing template variables
+5. Regenerates `.env.example` to reflect current requirements
 
-### 4. Instance Type
-Select server size. Affects performance and cost.
-
-### 5. Owner Configuration
-- **Name** — Your name (used in agent onboarding)
-- **Timezone** — e.g., `America/New_York`
-- **Working hours** — e.g., `9am-6pm`
-
-### 6. Agent Selection
-Pick from built-in identities, point to a Git repo or local directory, or mix both.
-
-### 7. API Keys & Secrets
-Configure required credentials (Anthropic API key, provider keys, etc.).
-
-### 8. Review & Confirm
-Review your full configuration with cost estimates before saving.
+Existing manifest values (stack name, provider, region, agents, etc.) are preserved. This is useful after updating an identity repo or adding new plugins to an identity.
 
 ## Examples
 
 ```bash
-# Standard interactive init
+# First-time setup — generates scaffold
 clawup init
 
-# Init and deploy immediately
-clawup init --deploy
-
-# Init, deploy, skip confirmation
-clawup init --deploy --yes
+# Refresh after identity changes
+clawup init
 ```
 
 ## Output
 
-Creates `~/.clawup/configs/<stack-name>/clawup.yaml` with your full manifest.
+Creates (or updates) in your project directory:
+- `clawup.yaml` — deployment manifest with `${env:VAR}` secret references
+- `.env.example` — all required env var names with empty values
+
+The `.clawup/` directory and `.env` are added to `.gitignore` automatically.
+
+## Next Steps
+
+After `init` completes:
+
+1. Edit `clawup.yaml` — set your provider, region, owner info, and agents
+2. Copy `.env.example` to `.env` and fill in your secrets
+3. Run [`clawup setup`](/cli/setup) to validate secrets and configure Pulumi
+4. Run [`clawup deploy`](/cli/deploy) to deploy your agents
+
+See [Environment Variables](/configuration/environment) for full details on the `${env:VAR}` reference system.
