@@ -467,14 +467,31 @@ function writeManifest(
     allModels,
   });
 
-  // Apply per-agent secrets
-  for (const agent of agents) {
-    const perAgentSec = manifestSecrets.perAgent[agent.name];
-    if (perAgentSec && Object.keys(perAgentSec).length > 0) {
-      agent.secrets = { ...(agent.secrets ?? {}), ...perAgentSec };
+  // Prune stale managed global keys, then merge fresh ones
+  const existingGlobal = { ...(manifest.secrets ?? {}) };
+  for (const key of manifestSecrets.managedGlobalKeys) {
+    if (!(key in manifestSecrets.global)) {
+      delete existingGlobal[key];
     }
   }
-  manifest.secrets = { ...(manifest.secrets ?? {}), ...manifestSecrets.global };
+  manifest.secrets = { ...existingGlobal, ...manifestSecrets.global };
+
+  // Per-agent: prune stale managed keys, then merge fresh ones
+  for (const agent of agents) {
+    const perAgentSec = manifestSecrets.perAgent[agent.name];
+    const managedKeys = manifestSecrets.managedPerAgentKeys[agent.name] ?? [];
+    const existing = { ...(agent.secrets ?? {}) };
+    for (const key of managedKeys) {
+      if (!perAgentSec?.[key]) {
+        delete existing[key];
+      }
+    }
+    if (perAgentSec && Object.keys(perAgentSec).length > 0) {
+      agent.secrets = { ...existing, ...perAgentSec };
+    } else if (Object.keys(existing).length > 0) {
+      agent.secrets = existing;
+    }
+  }
 
   // Inline plugin config (minus linearUserUuid — set by setup)
   for (const fi of fetchedIdentities) {

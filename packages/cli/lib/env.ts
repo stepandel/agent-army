@@ -7,7 +7,7 @@
  */
 
 import * as fs from "fs";
-import { resolvePlugin, PLUGIN_MANIFEST_REGISTRY, MODEL_PROVIDERS, getRequiredProviders, getProviderConfigKey, getProviderEnvVar } from "@clawup/core";
+import { resolvePlugin, PLUGIN_MANIFEST_REGISTRY, MODEL_PROVIDERS, PROVIDER_CONFIG_KEYS, getRequiredProviders, getProviderConfigKey, getProviderEnvVar } from "@clawup/core";
 
 // ---------------------------------------------------------------------------
 // Validators — shared prefix/suffix checks for well-known secret types
@@ -270,6 +270,10 @@ interface SecretsBuilderOpts {
 export interface ManifestSecrets {
   global: Record<string, string>;
   perAgent: Record<string, Record<string, string>>;
+  /** All global keys this function manages — stale ones should be pruned */
+  managedGlobalKeys: string[];
+  /** Per-agent managed keys — keyed by agent name */
+  managedPerAgentKeys: Record<string, string[]>;
 }
 
 /**
@@ -303,6 +307,18 @@ export function buildManifestSecrets(opts: SecretsBuilderOpts): ManifestSecrets 
   if (opts.allDepNames.has("brave-search")) {
     global.braveApiKey = "${env:BRAVE_API_KEY}";
   }
+
+  // Compute managedGlobalKeys: all keys this function could possibly manage
+  const managedGlobalKeys: string[] = [
+    ...Object.values(PROVIDER_CONFIG_KEYS),
+    "tailscaleAuthKey",
+    "tailnetDnsName",
+    "tailscaleApiKey",
+    "hcloudToken",
+    "braveApiKey",
+  ];
+
+  const managedPerAgentKeys: Record<string, string[]> = {};
 
   // Per-agent secrets — generic loop over resolved plugin manifests
   for (const agent of opts.agents) {
@@ -340,12 +356,14 @@ export function buildManifestSecrets(opts: SecretsBuilderOpts): ManifestSecrets 
       }
     }
 
+    managedPerAgentKeys[agent.name] = Object.keys(agentSecrets);
+
     if (Object.keys(agentSecrets).length > 0) {
       perAgent[agent.name] = agentSecrets;
     }
   }
 
-  return { global, perAgent };
+  return { global, perAgent, managedGlobalKeys, managedPerAgentKeys };
 }
 
 // ---------------------------------------------------------------------------

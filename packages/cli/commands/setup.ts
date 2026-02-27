@@ -230,12 +230,29 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
     allModels,
   });
 
-  // Merge expected secrets into manifest (add any missing env refs)
-  const mergedGlobalSecrets = { ...(manifest.secrets ?? {}), ...expectedSecrets.global };
+  // Prune stale managed global keys, then merge fresh ones
+  const existingGlobal = { ...(manifest.secrets ?? {}) };
+  for (const key of expectedSecrets.managedGlobalKeys) {
+    if (!(key in expectedSecrets.global)) {
+      delete existingGlobal[key];
+    }
+  }
+  const mergedGlobalSecrets = { ...existingGlobal, ...expectedSecrets.global };
+
+  // Per-agent: prune stale managed keys, then merge fresh ones
   for (const agent of agents) {
     const expected = expectedSecrets.perAgent[agent.name];
+    const managedKeys = expectedSecrets.managedPerAgentKeys[agent.name] ?? [];
+    const existing = { ...(agent.secrets ?? {}) };
+    for (const key of managedKeys) {
+      if (!expected?.[key]) {
+        delete existing[key];
+      }
+    }
     if (expected) {
-      agent.secrets = { ...(agent.secrets ?? {}), ...expected };
+      agent.secrets = { ...existing, ...expected };
+    } else if (Object.keys(existing).length > 0) {
+      agent.secrets = existing;
     }
   }
 

@@ -296,6 +296,50 @@ describe("buildManifestSecrets", () => {
     expect(result.global.openaiApiKey).toBeUndefined();
   });
 
+  it("returns managedGlobalKeys and managedPerAgentKeys", () => {
+    const result = buildManifestSecrets({
+      provider: "aws",
+      agents: [{ name: "agent-pm", role: "pm", displayName: "Juno" }],
+      allPluginNames: new Set(),
+      allDepNames: new Set(),
+      agentPlugins: new Map([["agent-pm", new Set()]]),
+      agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
+    });
+
+    // managedGlobalKeys should include all possible provider keys plus infra keys
+    expect(result.managedGlobalKeys).toContain("anthropicApiKey");
+    expect(result.managedGlobalKeys).toContain("openaiApiKey");
+    expect(result.managedGlobalKeys).toContain("googleApiKey");
+    expect(result.managedGlobalKeys).toContain("openrouterApiKey");
+    expect(result.managedGlobalKeys).toContain("tailscaleAuthKey");
+    expect(result.managedGlobalKeys).toContain("tailnetDnsName");
+    expect(result.managedGlobalKeys).toContain("tailscaleApiKey");
+    expect(result.managedGlobalKeys).toContain("hcloudToken");
+    expect(result.managedGlobalKeys).toContain("braveApiKey");
+
+    // managedPerAgentKeys should be empty array for agent with no plugins/deps/requiredSecrets
+    expect(result.managedPerAgentKeys["agent-pm"]).toEqual([]);
+  });
+
+  it("managedGlobalKeys includes stale provider key on model switch (anthropic→openai)", () => {
+    const result = buildManifestSecrets({
+      provider: "aws",
+      agents: [{ name: "agent-pm", role: "pm", displayName: "Juno" }],
+      allPluginNames: new Set(),
+      allDepNames: new Set(),
+      agentPlugins: new Map([["agent-pm", new Set()]]),
+      agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["openai/gpt-4o"],
+    });
+
+    // global should NOT have anthropicApiKey (only openai is used)
+    expect(result.global.anthropicApiKey).toBeUndefined();
+    expect(result.global.openaiApiKey).toBe("${env:OPENAI_API_KEY}");
+    // But managedGlobalKeys SHOULD include anthropicApiKey so merge logic can prune it
+    expect(result.managedGlobalKeys).toContain("anthropicApiKey");
+  });
+
   it("includes only openai key when allModels has openai models", () => {
     const result = buildManifestSecrets({
       provider: "aws",
@@ -385,6 +429,9 @@ describe("buildManifestSecrets", () => {
       slackBotToken: "${env:PM_SLACK_BOT_TOKEN}",
       slackAppToken: "${env:PM_SLACK_APP_TOKEN}",
     });
+    expect(result.managedPerAgentKeys["agent-pm"]).toEqual(
+      expect.arrayContaining(["slackBotToken", "slackAppToken"])
+    );
   });
 
   it("builds per-agent secrets for linear plugin", () => {
@@ -403,6 +450,9 @@ describe("buildManifestSecrets", () => {
       linearWebhookSecret: "${env:ENG_LINEAR_WEBHOOK_SECRET}",
       linearUserUuid: "${env:ENG_LINEAR_USER_UUID}",
     });
+    expect(result.managedPerAgentKeys["agent-eng"]).toEqual(
+      expect.arrayContaining(["linearApiKey", "linearWebhookSecret", "linearUserUuid"])
+    );
   });
 
   it("builds per-agent secrets for gh dep", () => {
@@ -419,6 +469,7 @@ describe("buildManifestSecrets", () => {
     expect(result.perAgent["agent-eng"]).toEqual({
       githubToken: "${env:ENG_GITHUB_TOKEN}",
     });
+    expect(result.managedPerAgentKeys["agent-eng"]).toEqual(["githubToken"]);
   });
 });
 
