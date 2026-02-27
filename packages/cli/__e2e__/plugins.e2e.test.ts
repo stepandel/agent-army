@@ -1,7 +1,10 @@
 /**
- * E2E Lifecycle Test: init → setup → deploy → validate → destroy
+ * E2E Plugin Test: deploy → validate → destroy with Slack + Linear plugins
  *
- * Tests the full CLI lifecycle using local Docker containers.
+ * Tests the full CLI lifecycle for plugin configuration using local Docker containers.
+ * Verifies that openclaw.json contains correct plugin config structure and that
+ * validation checks run for plugin secrets.
+ *
  * Requires: Docker running, Pulumi installed.
  */
 
@@ -83,6 +86,17 @@ import { validateTool } from "../tools/validate";
 import { destroyTool } from "../tools/destroy";
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const PLUGIN_IDENTITY_DIR = path.resolve(
+  __dirname,
+  "helpers",
+  "fixtures",
+  "plugin-identity",
+);
+
+// ---------------------------------------------------------------------------
 // Setup & teardown
 // ---------------------------------------------------------------------------
 
@@ -94,7 +108,7 @@ const E2E_ENV_KEYS = [
 ] as const;
 let savedEnv: Record<string, string | undefined> = {};
 
-describe("Lifecycle: init → setup → deploy → validate → destroy", () => {
+describe("Plugin Lifecycle: deploy → validate → destroy (Slack + Linear)", () => {
   beforeAll(() => {
     // Save existing env values
     savedEnv = Object.fromEntries(
@@ -102,11 +116,11 @@ describe("Lifecycle: init → setup → deploy → validate → destroy", () => 
     );
 
     // Generate unique stack name
-    stackName = `e2e-${Date.now()}`;
-    containerName = dockerContainerName(`${stackName}-local`, "agent-e2e-test");
+    stackName = `e2e-plugin-${Date.now()}`;
+    containerName = dockerContainerName(`${stackName}-local`, "agent-e2e-plugin-test");
 
     // Create temp directory
-    tempDir = fs.mkdtempSync(path.join(require("os").tmpdir(), "clawup-e2e-"));
+    tempDir = fs.mkdtempSync(path.join(require("os").tmpdir(), "clawup-e2e-plugin-"));
 
     // Set up workspace directory for project mode
     const workspaceDir = path.join(tempDir, ".clawup");
@@ -170,18 +184,29 @@ describe("Lifecycle: init → setup → deploy → validate → destroy", () => 
   });
 
   // -------------------------------------------------------------------------
-  // Test 1: init creates manifest (repair mode)
+  // Test 1: init creates manifest with plugin identity
   // -------------------------------------------------------------------------
 
-  it("init creates manifest and .env.example", async () => {
-    // Create a basic project for init to find and enter repair mode
-    createTestProject({ stackName, dir: tempDir });
+  it("init creates manifest with plugin identity", async () => {
+    // Create a basic project pointing at the plugin identity fixture
+    createTestProject({
+      stackName,
+      dir: tempDir,
+      identityDir: PLUGIN_IDENTITY_DIR,
+      agentName: "agent-e2e-plugin-test",
+      displayName: "PluginBot",
+      role: "plugintester",
+      extraEnvLines: [
+        "PLUGINTESTER_SLACK_BOT_TOKEN=xoxb-fake-bot-token-for-e2e",
+        "PLUGINTESTER_SLACK_APP_TOKEN=xapp-fake-app-token-for-e2e",
+        "PLUGINTESTER_LINEAR_API_KEY=lin_api_fake_key_for_e2e",
+        "PLUGINTESTER_LINEAR_WEBHOOK_SECRET=fake-webhook-secret-for-e2e",
+        "PLUGINTESTER_LINEAR_USER_UUID=fake-uuid-for-e2e",
+      ],
+    });
 
     // Run init — it finds the existing manifest and enters repair mode
     await initCommand();
-
-    // Assert: .env.example was created/updated
-    expect(fs.existsSync(path.join(tempDir, ".env.example"))).toBe(true);
 
     // Assert: clawup.yaml still exists and is valid YAML
     const manifestPath = path.join(tempDir, "clawup.yaml");
@@ -191,19 +216,15 @@ describe("Lifecycle: init → setup → deploy → validate → destroy", () => 
     const manifest = YAML.parse(fs.readFileSync(manifestPath, "utf-8"));
     expect(manifest.stackName).toBe(stackName);
     expect(manifest.agents).toHaveLength(1);
-    expect(manifest.agents[0].name).toBe("agent-e2e-test");
-
-    // Assert: .gitignore was updated
-    const gitignore = fs.readFileSync(path.join(tempDir, ".gitignore"), "utf-8");
-    expect(gitignore).toContain(".clawup/");
-    expect(gitignore).toContain(".env");
+    expect(manifest.agents[0].name).toBe("agent-e2e-plugin-test");
+    expect(manifest.agents[0].displayName).toBe("PluginBot");
   }, 30_000);
 
   // -------------------------------------------------------------------------
-  // Test 2: setup validates secrets and provisions Pulumi
+  // Test 2: setup validates secrets and provisions Pulumi with plugin config
   // -------------------------------------------------------------------------
 
-  it("setup validates secrets and creates Pulumi stack", async () => {
+  it("setup validates plugin secrets and creates Pulumi stack", async () => {
     // Run setup with the .env file
     await setupCommand({ envFile: path.join(tempDir, ".env") });
 
@@ -218,10 +239,10 @@ describe("Lifecycle: init → setup → deploy → validate → destroy", () => 
   }, 60_000);
 
   // -------------------------------------------------------------------------
-  // Test 3: deploy --local creates Docker containers
+  // Test 3: deploy --local creates Docker container with plugin config
   // -------------------------------------------------------------------------
 
-  it("deploy --local creates Docker container", async () => {
+  it("deploy --local creates Docker container with plugin config", async () => {
     const { adapter, ui, dispose } = createTestAdapter();
 
     try {
@@ -231,35 +252,51 @@ describe("Lifecycle: init → setup → deploy → validate → destroy", () => 
       expect(containerExists(containerName)).toBe(true);
       expect(isContainerRunning(containerName)).toBe(true);
 
-      // Assert: UI shows deployment summary with correct details
+      // Assert: UI shows deployment summary
       expect(ui.hasNote("Deployment Summary")).toBe(true);
       const summaryContent = ui.getNoteContent("Deployment Summary")!;
       expect(summaryContent).toContain(stackName);
       expect(summaryContent).toContain("Local Docker");
-      expect(summaryContent).toContain("TestBot");
+      expect(summaryContent).toContain("PluginBot");
 
       // Assert: UI shows success message
       expect(ui.hasLog("success", "Deployment complete!")).toBe(true);
 
-      // Assert: outro with next steps
-      expect(ui.outros.some((m) => m.includes("validate"))).toBe(true);
+      // Verify plugin secrets are embedded in the cloud-init script
+      const envResult = execSync(
+        `docker inspect --format='{{range .Config.Env}}{{println .}}{{end}}' ${containerName}`,
+        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+      );
+
+      // Cloud-init script is base64-encoded in CLOUDINIT_SCRIPT env var
+      const cloudinitMatch = envResult.match(/CLOUDINIT_SCRIPT=(.+)/);
+      expect(cloudinitMatch).not.toBeNull();
+      const cloudinitScript = Buffer.from(cloudinitMatch![1], "base64").toString("utf-8");
+
+      // Assert: Slack plugin secrets are in the cloud-init script
+      expect(cloudinitScript).toContain("SLACK_BOT_TOKEN=");
+      expect(cloudinitScript).toContain("SLACK_APP_TOKEN=");
+
+      // Assert: Linear plugin secrets are in the cloud-init script
+      expect(cloudinitScript).toContain("LINEAR_API_KEY=");
+      expect(cloudinitScript).toContain("LINEAR_WEBHOOK_SECRET=");
+      expect(cloudinitScript).toContain("LINEAR_USER_UUID=");
     } finally {
       dispose();
     }
   }, 300_000);
 
   // -------------------------------------------------------------------------
-  // Test 4: validate --local checks container health
+  // Test 4: validate --local runs plugin-specific checks
   // -------------------------------------------------------------------------
 
-  it("validate --local checks container health", async () => {
+  it("validate --local runs plugin secret checks", async () => {
     // Wait briefly for container to stabilize
     await new Promise((r) => setTimeout(r, 3_000));
 
     const { adapter, ui, dispose } = createTestAdapter();
 
-    // Validate — some checks may fail (dummy API key) but infrastructure checks should pass.
-    // The validate tool calls process.exit(1) if any agent fails.
+    // Validate — plugin secret checks should run (may pass or fail based on config)
     try {
       await validateTool(adapter, { local: true, timeout: "60" });
     } catch (err) {
@@ -269,42 +306,35 @@ describe("Lifecycle: init → setup → deploy → validate → destroy", () => 
       dispose();
     }
 
-    // Assert: validation summary note was generated with correct agent count
+    // Assert: validation summary note was generated
     const summary = ui.getValidationSummary();
     expect(summary).not.toBeNull();
     expect(summary!.total).toBe(1);
 
     // Assert: agent header was logged
-    expect(ui.hasLog("info", "TestBot")).toBe(true);
+    expect(ui.hasLog("info", "PluginBot")).toBe(true);
 
-    // Parse individual check results from console output
-    const checks = ui.getCheckResults();
-    expect(checks.length).toBeGreaterThan(0);
-
-    // Assert: "Container running" check PASSED — the core infrastructure check
+    // Assert: "Container running" check PASSED
     const containerCheck = ui.getCheckResult("Container running");
     expect(containerCheck).not.toBeNull();
     expect(containerCheck!.passed).toBe(true);
     expect(containerCheck!.detail).toBe("running");
 
-    // Assert: "Workspace files" check ran
-    // May fail in local Docker since cloud-init workspace injection may not complete
-    // immediately. The important thing is that the check was executed.
-    const workspaceCheck = ui.getCheckResult("Workspace files");
-    expect(workspaceCheck).not.toBeNull();
+    // Assert: Plugin secret checks were executed for Slack
+    const slackBotCheck = ui.getCheckResult("slack secret (SLACK_BOT_TOKEN)");
+    expect(slackBotCheck).not.toBeNull();
 
-    // Assert: Claude Code CLI check ran
-    const claudeCheck = ui.getCheckResult("Claude Code CLI");
-    expect(claudeCheck).not.toBeNull();
+    const slackAppCheck = ui.getCheckResult("slack secret (SLACK_APP_TOKEN)");
+    expect(slackAppCheck).not.toBeNull();
 
-    // Assert: Claude Code auth check ran — expected to FAIL with dummy API key
-    const authCheck = ui.getCheckResult("Claude Code auth");
-    if (authCheck && !process.env.ANTHROPIC_API_KEY?.startsWith("sk-ant-api")) {
-      expect(authCheck.passed).toBe(false);
-    }
+    // Assert: Plugin secret checks were executed for Linear
+    const linearApiCheck = ui.getCheckResult("openclaw-linear secret (LINEAR_API_KEY)");
+    expect(linearApiCheck).not.toBeNull();
 
-    // Assert: overall validation correctly reports the agent as failed
-    // (auth checks fail with dummy key, so the agent fails)
+    const linearWebhookCheck = ui.getCheckResult("openclaw-linear secret (LINEAR_WEBHOOK_SECRET)");
+    expect(linearWebhookCheck).not.toBeNull();
+
+    // Assert: Overall validation reports failures (expected with dummy secrets/API key)
     expect(summary!.failed).toBe(1);
   }, 120_000);
 
@@ -322,13 +352,13 @@ describe("Lifecycle: init → setup → deploy → validate → destroy", () => 
       expect(containerExists(containerName)).toBe(false);
       expect(isContainerRunning(containerName)).toBe(false);
 
-      // Assert: "Destruction Plan" note was shown with correct details
+      // Assert: "Destruction Plan" note was shown
       expect(ui.hasNote("Destruction Plan")).toBe(true);
       const planContent = ui.getNoteContent("Destruction Plan")!;
       expect(planContent).toContain(stackName);
       expect(planContent).toContain("Local Docker");
       expect(planContent).toContain("Docker containers");
-      expect(planContent).toContain("TestBot");
+      expect(planContent).toContain("PluginBot");
 
       // Assert: success message with stack name
       expect(ui.hasLog("success", "has been destroyed")).toBe(true);

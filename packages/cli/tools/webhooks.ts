@@ -9,11 +9,15 @@
 
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { requireManifest } from "../lib/config";
-import { SSH_USER, tailscaleHostname } from "@clawup/core";
+import { SSH_USER, tailscaleHostname, resolvePlugin } from "@clawup/core";
+import type { IdentityManifest, PluginManifest } from "@clawup/core";
+import { fetchIdentitySync } from "@clawup/core/identity";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { getConfig, getStackOutputs } from "../lib/tool-helpers";
 import { qualifiedStackName } from "../lib/pulumi";
 import pc from "picocolors";
+import path from "path";
+import os from "os";
 
 export interface WebhooksSetupOptions {}
 
@@ -91,9 +95,11 @@ export const webhooksSetupTool: ToolImplementation<WebhooksSetupOptions> = async
     process.exit(1);
   }
 
-  // Check if any webhook URLs exist
+  // Check if any webhook URLs exist (keys are ${role}${PluginSlug}WebhookUrl)
   const agentsWithUrls = manifest.agents.filter(
-    (agent) => outputs[`${agent.role}WebhookUrl`]
+    (agent) => Object.keys(outputs).some(
+      (k) => k.startsWith(agent.role) && k.endsWith("WebhookUrl")
+    )
   );
 
   if (agentsWithUrls.length === 0) {
@@ -105,40 +111,65 @@ export const webhooksSetupTool: ToolImplementation<WebhooksSetupOptions> = async
     process.exit(1);
   }
 
-  ui.note(
-    [
-      "This will walk you through creating Linear webhooks for each agent.",
-      "You'll need access to your Linear workspace settings.",
-    ].join("\n"),
-    "Linear Webhook Setup"
-  );
-
-  // Collect webhook secrets for each agent
-  const secrets: { role: string; name: string; agentName: string; secret: string }[] = [];
+  // Find all plugins with webhookSetup across all agents
+  const identityCacheDir = path.join(os.homedir(), ".clawup", "identity-cache");
+  const webhookPlugins: { agent: typeof manifest.agents[0]; plugin: PluginManifest }[] = [];
 
   for (const agent of manifest.agents) {
-    const webhookUrl = outputs[`${agent.role}WebhookUrl`] as string | undefined;
+    try {
+      const identity = fetchIdentitySync(agent.identity, identityCacheDir);
+      for (const pluginName of identity.manifest.plugins ?? []) {
+        const pluginManifest = resolvePlugin(pluginName, identity);
+        if (pluginManifest.webhookSetup) {
+          webhookPlugins.push({ agent, plugin: pluginManifest });
+        }
+      }
+    } catch {
+      ui.log.warn(`Could not load identity for ${agent.displayName} — skipping webhook checks.`);
+    }
+  }
+
+  if (webhookPlugins.length === 0) {
+    ui.log.warn("No plugins with webhook setup found.");
+    ui.outro("Nothing to do.");
+    return;
+  }
+
+  // Group by plugin for the intro message
+  const pluginNames = [...new Set(webhookPlugins.map((wp) => wp.plugin.displayName))];
+  ui.note(
+    [
+      `This will walk you through creating webhooks for: ${pluginNames.join(", ")}.`,
+      "You'll need access to the relevant service settings.",
+    ].join("\n"),
+    "Webhook Setup"
+  );
+
+  // Collect webhook secrets for each agent/plugin pair
+  const secrets: { role: string; name: string; agentName: string; secret: string; plugin: PluginManifest }[] = [];
+
+  for (const { agent, plugin } of webhookPlugins) {
+    const pluginSlug = plugin.name.replace(/[^a-zA-Z0-9]+(.)/g, (_, c: string) => c.toUpperCase()).replace(/^[a-z]/, (c) => c.toUpperCase());
+    const webhookUrl = outputs[`${agent.role}${pluginSlug}WebhookUrl`] as string | undefined;
     if (!webhookUrl) {
       ui.log.warn(`No webhook URL found for ${agent.displayName} (${agent.role}) — skipping.`);
       continue;
     }
 
+    const setup = plugin.webhookSetup!;
     ui.note(
       [
         `Webhook URL: ${pc.cyan(String(webhookUrl))}`,
         "",
         "Steps:",
-        "1. Go to Linear Settings → API → Webhooks → \"New webhook\"",
-        "2. Paste the URL above",
-        "3. Select events to receive (e.g., Issues, Comments)",
-        "4. Create the webhook and copy the \"Signing secret\"",
+        ...setup.instructions,
       ].join("\n"),
-      `${agent.displayName} (${agent.role})`
+      `${agent.displayName} (${agent.role}) — ${plugin.displayName}`
     );
 
     const secret = await ui.text({
-      message: `Signing secret for ${agent.displayName}`,
-      placeholder: "Paste the signing secret from Linear",
+      message: `Signing secret for ${agent.displayName} (${plugin.displayName})`,
+      placeholder: "Paste the signing secret",
       validate: (val: string) => {
         if (!val) return "Signing secret is required";
       },
@@ -149,6 +180,7 @@ export const webhooksSetupTool: ToolImplementation<WebhooksSetupOptions> = async
       name: agent.name,
       agentName: agent.displayName,
       secret: secret as string,
+      plugin,
     });
   }
 
@@ -160,10 +192,17 @@ export const webhooksSetupTool: ToolImplementation<WebhooksSetupOptions> = async
 
   // Store secrets in Pulumi config (for persistence across deploys)
   const configSpinner = ui.spinner("Saving webhook secrets to Pulumi config...");
-  for (const { role, secret } of secrets) {
+  for (const { role, secret, plugin } of secrets) {
+    const secretKey = plugin.webhookSetup!.secretKey;
+    // Derive Pulumi config key from the secret's envVar: e.g., <role>LinearWebhookSecret
+    const secretDef = plugin.secrets[secretKey];
+    const envVarSuffix = secretDef
+      ? secretDef.envVar.toLowerCase().split("_").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("")
+      : secretKey.charAt(0).toUpperCase() + secretKey.slice(1);
+    const pulumiKey = `${role}${envVarSuffix}`;
     exec.capture(
       "pulumi",
-      ["config", "set", `${role}LinearWebhookSecret`, secret, "--secret"],
+      ["config", "set", pulumiKey, secret, "--secret"],
       cwd
     );
   }
@@ -174,14 +213,18 @@ export const webhooksSetupTool: ToolImplementation<WebhooksSetupOptions> = async
   let applied = 0;
   let failed = 0;
 
-  for (const { role, name, agentName, secret } of secrets) {
+  for (const { role, name, agentName, secret, plugin } of secrets) {
     const tsHost = tailscaleHostname(manifest.stackName, name);
     const host = `${tsHost}.${tailnetDnsName}`;
+
+    // Use configJsonPath from plugin manifest to build the jq path
+    const jsonPath = plugin.webhookSetup!.configJsonPath;
+    const jqPath = "." + jsonPath.replace(/^\./, "");
 
     // Escape the secret for use inside jq
     const escapedSecret = secret.replace(/'/g, "'\\''");
     const jqCmd =
-      `jq '.plugins.entries.linear.config.webhookSecret = \\\"${escapedSecret.replace(/\\/g, "\\\\").replace(/"/g, '\\\\\\"')}\\\"' ` +
+      `jq '${jqPath} = \\\"${escapedSecret.replace(/\\/g, "\\\\").replace(/"/g, '\\\\\\"')}\\\"' ` +
       `/home/${SSH_USER}/.openclaw/openclaw.json > /tmp/openclaw-patched.json && ` +
       `mv /tmp/openclaw-patched.json /home/${SSH_USER}/.openclaw/openclaw.json`;
 

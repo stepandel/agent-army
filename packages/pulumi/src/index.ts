@@ -21,12 +21,13 @@ import type { BaseOpenClawAgentArgs, DepInstallConfig } from "./components";
 import { SharedVpc } from "./shared-vpc";
 import {
   classifySkills,
-  PLUGIN_REGISTRY,
+  resolvePlugin,
+  getSecretEnvVars,
   resolveDeps,
   collectDepSecrets,
 } from "@clawup/core";
 import { fetchIdentitySync } from "@clawup/core/identity";
-import type { AgentDefinition, ClawupManifest, PluginConfigFile } from "@clawup/core";
+import type { AgentDefinition, ClawupManifest, PluginConfigFile, IdentityResult } from "@clawup/core";
 import * as os from "os";
 
 // -----------------------------------------------------------------------------
@@ -82,13 +83,24 @@ function processTemplates(
 // Load Manifest (YAML)
 // -----------------------------------------------------------------------------
 
-// Pulumi sets cwd to the project root (where Pulumi.yaml lives)
-const manifestPath = path.join(process.cwd(), "clawup.yaml");
-if (!fs.existsSync(manifestPath)) {
-  throw new Error(
-    "clawup.yaml not found. Run `clawup init` to create it."
-  );
+// Pulumi sets cwd to where Pulumi.yaml lives
+// In dev mode: repo root (clawup.yaml is also there)
+// In project mode: <projectRoot>/.clawup (clawup.yaml is in parent dir)
+// Search upward from cwd for clawup.yaml
+// In dev mode: repo root (clawup.yaml is here, cwd = repo root)
+// In project mode: Pulumi sets cwd to the program dir (packages/pulumi/dist),
+//   clawup.yaml is in the workspace root (<projectRoot>/.clawup/) or project root
+function findManifestPath(): string {
+  let dir = process.cwd();
+  const root = path.parse(dir).root;
+  while (dir !== root) {
+    const candidate = path.join(dir, "clawup.yaml");
+    if (fs.existsSync(candidate)) return candidate;
+    dir = path.dirname(dir);
+  }
+  throw new Error("clawup.yaml not found. Run `clawup init` to create it.");
 }
+const manifestPath = findManifestPath();
 
 // Cast as partial — old manifests may omit `provider` (defaults to "aws" below)
 const manifest = YAML.parse(fs.readFileSync(manifestPath, "utf-8")) as ClawupManifest & { provider?: string };
@@ -214,7 +226,8 @@ if (provider === "aws") {
 function buildPluginsForAgent(
   agent: AgentDefinition,
   identityDefaults?: Record<string, Record<string, unknown>>,
-  identityPlugins?: string[]
+  identityPlugins?: string[],
+  identityResult?: IdentityResult
 ): { plugins: PluginInstallConfig[]; pluginSecrets: Record<string, pulumi.Output<string>>; enableFunnel: boolean } {
   const plugins: PluginInstallConfig[] = [];
   const pluginSecrets: Record<string, pulumi.Output<string>> = {};
@@ -236,24 +249,32 @@ function buildPluginsForAgent(
       agentSection = { ...identityConfig, ...userConfig };
     }
 
-    const registryEntry = PLUGIN_REGISTRY[pluginName];
-    const secretMapping = registryEntry?.secretEnvVars ?? {};
+    const manifest = resolvePlugin(pluginName, identityResult);
+    const secretMapping = getSecretEnvVars(manifest);
 
     // Merge registry defaultConfig as lowest-priority defaults
-    let mergedConfig = registryEntry?.defaultConfig
-      ? { ...registryEntry.defaultConfig, ...agentSection }
+    let mergedConfig = manifest.defaultConfig
+      ? { ...manifest.defaultConfig, ...agentSection }
       : agentSection;
 
-    // Apply registry transform (e.g., build agentMapping from linearUserUuid)
-    if (registryEntry?.transformConfig) {
-      mergedConfig = registryEntry.transformConfig(mergedConfig);
+    // Apply Linear-specific transform (build agentMapping from linearUserUuid)
+    // This is the one piece of runtime logic that can't be purely declarative
+    if (pluginName === "openclaw-linear") {
+      const uuid = mergedConfig.linearUserUuid as string | undefined;
+      const mapping: Record<string, string> = {};
+      if (uuid) mapping[uuid] = "default";
+      mapping["$AGENT_NAME"] = "default";
+      mergedConfig.agentMapping = mapping;
     }
 
     plugins.push({
       name: pluginName,
       config: mergedConfig,
       secretEnvVars: Object.keys(secretMapping).length > 0 ? secretMapping : undefined,
-      installable: registryEntry?.installable ?? true,
+      installable: manifest.installable,
+      configPath: manifest.configPath,
+      internalKeys: manifest.internalKeys.length > 0 ? manifest.internalKeys : undefined,
+      configTransforms: manifest.configTransforms.length > 0 ? manifest.configTransforms : undefined,
     });
 
     // Collect secret outputs from Pulumi config
@@ -269,7 +290,7 @@ function buildPluginsForAgent(
     }
 
     // Enable funnel if the plugin needs webhooks
-    if (registryEntry?.needsFunnel) {
+    if (manifest.needsFunnel) {
       enableFunnel = true;
     }
   }
@@ -336,7 +357,7 @@ function buildBaseAgentArgs(agent: AgentDefinition): {
   const clawhubSkillSlugs = publicSkills.map((s) => s.slug);
 
   // Build plugin configs for this agent (always from identity)
-  const { plugins, pluginSecrets, enableFunnel } = buildPluginsForAgent(agent, identity.manifest.pluginDefaults, identity.manifest.plugins);
+  const { plugins, pluginSecrets, enableFunnel } = buildPluginsForAgent(agent, identity.manifest.pluginDefaults, identity.manifest.plugins, identity);
 
   // Resolve model/codingAgent from identity
   const agentModel = identity.manifest.model ?? "anthropic/claude-opus-4-6";
@@ -422,7 +443,8 @@ for (const agent of manifest.agents) {
       sshPrivateKey: agentResource.sshPrivateKey,
     };
   } else if (provider === "local") {
-    const hostPort = 18789 + localPortOffset++;
+    const basePort = parseInt(process.env.CLAWUP_LOCAL_BASE_PORT || "18789", 10);
+    const hostPort = basePort + localPortOffset++;
     const agentResource = new LocalDockerOpenClawAgent(agent.name, {
       ...baseArgs,
       gatewayPort: hostPort,
@@ -474,10 +496,22 @@ for (const [role, outputs] of Object.entries(agentOutputs)) {
   module.exports[`${role}PublicIp`] = outputs.publicIp;
   module.exports[`${role}SshPrivateKey`] = pulumi.secret(outputs.sshPrivateKey);
 
-  // Webhook URL for plugins that need it (derived from Tailscale Funnel public URL)
-  module.exports[`${role}WebhookUrl`] = outputs.tailscaleUrl.apply((url) => {
-    // Extract base URL (remove query params like ?token=...) and append webhook path
-    const baseUrl = url.split("?")[0].replace(/\/$/, "");
-    return `${baseUrl}/hooks/linear`;
-  });
+  // Webhook URLs for plugins that need them (derived from Tailscale Funnel public URL)
+  // Generic: loop over all agents' plugins and emit webhook URLs for those with webhookSetup
+  const agentDef = manifest.agents.find((a) => a.role === role);
+  if (agentDef) {
+    const identityResult = fetchIdentitySync(agentDef.identity, identityCacheDir);
+    const agentPluginNames = identityResult.manifest.plugins ?? [];
+    for (const pluginName of agentPluginNames) {
+      const pluginManifest = resolvePlugin(pluginName, identityResult);
+      if (pluginManifest.webhookSetup) {
+        const urlPath = pluginManifest.webhookSetup.urlPath;
+        const pluginSlug = pluginName.replace(/[^a-zA-Z0-9]+(.)/g, (_, c: string) => c.toUpperCase()).replace(/^[a-z]/, (c) => c.toUpperCase());
+        module.exports[`${role}${pluginSlug}WebhookUrl`] = outputs.tailscaleUrl.apply((url) => {
+          const baseUrl = url.split("?")[0].replace(/\/$/, "");
+          return `${baseUrl}${urlPath}`;
+        });
+      }
+    }
+  }
 }

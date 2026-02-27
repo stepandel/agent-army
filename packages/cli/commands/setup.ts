@@ -10,11 +10,16 @@ import * as path from "path";
 import * as os from "os";
 import * as p from "@clack/prompts";
 import YAML from "yaml";
-import type { AgentDefinition, ClawupManifest, IdentityManifest } from "@clawup/core";
+import type { AgentDefinition, ClawupManifest, IdentityManifest, IdentityResult } from "@clawup/core";
 import {
   MANIFEST_FILE,
   ClawupManifestSchema,
   tailscaleHostname,
+  resolvePlugin,
+  buildValidators,
+  isSecretCoveredByPlugin,
+  resolvePlugins,
+  PLUGIN_MANIFEST_REGISTRY,
 } from "@clawup/core";
 import { fetchIdentity } from "@clawup/core/identity";
 import { findProjectRoot } from "../lib/project";
@@ -41,6 +46,7 @@ interface SetupOptions {
 interface FetchedIdentity {
   agent: AgentDefinition;
   manifest: IdentityManifest;
+  identityResult: IdentityResult;
 }
 
 export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
@@ -94,7 +100,7 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
   for (const agent of agents) {
     try {
       const identity = await fetchIdentity(agent.identity, identityCacheDir);
-      fetchedIdentities.push({ agent, manifest: identity.manifest });
+      fetchedIdentities.push({ agent, manifest: identity.manifest, identityResult: identity });
     } catch (err) {
       identitySpinner.stop(`Failed to resolve identity for ${agent.name}`);
       exitWithError(
@@ -223,9 +229,17 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
   // -------------------------------------------------------------------------
   const missingSecrets = [...resolvedSecrets.missing];
 
+  // Build merged validators: infrastructure + plugin-derived (from full resolved manifests)
+  const allResolvedManifests = [...allPluginNames].map((name) => {
+    const fi = fetchedIdentities.find((f) => agentPlugins.get(f.agent.name)?.has(name));
+    return resolvePlugin(name, fi?.identityResult);
+  });
+  const pluginValidators = buildValidators(allResolvedManifests);
+  const allValidators = { ...VALIDATORS, ...pluginValidators };
+
   // Run validators on resolved values (warn, don't block)
   for (const [key, value] of Object.entries(resolvedSecrets.global)) {
-    const validator = VALIDATORS[key];
+    const validator = allValidators[key];
     if (validator) {
       const warning = validator(value);
       if (warning) {
@@ -235,7 +249,7 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
   }
   for (const [agentName, agentSecrets] of Object.entries(resolvedSecrets.perAgent)) {
     for (const [key, value] of Object.entries(agentSecrets)) {
-      const validator = VALIDATORS[key];
+      const validator = allValidators[key];
       if (validator) {
         const warning = validator(value);
         if (warning) {
@@ -246,8 +260,20 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
     }
   }
 
-  // linearUserUuid is auto-fetched from Linear API — don't require it in .env
-  const requiredMissing = missingSecrets.filter((m) => m.key !== "linearUserUuid");
+  // Filter out auto-resolvable secrets (e.g., linearUserUuid) — don't require them in .env
+  // Use agent-specific resolved manifests for context-aware lookup
+  const requiredMissing = missingSecrets.filter((m) => {
+    const agentManifests = m.agent
+      ? (() => {
+          const fi = fetchedIdentities.find((f) => f.agent.name === m.agent);
+          return fi ? resolvePlugins([...(agentPlugins.get(m.agent) ?? [])], fi.identityResult) : allResolvedManifests;
+        })()
+      : allResolvedManifests;
+    for (const pm of agentManifests) {
+      if (pm.secrets[m.key]?.autoResolvable) return false;
+    }
+    return true;
+  });
 
   if (requiredMissing.length > 0) {
     console.log();
@@ -266,46 +292,74 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
   p.log.success("All secrets resolved");
 
   // -------------------------------------------------------------------------
-  // 7. Linear UUID fetch
+  // 7. Auto-resolve secrets (e.g., Linear UUID fetch)
   // -------------------------------------------------------------------------
-  const integrationCredentials: Record<string, { linearUserUuid?: string }> = {};
+  // Generic: for each plugin with auto-resolvable secrets, attempt resolution
+  const autoResolvedSecrets: Record<string, Record<string, string>> = {};
 
-  if (allPluginNames.has("openclaw-linear")) {
-    const linearAgents = fetchedIdentities.filter(
-      (fi) => agentPlugins.get(fi.agent.name)?.has("openclaw-linear")
-    );
+  for (const fi of fetchedIdentities) {
+    const plugins = agentPlugins.get(fi.agent.name);
+    if (!plugins) continue;
 
-    for (const fi of linearAgents) {
-      const roleUpper = fi.agent.role.toUpperCase();
+    for (const pluginName of plugins) {
+      const manifest = resolvePlugin(pluginName, fi.identityResult);
+      for (const [key, secret] of Object.entries(manifest.secrets)) {
+        if (!secret.autoResolvable) continue;
 
-      // Check if linearUserUuid is already in manifest plugin config
-      const existingPluginConfig = fi.agent.plugins?.["openclaw-linear"] as Record<string, unknown> | undefined;
-      if (existingPluginConfig?.linearUserUuid) {
-        integrationCredentials[fi.agent.role] = {
-          linearUserUuid: existingPluginConfig.linearUserUuid as string,
-        };
-        continue;
+        const roleUpper = fi.agent.role.toUpperCase();
+
+        // Check if already in manifest plugin config
+        const existingPluginConfig = fi.agent.plugins?.[pluginName] as Record<string, unknown> | undefined;
+        if (existingPluginConfig?.[key]) {
+          if (!autoResolvedSecrets[fi.agent.role]) autoResolvedSecrets[fi.agent.role] = {};
+          autoResolvedSecrets[fi.agent.role][key] = existingPluginConfig[key] as string;
+          continue;
+        }
+
+        // Check if set as env var
+        const envValue = envDict[`${roleUpper}_${secret.envVar}`];
+        if (envValue) {
+          p.log.success(`${key} for ${fi.agent.displayName} (from ${roleUpper}_${secret.envVar})`);
+          if (!autoResolvedSecrets[fi.agent.role]) autoResolvedSecrets[fi.agent.role] = {};
+          autoResolvedSecrets[fi.agent.role][key] = envValue;
+          continue;
+        }
+
+        // Plugin-specific auto-resolution logic
+        const resolved = await autoResolveSecret(pluginName, key, fi, resolvedSecrets, envDict);
+        if (resolved) {
+          if (!autoResolvedSecrets[fi.agent.role]) autoResolvedSecrets[fi.agent.role] = {};
+          autoResolvedSecrets[fi.agent.role][key] = resolved;
+        }
       }
+    }
+  }
 
-      // Check if set as env var
-      const envUuid = envDict[`${roleUpper}_LINEAR_USER_UUID`];
-      if (envUuid) {
-        p.log.success(`linearUserUuid for ${fi.agent.displayName} (from ${roleUpper}_LINEAR_USER_UUID)`);
-        integrationCredentials[fi.agent.role] = { linearUserUuid: envUuid };
-        continue;
-      }
-
-      // Fetch from Linear API
-      const linearApiKey = resolvedSecrets.perAgent[fi.agent.name]?.linearApiKey;
+  /**
+   * Auto-resolve a secret for a specific plugin.
+   * Currently supports Linear UUID fetch; future plugins can add their own resolvers here.
+   */
+  async function autoResolveSecret(
+    pluginName: string,
+    key: string,
+    fi: FetchedIdentity,
+    secrets: ReturnType<typeof loadEnvSecrets>,
+    _envDict: Record<string, string>,
+  ): Promise<string | undefined> {
+    if (pluginName === "openclaw-linear" && key === "linearUserUuid") {
+      const linearApiKey = secrets.perAgent[fi.agent.name]?.linearApiKey;
       if (!linearApiKey) {
         exitWithError(
           `Cannot fetch Linear user UUID for ${fi.agent.displayName}: linearApiKey not resolved.`
         );
       }
 
+      const roleUpper = fi.agent.role.toUpperCase();
       const s = p.spinner();
       s.start(`Fetching Linear user ID for ${fi.agent.displayName}...`);
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
         const res = await fetch("https://api.linear.app/graphql", {
           method: "POST",
           headers: {
@@ -313,12 +367,20 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
             Authorization: linearApiKey,
           },
           body: JSON.stringify({ query: "{ viewer { id } }" }),
+          signal: controller.signal,
         });
-        const data = (await res.json()) as { data?: { viewer?: { id?: string } } };
+        clearTimeout(timeout);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        const data = (await res.json()) as { data?: { viewer?: { id?: string } }; errors?: Array<{ message: string }> };
+        if (data.errors && data.errors.length > 0) {
+          throw new Error(`GraphQL error: ${data.errors[0].message}`);
+        }
         const uuid = data?.data?.viewer?.id;
         if (!uuid) throw new Error("No user ID in response");
-        integrationCredentials[fi.agent.role] = { linearUserUuid: uuid };
         s.stop(`${fi.agent.displayName}: ${uuid}`);
+        return uuid;
       } catch (err) {
         s.stop(`Could not fetch Linear user ID for ${fi.agent.displayName}`);
         exitWithError(
@@ -327,6 +389,8 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
         );
       }
     }
+
+    return undefined;
   }
 
   // -------------------------------------------------------------------------
@@ -353,10 +417,14 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
         agentId: fi.agent.name,
       };
 
-      if (pluginName === "openclaw-linear") {
-        const creds = integrationCredentials[fi.agent.role];
-        if (creds?.linearUserUuid) {
-          agentConfig.linearUserUuid = creds.linearUserUuid;
+      // Inject auto-resolved secrets for this plugin
+      const roleAutoResolved = autoResolvedSecrets[fi.agent.role];
+      if (roleAutoResolved) {
+        const manifest = resolvePlugin(pluginName, fi.identityResult);
+        for (const [key, secret] of Object.entries(manifest.secrets)) {
+          if (secret.autoResolvable && roleAutoResolved[key]) {
+            agentConfig[key] = roleAutoResolved[key];
+          }
         }
       }
 
@@ -378,15 +446,15 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
 
     if (!fi.agent.secrets) fi.agent.secrets = {};
 
+    // Resolve plugins for this agent to check coverage generically
+    const agentResolvedPlugins = resolvePlugins([...(plugins ?? [])], fi.identityResult);
+
     for (const key of fi.manifest.requiredSecrets) {
       if (fi.agent.secrets[key]) continue;
-      const alreadyCovered =
-        (key === "slackBotToken" && plugins?.has("slack")) ||
-        (key === "slackAppToken" && plugins?.has("slack")) ||
-        (key === "linearApiKey" && plugins?.has("openclaw-linear")) ||
-        (key === "linearWebhookSecret" && plugins?.has("openclaw-linear")) ||
-        (key === "githubToken" && deps?.has("gh"));
-      if (alreadyCovered) continue;
+      // Check if this secret is already covered by a plugin's secrets definition
+      const coveredByPlugin = isSecretCoveredByPlugin(key, agentResolvedPlugins);
+      const coveredByDep = key === "githubToken" && deps?.has("gh");
+      if (coveredByPlugin || coveredByDep) continue;
       fi.agent.secrets[key] = `\${env:${roleUpper}_${camelToScreamingSnake(key)}}`;
     }
   }
@@ -403,6 +471,7 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
     globalSecrets: manifest.secrets,
     agents: agents.map((a) => ({ name: a.name, displayName: a.displayName, role: a.role })),
     perAgentSecrets,
+    agentPluginNames: agentPlugins,
   });
   fs.writeFileSync(path.join(projectRoot, ".env.example"), envExampleContent, "utf-8");
   s.stop("Manifest updated");
@@ -474,18 +543,31 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
     const agent = agents.find((a) => a.name === agentName);
     if (!agent) continue;
     const role = agent.role;
+    const fi = fetchedIdentities.find((f) => f.agent.name === agentName);
+    const agentManifests = fi
+      ? resolvePlugins([...(agentPlugins.get(agentName) ?? [])], fi.identityResult)
+      : [];
 
     for (const [key, value] of Object.entries(agentSecrets)) {
       const configKey = `${role}${key.charAt(0).toUpperCase()}${key.slice(1)}`;
-      const isSecret = key !== "linearUserUuid";
+      // Determine isSecret from the agent's resolved plugin manifests
+      const isSecret = resolveIsSecret(key, agentManifests);
       setConfig(configKey, value, isSecret, cwd);
     }
   }
 
-  // Set Linear user UUIDs
-  for (const [role, creds] of Object.entries(integrationCredentials)) {
-    if (creds.linearUserUuid) {
-      setConfig(`${role}LinearUserUuid`, creds.linearUserUuid, false, cwd);
+  // Set auto-resolved secrets (e.g., Linear user UUIDs)
+  for (const [role, resolved] of Object.entries(autoResolvedSecrets)) {
+    const fi = fetchedIdentities.find((f) => f.agent.role === role);
+    const agentManifests = fi
+      ? resolvePlugins([...(agentPlugins.get(fi.agent.name) ?? [])], fi.identityResult)
+      : [];
+
+    for (const [key, value] of Object.entries(resolved)) {
+      const configKey = `${role}${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+      // Determine isSecret from the agent's resolved plugin manifests
+      const isSecret = resolveIsSecret(key, agentManifests);
+      setConfig(configKey, value, isSecret, cwd);
     }
   }
 
@@ -506,16 +588,57 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
   }
 }
 
+/**
+ * Determine if a secret key should be stored as a Pulumi secret.
+ * Resolves by checking the agent's plugin manifests for matching secret metadata.
+ * Falls back to true (encrypted) if no metadata found.
+ */
+function resolveIsSecret(key: string, agentManifests: Array<{ secrets: Record<string, { envVar: string; isSecret: boolean }> }>): boolean {
+  for (const pm of agentManifests) {
+    // Check by raw key first (e.g., "linearUserUuid")
+    if (pm.secrets[key] !== undefined) {
+      return pm.secrets[key].isSecret;
+    }
+    // Check by envVar-derived camelCase key (e.g., "linearApiKey" matches LINEAR_API_KEY)
+    for (const secret of Object.values(pm.secrets)) {
+      const envDerivedKey = secret.envVar
+        .toLowerCase()
+        .split("_")
+        .map((part: string, i: number) => i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1))
+        .join("");
+      if (envDerivedKey === key) return secret.isSecret;
+    }
+  }
+  return true; // default to encrypted
+}
+
 /** Get a human-readable hint for a validator */
 function getValidatorHint(key: string): string {
-  const hints: Record<string, string> = {
+  // Infrastructure hints
+  const infraHints: Record<string, string> = {
     anthropicApiKey: "must start with sk-ant-",
     tailscaleAuthKey: "must start with tskey-auth-",
     tailnetDnsName: "must end with .ts.net",
-    slackBotToken: "must start with xoxb-",
-    slackAppToken: "must start with xapp-",
-    linearApiKey: "must start with lin_api_",
     githubToken: "must start with ghp_ or github_pat_",
   };
-  return hints[key] ?? "";
+  if (infraHints[key]) return infraHints[key];
+
+  // Plugin-derived hints (from validator prefix) — check both raw key and envVar-derived key
+  for (const pm of Object.values(PLUGIN_MANIFEST_REGISTRY)) {
+    if (pm.secrets[key]?.validator) {
+      return `must start with ${pm.secrets[key].validator}`;
+    }
+    for (const secret of Object.values(pm.secrets)) {
+      const envDerivedKey = secret.envVar
+        .toLowerCase()
+        .split("_")
+        .map((part: string, i: number) => i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1))
+        .join("");
+      if (envDerivedKey === key && secret.validator) {
+        return `must start with ${secret.validator}`;
+      }
+    }
+  }
+
+  return "";
 }
