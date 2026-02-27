@@ -129,7 +129,7 @@ clawup config show --json      # Full JSON output
 
 Update a config value with validation. No need to re-run `init`.
 
-Top-level keys: `region`, `instanceType`, `ownerName`, `timezone`, `workingHours`, `userNotes`, `linearTeam`, `githubRepo`
+Top-level keys: `region`, `instanceType`, `ownerName`, `timezone`, `workingHours`, `userNotes`, `templateVars.<KEY>`
 
 Per-agent keys: `instanceType`, `volumeSize`, `displayName`
 
@@ -228,14 +228,15 @@ The `secrets` section uses `${env:VAR}` references — actual values come from a
 
 ### Pulumi Config
 
-Secrets and stack configuration are stored in Pulumi config (encrypted). The `init` command sets these automatically:
+Secrets and stack configuration are stored in Pulumi config (encrypted). The `setup` command sets these automatically:
 
 - `anthropicApiKey` (secret)
 - `tailscaleAuthKey` (secret)
 - `tailnetDnsName`
-- `aws:region` (AWS) or `hcloud:token` (Hetzner)
-- `instanceType`
-- `ownerName`
+- `provider`, `modelProvider`, `defaultModel`
+- `aws:region` (AWS) or `hetzner:location` (Hetzner)
+- `instanceType`, `ownerName`, `timezone`, `workingHours`, `userNotes`
+- Per-agent secrets (Slack, Linear, GitHub tokens, etc.)
 
 ## Project Structure
 
@@ -246,14 +247,19 @@ packages/cli/
 ├── tools/              # Tool implementations (adapter-based: deploy, destroy, redeploy, status, validate, push, webhooks)
 ├── lib/                # CLI-only utilities
 │   ├── config.ts       # Load/save clawup.yaml manifest
+│   ├── constants.ts    # CLI-specific constants
 │   ├── env.ts          # .env parser, ${env:VAR} resolver, secret builder
 │   ├── exec.ts         # Shell command execution
 │   ├── prerequisites.ts # Prerequisite checks
 │   ├── process.ts      # Graceful shutdown handling
+│   ├── project.ts      # Project root finder
 │   ├── pulumi.ts       # Pulumi stack & config operations
 │   ├── tailscale.ts    # Tailscale device management
 │   ├── tool-helpers.ts # Shared helpers for tool implementations
-│   └── ui.ts           # UI helpers (banners, spinners, formatting)
+│   ├── ui.ts           # UI helpers (banners, spinners, formatting)
+│   ├── update-check.ts # Update notification system
+│   ├── vendor.ts       # Vendor utilities
+│   └── workspace.ts    # Workspace file management
 └── adapters/           # Runtime adapters (CLI vs API)
 
 # Shared types, constants, and registries live in @clawup/core (packages/core/)

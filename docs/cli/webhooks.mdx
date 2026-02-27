@@ -1,0 +1,22 @@
+---
+title: "webhooks"
+description: "Configure Linear webhooks for deployed agents"
+---
+
+Sets up Linear webhooks so that ticket state changes are routed to the appropriate agents automatically.
+
+## Usage
+
+```bash
+clawup webhooks setup
+```
+
+## What It Does
+
+1. Reads your `clawup.yaml` manifest and identifies agents with the `openclaw-linear` plugin
+2. Creates Linear webhooks pointing to each agent's OpenClaw gateway endpoint
+3. Configures webhook secrets for secure payload verification
+
+<Note>
+Agents must be deployed and accessible via Tailscale before setting up webhooks.
+</Note>

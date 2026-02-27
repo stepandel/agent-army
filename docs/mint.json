@@ -72,8 +72,13 @@
         "cli/status",
         "cli/ssh",
         "cli/validate",
+        "cli/push",
         "cli/destroy",
-        "cli/list"
+        "cli/list",
+        "cli/config",
+        "cli/secrets",
+        "cli/webhooks",
+        "cli/update"
       ]
     },
     {

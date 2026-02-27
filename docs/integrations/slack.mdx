@@ -37,13 +37,24 @@ Use the Slack app manifests below for each agent. Copy and paste them during app
     {
       "display_information": {
         "name": "Juno (PM)",
-        "description": "Clawup — Product Manager agent"
+        "description": "Slack connector for OpenClaw"
       },
       "features": {
         "bot_user": {
           "display_name": "Juno",
-          "always_online": true
-        }
+          "always_online": false
+        },
+        "app_home": {
+          "messages_tab_enabled": true,
+          "messages_tab_read_only_enabled": false
+        },
+        "slash_commands": [
+          {
+            "command": "/openclaw",
+            "description": "Send a message to OpenClaw",
+            "should_escape": false
+          }
+        ]
       },
       "oauth_config": {
         "scopes": {
@@ -71,10 +82,26 @@ Use the Slack app manifests below for each agent. Copy and paste them during app
             "commands",
             "files:read",
             "files:write"
+          ],
+          "user": [
+            "channels:history",
+            "channels:read",
+            "groups:history",
+            "groups:read",
+            "im:history",
+            "im:read",
+            "mpim:history",
+            "mpim:read",
+            "users:read",
+            "reactions:read",
+            "pins:read",
+            "emoji:read",
+            "search:read"
           ]
         }
       },
       "settings": {
+        "socket_mode_enabled": true,
         "event_subscriptions": {
           "bot_events": [
             "app_mention",
@@ -90,8 +117,7 @@ Use the Slack app manifests below for each agent. Copy and paste them during app
             "pin_added",
             "pin_removed"
           ]
-        },
-        "socket_mode_enabled": true
+        }
       }
     }
     ```
@@ -101,13 +127,24 @@ Use the Slack app manifests below for each agent. Copy and paste them during app
     {
       "display_information": {
         "name": "Titus (Engineer)",
-        "description": "Clawup — Engineer agent"
+        "description": "Slack connector for OpenClaw"
       },
       "features": {
         "bot_user": {
           "display_name": "Titus",
-          "always_online": true
-        }
+          "always_online": false
+        },
+        "app_home": {
+          "messages_tab_enabled": true,
+          "messages_tab_read_only_enabled": false
+        },
+        "slash_commands": [
+          {
+            "command": "/openclaw",
+            "description": "Send a message to OpenClaw",
+            "should_escape": false
+          }
+        ]
       },
       "oauth_config": {
         "scopes": {
@@ -135,10 +172,26 @@ Use the Slack app manifests below for each agent. Copy and paste them during app
             "commands",
             "files:read",
             "files:write"
+          ],
+          "user": [
+            "channels:history",
+            "channels:read",
+            "groups:history",
+            "groups:read",
+            "im:history",
+            "im:read",
+            "mpim:history",
+            "mpim:read",
+            "users:read",
+            "reactions:read",
+            "pins:read",
+            "emoji:read",
+            "search:read"
           ]
         }
       },
       "settings": {
+        "socket_mode_enabled": true,
         "event_subscriptions": {
           "bot_events": [
             "app_mention",
@@ -154,8 +207,7 @@ Use the Slack app manifests below for each agent. Copy and paste them during app
             "pin_added",
             "pin_removed"
           ]
-        },
-        "socket_mode_enabled": true
+        }
       }
     }
     ```
@@ -165,13 +217,24 @@ Use the Slack app manifests below for each agent. Copy and paste them during app
     {
       "display_information": {
         "name": "Scout (QA)",
-        "description": "Clawup — QA Tester agent"
+        "description": "Slack connector for OpenClaw"
       },
       "features": {
         "bot_user": {
           "display_name": "Scout",
-          "always_online": true
-        }
+          "always_online": false
+        },
+        "app_home": {
+          "messages_tab_enabled": true,
+          "messages_tab_read_only_enabled": false
+        },
+        "slash_commands": [
+          {
+            "command": "/openclaw",
+            "description": "Send a message to OpenClaw",
+            "should_escape": false
+          }
+        ]
       },
       "oauth_config": {
         "scopes": {
@@ -199,10 +262,26 @@ Use the Slack app manifests below for each agent. Copy and paste them during app
             "commands",
             "files:read",
             "files:write"
+          ],
+          "user": [
+            "channels:history",
+            "channels:read",
+            "groups:history",
+            "groups:read",
+            "im:history",
+            "im:read",
+            "mpim:history",
+            "mpim:read",
+            "users:read",
+            "reactions:read",
+            "pins:read",
+            "emoji:read",
+            "search:read"
           ]
         }
       },
       "settings": {
+        "socket_mode_enabled": true,
         "event_subscriptions": {
           "bot_events": [
             "app_mention",
@@ -218,8 +297,7 @@ Use the Slack app manifests below for each agent. Copy and paste them during app
             "pin_added",
             "pin_removed"
           ]
-        },
-        "socket_mode_enabled": true
+        }
       }
     }
     ```

@@ -31,8 +31,11 @@ clawup/
 │   │       ├── components/
 │   │       │   ├── openclaw-agent.ts    # AWS EC2 agent
 │   │       │   ├── hetzner-agent.ts     # Hetzner Cloud agent
+│   │       │   ├── local-docker-agent.ts # Local Docker agent
 │   │       │   ├── cloud-init.ts        # User-data script generation
-│   │       │   └── config-generator.ts  # OpenClaw config builder
+│   │       │   ├── config-generator.ts  # OpenClaw config builder
+│   │       │   ├── shared.ts            # Shared component utilities
+│   │       │   └── types.ts             # Component type definitions
 │   │       ├── shared-vpc.ts            # AWS VPC component
 │   │       └── index.ts                 # Main Pulumi stack program
 │   └── web/                     # Next.js dashboard (clawup-web)
@@ -40,7 +43,6 @@ clawup/
 │           ├── app/             # App router pages & API routes
 │           ├── components/      # React components (shadcn/ui)
 │           └── lib/             # Server utilities (prisma, auth, crypto)
-├── identities/                  # Built-in agent identities (self-contained)
 ├── docs/                        # Mintlify documentation
 ├── Pulumi.yaml                  # Points to packages/pulumi/dist/index.js
 └── pnpm-workspace.yaml          # packages: ["packages/*"]

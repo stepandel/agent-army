@@ -116,6 +116,7 @@ The `codingAgent` field selects which coding CLI is installed and configured on 
 | Agent | CLI | Description |
 |-------|-----|-------------|
 | `claude-code` | `claude` | Claude Code CLI (default) |
+| `codex` | `codex` | OpenAI Codex CLI (`@openai/codex`) |
 
 Each entry provides an install script, model configuration script, and OpenClaw `cliBackends` config. New coding agents can be added by extending the registry in `packages/core/src/coding-agent-registry.ts`.
 
@@ -344,9 +345,8 @@ agents:
     identity: "https://github.com/stepandel/army-identities#eng"
     volumeSize: 50
     plugins:
-      - slack              # Only Slack, skip Linear
-    deps:
-      - gh                 # Only GitHub CLI, skip Brave Search
+      slack:               # Only Slack, skip Linear
+        mode: socket
 ```
 
 ### Override Volume and Instance Type

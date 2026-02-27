@@ -83,7 +83,7 @@ emoji: telescope
 description: Deep research, source analysis, report generation
 volumeSize: 20
 
-model: anthropic/claude-sonnet-4-5
+model: anthropic/claude-opus-4-6
 codingAgent: claude-code
 
 deps:
@@ -232,7 +232,7 @@ clawup ssh agent-pm    # by resource name
 
 | Feature | AWS | Hetzner Cloud |
 |---------|-----|---------------|
-| **3x Agents (monthly)** | ~$110-120 | ~$18-22 |
+| **3x Agents (monthly)** | ~$99 | ~$18-22 |
 | **Instance Type** | t3.medium (2 vCPU, 4GB) | CX22 (2 vCPU, 4GB) |
 | **Storage** | ~$2.40/month per 30GB | Included |
 | **Data Transfer** | ~$5-10/month | 20TB included |
@@ -282,7 +282,7 @@ Tailscale requires a few one-time setup steps:
 
 1. [Create an account](https://login.tailscale.com/start)
 2. [Enable HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) (required for OpenClaw web UI)
-3. [Generate a reusable auth key](https://login.tailscale.com/admin/settings/keys) with tags
+3. [Generate a reusable auth key](https://login.tailscale.com/admin/settings/keys) with tags — enable both "Reusable" and "Ephemeral" (ephemeral nodes auto-remove when offline)
 4. Note your tailnet DNS name (e.g., `tail12345.ts.net`)
 
 ### Installed on agents automatically
@@ -386,11 +386,10 @@ agents:
       slackBotToken: "${env:PM_SLACK_BOT_TOKEN}"
       slackAppToken: "${env:PM_SLACK_APP_TOKEN}"
     plugins:
-      - openclaw-linear
-      - slack
-    deps:
-      - gh
-      - brave-search
+      openclaw-linear:
+        agentId: agent-pm
+      slack:
+        mode: socket
   - name: agent-researcher
     displayName: Atlas
     role: researcher
@@ -439,12 +438,12 @@ clawup/
 │   │       ├── components/
 │   │       │   ├── openclaw-agent.ts    # AWS EC2 agent component
 │   │       │   ├── hetzner-agent.ts     # Hetzner Cloud agent component
+│   │       │   ├── local-docker-agent.ts # Local Docker agent component
 │   │       │   ├── cloud-init.ts        # Cloud-init script generation
 │   │       │   └── config-generator.ts  # OpenClaw config builder
 │   │       ├── shared-vpc.ts
 │   │       └── index.ts    # Main Pulumi stack program
 │   └── web/                # Next.js dashboard (clawup-web)
-├── identities/             # Built-in identity stubs (point to external repos)
 ├── examples/               # Example identities for reference
 │   └── identity/           # Complete "researcher" identity example
 ├── docs/                   # Documentation (Mintlify site + guides)

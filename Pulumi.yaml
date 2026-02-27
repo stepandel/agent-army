@@ -6,20 +6,23 @@ runtime:
   options:
     packagemanager: pnpm
 
-# This project deploys 3 specialized AI agents on AWS:
+# This project deploys specialized AI agents on AWS, Hetzner Cloud, or local Docker.
+# Agent count and roles are defined in clawup.yaml.
+#
+# Built-in identities:
 #   - Juno (PM): Break down tickets, research, plan and sequence work, track progress, unblock teams
 #   - Titus (Eng): Lead engineering, coding, feature development
 #   - Scout (Tester): Quality assurance, verification, bug hunting
 #
-# All agents share a single VPC for cost optimization.
-# Secrets are managed via Pulumi ESC (see Pulumi.dev.yaml).
+# Cloud agents share a single VPC/network for cost optimization.
+# Secrets are managed via Pulumi config (encrypted).
 #
 # Prerequisites:
-#   - AWS credentials configured
-#   - Pulumi ESC environment with required secrets
-#   - Tailscale account with HTTPS enabled
+#   - AWS credentials (for AWS) or Hetzner API token (for Hetzner) or Docker (for local)
+#   - Pulumi CLI + account
+#   - Tailscale account with HTTPS enabled (cloud deployments)
 #
-# Deploy:
-#   pulumi up
+# Deploy via CLI:
+#   clawup deploy
 #
 # Access agents via Tailscale URLs in stack outputs.

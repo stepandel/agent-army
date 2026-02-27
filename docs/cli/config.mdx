@@ -1,0 +1,55 @@
+---
+title: "config"
+description: "View and modify deployment configuration"
+---
+
+View and update `clawup.yaml` config values with validation. No need to re-run `init`.
+
+## `config show`
+
+```bash
+clawup config show [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output as JSON |
+
+## `config set`
+
+```bash
+clawup config set <key> <value> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-a, --agent <name>` | Target a specific agent (name, role, or alias) |
+
+### Settable Keys
+
+**Top-level:** `region`, `instanceType`, `ownerName`, `timezone`, `workingHours`, `userNotes`, `templateVars.<KEY>`
+
+**Per-agent** (with `-a`): `instanceType`, `volumeSize`, `displayName`
+
+## Examples
+
+```bash
+# View current config
+clawup config show
+clawup config show --json
+
+# Update top-level values
+clawup config set region us-west-2
+clawup config set instanceType t3.large
+
+# Update template variables
+clawup config set templateVars.LINEAR_TEAM ENG
+
+# Update per-agent values
+clawup config set instanceType cx32 -a titus
+clawup config set volumeSize 50 -a scout
+```
+
+<Note>
+Run `clawup redeploy` after changing config to apply changes to running agents.
+</Note>
