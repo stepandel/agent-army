@@ -347,8 +347,13 @@ import os
 
 config_path = "/home/ubuntu/.openclaw/openclaw.json"
 
-with open(config_path) as f:
-    config = json.load(f)
+if os.path.exists(config_path):
+    with open(config_path) as f:
+        config = json.load(f)
+else:
+    # Create default skeleton if onboarding was skipped (e.g., non-Anthropic provider)
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+    config = {"gateway": {}, "agents": {"defaults": {}}, "env": {}}
 
 # Configure gateway for Tailscale Serve
 config["gateway"]["trustedProxies"] = ${JSON.stringify(configPatches.trustedProxies)}

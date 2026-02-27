@@ -102,4 +102,26 @@ describe("generateCloudInit — provider-aware env vars", () => {
     expect(script).toContain("OPENAI_API_KEY");
     expect(script).not.toContain("Auto-detect Anthropic");
   });
+
+  it("skips openclaw onboard for non-Anthropic providers and creates skeleton config", () => {
+    const script = generateCloudInit({
+      providerApiKeys: { openai: "sk-openai-test" },
+      tailscaleAuthKey: "tskey-auth-test",
+      gatewayToken: "gw-token-test",
+      model: "openai/gpt-5.3",
+      modelProvider: "openai",
+      codingAgent: "codex",
+      workspaceFiles: {},
+      skipTailscale: true,
+    });
+    expect(script).toContain("Skipping OpenClaw onboarding (non-Anthropic provider: openai)");
+    expect(script).toContain("openclaw.json");
+    expect(script).not.toContain("openclaw onboard --non-interactive");
+  });
+
+  it("runs openclaw onboard for anthropic provider", () => {
+    const script = generateCloudInit(BASE_CONFIG);
+    expect(script).toContain("openclaw onboard");
+    expect(script).not.toContain("Skipping OpenClaw onboarding");
+  });
 });

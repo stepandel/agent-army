@@ -402,7 +402,7 @@ loginctl enable-linger ubuntu
 # Start user's systemd instance (required for user services during cloud-init)
 systemctl start user@1000.service`}
 
-# Run OpenClaw onboarding as ubuntu user (skip daemon install, do it separately)
+${primaryProviderKey === "anthropic" ? `# Run OpenClaw onboarding as ubuntu user (skip daemon install, do it separately)
 echo "Running OpenClaw onboarding..."
 sudo -H -u ubuntu ${primaryEnvVar}="\${${primaryEnvVar}}" GATEWAY_PORT="$GATEWAY_PORT" bash -c '
 export HOME=/home/ubuntu
@@ -416,7 +416,27 @@ openclaw onboard --non-interactive --accept-risk \\
   --gateway-bind loopback \\
   --skip-daemon \\
   --skip-skills || echo "WARNING: OpenClaw onboarding failed. Run openclaw onboard manually."
-'
+'` : `# Non-Anthropic provider (${primaryProviderKey}) — skip openclaw onboard (requires ANTHROPIC_API_KEY)
+# Instead, create the .openclaw directory and a minimal openclaw.json skeleton
+echo "Skipping OpenClaw onboarding (non-Anthropic provider: ${primaryProviderKey})..."
+sudo -H -u ubuntu bash -c '
+mkdir -p /home/ubuntu/.openclaw
+cat > /home/ubuntu/.openclaw/openclaw.json << SKELETON_CONFIG
+{
+  "gateway": {
+    "port": '"$GATEWAY_PORT"',
+    "bind": "127.0.0.1",
+    "trustedProxies": ["127.0.0.1"],
+    "controlUi": { "enabled": true, "allowInsecureAuth": true },
+    "auth": { "mode": "token", "token": "" }
+  },
+  "sandbox": { "enabled": false },
+  "agents": { "defaults": {} },
+  "env": {}
+}
+SKELETON_CONFIG
+echo "Created minimal openclaw.json skeleton"
+'`}
 ${postProvisionHooksScript}
 ${workspaceFilesScript}
 ${pluginInstallScript}
@@ -525,7 +545,7 @@ function generateWorkspaceFilesScript(
     lines.push(`echo "${compressed}" | base64 -d | gunzip > "${fullPath}"`);
   }
 
-  lines.push('chown -R ubuntu:ubuntu /home/ubuntu/.openclaw/workspace');
+  lines.push('chown -R ubuntu:ubuntu /home/ubuntu/.openclaw');
   lines.push('echo "Workspace files injected successfully"');
 
   return lines.join("\n");
