@@ -48,11 +48,13 @@ function runSshCheck(
   command: string,
   timeout: number
 ): { ok: boolean; output: string } {
+  // Escape $ so the host shell passes them through to the remote shell
+  const escaped = command.replace(/"/g, '\\"').replace(/\$/g, '\\$');
   const result = exec.capture("ssh", [
     "-o", `ConnectTimeout=${timeout}`,
     ...SSH_OPTS,
     `${SSH_USER}@${host}`,
-    `"${command.replace(/"/g, '\\"')}"`,
+    `"${escaped}"`,
   ]);
   return { ok: result.exitCode === 0, output: result.stdout || result.stderr };
 }
@@ -68,7 +70,8 @@ function runDockerCheck(
   // Run as ubuntu user (-u) to match SSH behavior (gh auth, NVM, etc.)
   // Source NVM so Node.js-based CLIs (codex, etc.) can find `node`
   const nvmPreamble = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; ';
-  const escaped = (nvmPreamble + command).replace(/"/g, '\\"');
+  // Escape $ so the host shell passes them through to the container's bash
+  const escaped = (nvmPreamble + command).replace(/"/g, '\\"').replace(/\$/g, '\\$');
   const result = exec.capture("docker", [
     "exec", "-u", SSH_USER, containerName, "bash", "-c", `"${escaped}"`,
   ]);
