@@ -66,9 +66,9 @@ function runDockerCheck(
   command: string,
 ): { ok: boolean; output: string } {
   // Run as ubuntu user (-u) to match SSH behavior (gh auth, NVM, etc.)
-  // Wrap command in double quotes so execSync (which joins args with spaces)
-  // passes it as a single argument to bash -c
-  const escaped = command.replace(/"/g, '\\"');
+  // Source NVM so Node.js-based CLIs (codex, etc.) can find `node`
+  const nvmPreamble = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; ';
+  const escaped = (nvmPreamble + command).replace(/"/g, '\\"');
   const result = exec.capture("docker", [
     "exec", "-u", SSH_USER, containerName, "bash", "-c", `"${escaped}"`,
   ]);
