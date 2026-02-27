@@ -127,6 +127,7 @@ export function generateCloudInit(config: CloudInitConfig): string {
   const configPatchScript = generateConfigPatchScript({
     gatewayPort,
     gatewayToken: config.gatewayToken,
+    model: config.model,
     trustedProxies,
     enableControlUi: true,
     plugins: pluginEntries,

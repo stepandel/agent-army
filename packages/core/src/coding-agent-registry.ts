@@ -104,8 +104,11 @@ export NVM_DIR="$HOME/.nvm"
 # Install Codex via npm
 npm install -g @openai/codex
 
-# Verify installation
-if command -v codex &>/dev/null; then
+# Symlink to .local/bin so codex is available without sourcing NVM
+mkdir -p "$HOME/.local/bin"
+CODEX_BIN=$(command -v codex 2>/dev/null || true)
+if [ -n "$CODEX_BIN" ]; then
+  ln -sf "$CODEX_BIN" "$HOME/.local/bin/codex"
   echo "Codex CLI installed successfully"
 else
   echo "WARNING: Codex CLI installation may have failed"
