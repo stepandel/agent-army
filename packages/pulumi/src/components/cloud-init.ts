@@ -233,7 +233,7 @@ echo "Clawhub skills installation complete"
   // Generate additional env vars
   const additionalEnvVars = config.envVars
     ? Object.entries(config.envVars)
-        .map(([key, value]) => `echo 'export ${key}="${value}"' >> /home/ubuntu/.bashrc`)
+        .map(([key, value]) => `echo 'export ${key}="${value}"' >> /home/ubuntu/.profile`)
         .join("\n")
     : "";
 
@@ -373,25 +373,25 @@ ${Object.entries(config.providerApiKeys).map(([providerKey]) => {
     return `# Auto-detect Anthropic credential type and export the correct variable
 if [[ "\${${envVar}}" =~ ^sk-ant-oat ]]; then
   # OAuth token from Claude Pro/Max subscription
-  echo 'export CLAUDE_CODE_OAUTH_TOKEN="\${${envVar}}"' >> /home/ubuntu/.bashrc
+  echo 'export CLAUDE_CODE_OAUTH_TOKEN="\${${envVar}}"' >> /home/ubuntu/.profile
   echo "Detected OAuth token, exporting as CLAUDE_CODE_OAUTH_TOKEN"
 else
   # API key from Anthropic Console
-  echo 'export ${envVar}="\${${envVar}}"' >> /home/ubuntu/.bashrc
+  echo 'export ${envVar}="\${${envVar}}"' >> /home/ubuntu/.profile
   echo "Detected API key, exporting as ${envVar}"
 fi`;
   }
   return `# ${providerKey} provider: export ${envVar}
-echo 'export ${envVar}="\${${envVar}}"' >> /home/ubuntu/.bashrc
+echo 'export ${envVar}="\${${envVar}}"' >> /home/ubuntu/.profile
 echo "Configured ${envVar} for ${providerKey}"`;
 }).join("\n")}
 ${(config.plugins ?? [])
     .flatMap((p) => Object.values(p.secretEnvVars ?? {}))
-    .map((envVar) => `[ -n "\${${envVar}:-}" ] && echo 'export ${envVar}="\${${envVar}:-}"' >> /home/ubuntu/.bashrc`)
+    .map((envVar) => `[ -n "\${${envVar}:-}" ] && echo 'export ${envVar}="\${${envVar}:-}"' >> /home/ubuntu/.profile`)
     .join("\n")}
 ${(config.deps ?? [])
     .flatMap(d => Object.values(d.secrets).map(s => s.envVar))
-    .map(envVar => `[ -n "\${${envVar}:-}" ] && echo 'export ${envVar}="\${${envVar}:-}"' >> /home/ubuntu/.bashrc`)
+    .map(envVar => `[ -n "\${${envVar}:-}" ] && echo 'export ${envVar}="\${${envVar}:-}"' >> /home/ubuntu/.profile`)
     .join("\n")}
 ${additionalEnvVars}
 ${depPostInstallScript}
