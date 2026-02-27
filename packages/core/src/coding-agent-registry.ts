@@ -121,6 +121,9 @@ model = "\${MODEL}"
 CODEX_CONFIG
 echo "Codex default model set to \${MODEL}"
 '`.trim(),
+    secrets: {
+      OpenaiApiKey: { envVar: "OPENAI_API_KEY", scope: "agent" },
+    },
     cliBackend: {
       command: "codex",
       args: ["exec", "--full-auto"],
