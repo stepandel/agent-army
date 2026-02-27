@@ -124,4 +124,40 @@ describe("generateCloudInit — provider-aware env vars", () => {
     expect(script).toContain("Creating openclaw.json skeleton");
     expect(script).not.toContain("openclaw onboard");
   });
+
+  it("aliases OPENROUTER_API_KEY to OPENAI_API_KEY when codex + openrouter", () => {
+    const script = generateCloudInit({
+      ...BASE_CONFIG,
+      providerApiKeys: { openrouter: "sk-or-test" },
+      modelProvider: "openrouter",
+      model: "openrouter/openai/gpt-5.2",
+      codingAgent: "codex",
+    });
+    expect(script).toContain("OPENROUTER_API_KEY");
+    expect(script).toContain('OPENAI_API_KEY=');
+    expect(script).toContain('OPENAI_BASE_URL="https://openrouter.ai/api/v1"');
+    expect(script).toContain("Aliased OPENROUTER_API_KEY -> OPENAI_API_KEY");
+  });
+
+  it("does not alias when claude-code + openrouter", () => {
+    const script = generateCloudInit({
+      ...BASE_CONFIG,
+      providerApiKeys: { openrouter: "sk-or-test" },
+      modelProvider: "openrouter",
+      model: "openrouter/auto",
+      codingAgent: "claude-code",
+    });
+    expect(script).not.toContain("Aliased OPENROUTER_API_KEY");
+  });
+
+  it("does not alias when codex + direct openai", () => {
+    const script = generateCloudInit({
+      ...BASE_CONFIG,
+      providerApiKeys: { openai: "sk-openai-test" },
+      modelProvider: "openai",
+      model: "openai/gpt-4o",
+      codingAgent: "codex",
+    });
+    expect(script).not.toContain("Aliased OPENROUTER_API_KEY");
+  });
 });

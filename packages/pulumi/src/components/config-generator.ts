@@ -382,6 +382,10 @@ backup_provider_key = os.environ.get("${backupProviderDef.envVar}", "")
 if backup_provider_key:
     config["env"]["${backupProviderDef.envVar}"] = backup_provider_key
     print("Configured backup provider env: ${backupProviderDef.envVar}")` : ""}
+${codingAgentName === "codex" && providerKey === "openrouter" ? `# Codex uses OpenAI-compatible API — alias OpenRouter credentials
+config["env"]["OPENAI_API_KEY"] = config["env"].get("OPENROUTER_API_KEY", provider_key)
+config["env"]["OPENAI_BASE_URL"] = "https://openrouter.ai/api/v1"
+print("Aliased OPENROUTER_API_KEY -> OPENAI_API_KEY + OPENAI_BASE_URL for Codex")` : ""}
 
 # Configure heartbeat (proactive mode)
 config.setdefault("agents", {})

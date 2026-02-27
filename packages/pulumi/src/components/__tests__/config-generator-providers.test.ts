@@ -120,4 +120,34 @@ describe("generateConfigPatchScript — Codex coding agent", () => {
     expect(script).toContain('"claude"');
     expect(script).toContain("code");
   });
+
+  it("aliases OPENROUTER_API_KEY to OPENAI_API_KEY when codex + openrouter", () => {
+    const script = generateConfigPatchScript({
+      ...BASE_OPTIONS,
+      model: "openrouter/openai/gpt-5.2",
+      codingAgent: "codex",
+    });
+    expect(script).toContain('OPENROUTER_API_KEY');
+    expect(script).toContain('config["env"]["OPENAI_API_KEY"]');
+    expect(script).toContain('config["env"]["OPENAI_BASE_URL"] = "https://openrouter.ai/api/v1"');
+    expect(script).toContain("Aliased OPENROUTER_API_KEY -> OPENAI_API_KEY");
+  });
+
+  it("does not alias OPENAI_API_KEY when codex + direct openai", () => {
+    const script = generateConfigPatchScript({
+      ...BASE_OPTIONS,
+      model: "openai/gpt-4o",
+      codingAgent: "codex",
+    });
+    expect(script).not.toContain("Aliased OPENROUTER_API_KEY");
+  });
+
+  it("does not alias OPENAI_API_KEY when claude-code + openrouter", () => {
+    const script = generateConfigPatchScript({
+      ...BASE_OPTIONS,
+      model: "openrouter/openai/gpt-4o",
+      codingAgent: "claude-code",
+    });
+    expect(script).not.toContain("Aliased OPENROUTER_API_KEY");
+  });
 });

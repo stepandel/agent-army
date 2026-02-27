@@ -385,6 +385,10 @@ fi`;
 echo 'export ${envVar}="\${${envVar}}"' >> /home/ubuntu/.profile
 echo "Configured ${envVar} for ${providerKey}"`;
 }).join("\n")}
+${codingAgentName === "codex" && Object.keys(config.providerApiKeys).includes("openrouter") ? `# Codex uses OpenAI-compatible API — alias OpenRouter credentials
+echo 'export OPENAI_API_KEY="\${OPENROUTER_API_KEY}"' >> /home/ubuntu/.profile
+echo 'export OPENAI_BASE_URL="https://openrouter.ai/api/v1"' >> /home/ubuntu/.profile
+echo "Aliased OPENROUTER_API_KEY -> OPENAI_API_KEY + OPENAI_BASE_URL for Codex"` : ""}
 ${(config.plugins ?? [])
     .flatMap((p) => Object.values(p.secretEnvVars ?? {}))
     .map((envVar) => `[ -n "\${${envVar}:-}" ] && echo 'export ${envVar}="\${${envVar}:-}"' >> /home/ubuntu/.profile`)
