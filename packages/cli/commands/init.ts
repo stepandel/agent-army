@@ -194,26 +194,68 @@ async function repairMode(projectRoot: string): Promise<void> {
     `Stack: ${manifest.stackName} | Provider: ${manifest.provider} | ${agents.length} agent(s)`
   );
 
-  // Re-fetch identities
+  // Discover local identities and match to manifest agents
   const identityCacheDir = path.join(os.homedir(), ".clawup", "identity-cache");
   const fetchedIdentities: FetchedIdentity[] = [];
 
   const identitySpinner = p.spinner();
-  identitySpinner.start("Resolving agent identities...");
-  for (const agent of agents) {
+  identitySpinner.start("Discovering local identities...");
+
+  const identityPaths = discoverIdentities(projectRoot);
+
+  // Fetch each discovered identity (resolve relative to projectRoot)
+  const discovered: DiscoveredIdentity[] = [];
+  for (const relPath of identityPaths) {
+    try {
+      const absPath = path.resolve(projectRoot, relPath);
+      const identity = await fetchIdentity(absPath, identityCacheDir);
+      discovered.push({ relPath, manifest: identity.manifest });
+    } catch (err) {
+      p.log.warn(
+        `Could not fetch discovered identity "${relPath}": ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+
+  // Match discovered identities to manifest agents
+  const { matched, unmatchedAgents, unmatchedPaths } = matchIdentitiesToAgents(agents, discovered);
+
+  // Update identity-owned fields for matched agents
+  for (const { agent, discovered: d } of matched) {
+    agent.identity = d.relPath;
+    agent.displayName = d.manifest.displayName;
+    agent.role = d.manifest.role;
+    agent.volumeSize = d.manifest.volumeSize;
+
+    const identity = await fetchIdentity(path.resolve(projectRoot, d.relPath), identityCacheDir);
+    fetchedIdentities.push({ agent, manifest: identity.manifest });
+  }
+
+  // Fallback for unmatched agents: try fetching their existing identity path
+  for (const agent of unmatchedAgents) {
+    p.log.warn(`Agent "${agent.name}" has no matching local identity directory`);
     try {
       const identity = await fetchIdentity(agent.identity, identityCacheDir);
       fetchedIdentities.push({ agent, manifest: identity.manifest });
     } catch (err) {
-      identitySpinner.stop(`Failed to resolve identity for ${agent.name}`);
-      exitWithError(
-        `Failed to resolve identity "${agent.identity}": ${
+      p.log.warn(
+        `Could not resolve identity "${agent.identity}" for agent "${agent.name}": ${
           err instanceof Error ? err.message : String(err)
         }`
       );
-      return;
     }
   }
+
+  // Warn about discovered identities not in the manifest
+  for (const relPath of unmatchedPaths) {
+    p.log.warn(
+      `Discovered identity "${relPath}" does not match any agent in ${MANIFEST_FILE}. ` +
+      `Add it manually or re-run \`clawup init\` from scratch.`
+    );
+  }
+
   identitySpinner.stop(
     `Resolved ${fetchedIdentities.length} agent identit${fetchedIdentities.length === 1 ? "y" : "ies"}`
   );
@@ -264,6 +306,97 @@ async function repairMode(projectRoot: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+/** A discovered identity path paired with its fetched manifest */
+interface DiscoveredIdentity {
+  /** Relative path as returned by discoverIdentities (e.g., "./pm") */
+  relPath: string;
+  manifest: IdentityManifest;
+}
+
+/** Result of matching discovered identities to manifest agents */
+interface MatchResult {
+  /** Agents matched to a discovered identity */
+  matched: { agent: AgentDefinition; discovered: DiscoveredIdentity }[];
+  /** Agents with no matching discovered identity */
+  unmatchedAgents: AgentDefinition[];
+  /** Discovered identity paths with no matching agent */
+  unmatchedPaths: string[];
+}
+
+/**
+ * Three-tier matching of discovered identities to manifest agents.
+ *
+ * - Tier 1: Exact identity path match (`agent.identity === relPath`)
+ * - Tier 2: Name match (`agent.name === "agent-" + identity.manifest.name`)
+ * - Tier 3: Unique role match (`agent.role === identity.manifest.role`,
+ *           only when both sides have a single unmatched candidate for that role)
+ */
+export function matchIdentitiesToAgents(
+  agents: AgentDefinition[],
+  discovered: DiscoveredIdentity[],
+): MatchResult {
+  const matched: MatchResult["matched"] = [];
+  const remainingAgents = new Set(agents);
+  const remainingDiscovered = new Set(discovered);
+
+  // Tier 1: exact path match
+  for (const agent of remainingAgents) {
+    for (const d of remainingDiscovered) {
+      if (agent.identity === d.relPath) {
+        matched.push({ agent, discovered: d });
+        remainingAgents.delete(agent);
+        remainingDiscovered.delete(d);
+        break;
+      }
+    }
+  }
+
+  // Tier 2: name match (agent.name === "agent-" + manifest.name)
+  for (const agent of remainingAgents) {
+    for (const d of remainingDiscovered) {
+      if (agent.name === `agent-${d.manifest.name}`) {
+        matched.push({ agent, discovered: d });
+        remainingAgents.delete(agent);
+        remainingDiscovered.delete(d);
+        break;
+      }
+    }
+  }
+
+  // Tier 3: unique role match
+  // Only match when exactly one unmatched agent and one unmatched identity share a role
+  const agentsByRole = new Map<string, AgentDefinition[]>();
+  for (const agent of remainingAgents) {
+    const list = agentsByRole.get(agent.role) ?? [];
+    list.push(agent);
+    agentsByRole.set(agent.role, list);
+  }
+
+  const discoveredByRole = new Map<string, DiscoveredIdentity[]>();
+  for (const d of remainingDiscovered) {
+    const list = discoveredByRole.get(d.manifest.role) ?? [];
+    list.push(d);
+    discoveredByRole.set(d.manifest.role, list);
+  }
+
+  for (const [role, agentsForRole] of agentsByRole) {
+    const discoveredForRole = discoveredByRole.get(role);
+    if (agentsForRole.length === 1 && discoveredForRole?.length === 1) {
+      const agent = agentsForRole[0];
+      const d = discoveredForRole[0];
+      matched.push({ agent, discovered: d });
+      remainingAgents.delete(agent);
+      remainingDiscovered.delete(d);
+    }
+  }
+
+  return {
+    matched,
+    unmatchedAgents: [...remainingAgents],
+    unmatchedPaths: [...remainingDiscovered].map((d) => d.relPath),
+  };
+}
 
 /** Build plugin/dep maps and collect all model strings from fetched identities */
 function buildPluginDepMaps(fetchedIdentities: FetchedIdentity[]) {
