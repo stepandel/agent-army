@@ -113,18 +113,6 @@ requiredSecrets:
   - notionApiKey       # → <ROLE>_NOTION_API_KEY in .env
 ```
 
-### Built-in Identities
-
-Clawup ships with three built-in identities to get you started:
-
-| Alias | Role | What It Does |
-|-------|------|-------------|
-| **Juno** | PM | Breaks down tickets, researches requirements, plans & sequences work, tracks progress |
-| **Titus** | Engineer | Picks up tickets, writes code via Claude Code, builds/tests, creates PRs |
-| **Scout** | Tester | Reviews PRs, tests happy/sad/edge cases, files bugs, verifies fixes |
-
-These are standard identities hosted in a Git repo — the same format as any custom identity you'd create.
-
 ### Creating Your Own Identity
 
 See the [`examples/identity/`](./examples/identity/) directory for a complete, minimal example (a "researcher" agent), and the [Creating Identities](./docs/guides/creating-identities.mdx) guide for the full authoring reference covering:
@@ -150,7 +138,7 @@ npm install -g clawup
 clawup init
 ```
 
-Scaffolds a `clawup.yaml` manifest and `.env.example` with sensible defaults (AWS, us-east-1, all built-in agents). Edit `clawup.yaml` by hand to customize your provider, region, instance type, owner info, and agents.
+Discovers local identity directories and scaffolds a `clawup.yaml` manifest and `.env.example` with sensible defaults (AWS, us-east-1). Edit `clawup.yaml` by hand to customize your provider, region, instance type, owner info, and agents.
 
 ### 3. Fill in Secrets
 
@@ -221,9 +209,9 @@ Run `clawup --help` for the full list.
 Agent resolution is flexible — all of these target the same agent:
 
 ```bash
-clawup ssh juno        # by alias
 clawup ssh pm          # by role
 clawup ssh agent-pm    # by resource name
+clawup ssh juno        # by displayName
 ```
 
 ## Cloud Providers

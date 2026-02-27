@@ -13,8 +13,8 @@ clawup/
 │   │   └── src/
 │   │       ├── schemas/         # Zod schemas (source of truth for types)
 │   │       ├── types.ts         # TypeScript types (z.infer<> re-exports)
-│   │       ├── constants.ts     # Regions, costs, identities, model providers
-│   │       ├── identity.ts      # Git-based identity loader
+│   │       ├── constants.ts     # Regions, costs, model providers
+│   │       ├── identity.ts      # Identity loader + local discovery
 │   │       ├── skills.ts        # Skill classification (private vs clawhub)
 │   │       ├── deps.ts          # Dep resolution
 │   │       ├── plugin-registry.ts
@@ -121,9 +121,9 @@ cd packages/cli && pnpm watch
 |------|---------|
 | `packages/cli/commands/init.ts` | Non-interactive scaffold generator + repair mode |
 | `packages/cli/lib/config.ts` | Load/save YAML manifests |
-| `packages/core/src/constants.ts` | Built-in identities, regions, instance types, key instructions |
+| `packages/core/src/constants.ts` | Regions, instance types, model providers, key instructions |
 | `packages/core/src/schemas/` | Zod schemas (source of truth for all types) |
-| `packages/core/src/identity.ts` | Git-based identity loader |
+| `packages/core/src/identity.ts` | Identity loader + local discovery (`discoverIdentities`) |
 | `packages/pulumi/src/components/cloud-init.ts` | Cloud-init script generation (dynamic plugin support) |
 | `packages/pulumi/src/components/config-generator.ts` | OpenClaw config builder (dynamic plugin entries) |
 | `packages/pulumi/src/index.ts` | Main Pulumi program that reads clawup.yaml manifest |
@@ -143,10 +143,10 @@ Currently minimal test coverage. When adding tests:
 
 ## Common Tasks
 
-### Adding a New Built-in Agent Identity
+### Adding a New Agent Identity
 1. Create an identity directory with `identity.yaml` and workspace files
-2. Host in a Git repo (or add to an existing identities repo)
-3. Register in `packages/core/src/constants.ts` under `BUILT_IN_IDENTITIES`
+2. Place it in the project root (for local discovery) or host in a Git repo
+3. Run `clawup init` to discover and scaffold the manifest
 
 ### Adding a New CLI Command
 1. Create `packages/cli/commands/<name>.ts`

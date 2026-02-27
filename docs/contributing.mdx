@@ -41,13 +41,6 @@ pnpm --filter clawup build
 - **PRs:** One PR per feature/fix, link to relevant issues
 - **TypeScript:** Strict mode, no `any` without comment
 
-## Adding a New Built-in Identity
-
-1. Create an identity directory with `identity.yaml` and workspace files (see [examples/identity/](https://github.com/stepandel/clawup/tree/main/examples/identity) for the format)
-2. Host the identity in a Git repo (or add to an existing identities repo)
-3. Register it in `packages/core/src/constants.ts` under `BUILT_IN_IDENTITIES`
-4. Update documentation in `docs/architecture/identities.mdx`
-
 ## Adding a New Cloud Provider
 
 1. Create a new component in `packages/pulumi/src/components/`

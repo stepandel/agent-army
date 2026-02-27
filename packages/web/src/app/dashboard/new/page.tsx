@@ -9,7 +9,6 @@ import {
   hetznerServerTypes,
   COST_ESTIMATES,
   HETZNER_COST_ESTIMATES,
-  BUILT_IN_IDENTITIES,
 } from "@clawup/core";
 import type { ClawupManifest, AgentDefinition } from "@clawup/core";
 
@@ -21,7 +20,15 @@ const STEPS = [
   "Review",
 ];
 
-type PresetKey = keyof typeof BUILT_IN_IDENTITIES;
+interface AgentEntry {
+  name: string;
+  displayName: string;
+  role: string;
+  identity: string;
+  volumeSize: number;
+}
+
+const emptyAgent: AgentEntry = { name: "", displayName: "", role: "", identity: "", volumeSize: 30 };
 
 interface WizardState {
   stackName: string;
@@ -31,7 +38,7 @@ interface WizardState {
   ownerName: string;
   timezone: string;
   workingHours: string;
-  selectedAgents: PresetKey[];
+  agents: AgentEntry[];
 }
 
 const initialState: WizardState = {
@@ -42,7 +49,7 @@ const initialState: WizardState = {
   ownerName: "",
   timezone: "America/New_York",
   workingHours: "9am-6pm",
-  selectedAgents: [],
+  agents: [{ ...emptyAgent }],
 };
 
 // Styles
@@ -74,6 +81,8 @@ const s = {
   reviewLabel: { fontWeight: 600, color: "#6b7280", fontSize: 14 } as const,
   reviewValue: { fontSize: 14, color: "#111827" } as const,
   cost: { fontSize: 20, fontWeight: 700, color: "#22c55e", marginTop: 16, textAlign: "right" as const },
+  smallBtn: { padding: "6px 14px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, cursor: "pointer", background: "#fff", color: "#374151" } as const,
+  removeBtn: { padding: "6px 14px", borderRadius: 6, border: "1px solid #fca5a5", fontSize: 13, cursor: "pointer", background: "#fff", color: "#ef4444" } as const,
 };
 
 export default function NewDeploymentWizard() {
@@ -84,6 +93,22 @@ export default function NewDeploymentWizard() {
 
   const update = <K extends keyof WizardState>(key: K, val: WizardState[K]) =>
     setState((prev) => ({ ...prev, [key]: val }));
+
+  function updateAgent(index: number, field: keyof AgentEntry, value: string | number) {
+    setState((prev) => {
+      const agents = [...prev.agents];
+      agents[index] = { ...agents[index], [field]: value };
+      return { ...prev, agents };
+    });
+  }
+
+  function addAgent() {
+    setState((prev) => ({ ...prev, agents: [...prev.agents, { ...emptyAgent }] }));
+  }
+
+  function removeAgent(index: number) {
+    setState((prev) => ({ ...prev, agents: prev.agents.filter((_, i) => i !== index) }));
+  }
 
   const regions = state.provider === "aws" ? AWS_REGIONS : HETZNER_LOCATIONS;
   const instanceTypes =
@@ -109,7 +134,13 @@ export default function NewDeploymentWizard() {
       if (!state.ownerName.trim()) errs.push("Owner name is required");
     }
     if (step === 3) {
-      if (state.selectedAgents.length === 0) errs.push("Select at least one agent");
+      if (state.agents.length === 0) errs.push("Add at least one agent");
+      for (const [i, agent] of state.agents.entries()) {
+        if (!agent.name.trim()) errs.push(`Agent ${i + 1}: name is required`);
+        if (!agent.displayName.trim()) errs.push(`Agent ${i + 1}: display name is required`);
+        if (!agent.role.trim()) errs.push(`Agent ${i + 1}: role is required`);
+        if (!agent.identity.trim()) errs.push(`Agent ${i + 1}: identity path is required`);
+      }
     }
     return errs;
   }
@@ -126,27 +157,14 @@ export default function NewDeploymentWizard() {
     setStep((s) => Math.max(s - 1, 0));
   }
 
-  function toggleAgent(key: PresetKey) {
-    setState((prev) => ({
-      ...prev,
-      selectedAgents: prev.selectedAgents.includes(key)
-        ? prev.selectedAgents.filter((k) => k !== key)
-        : [...prev.selectedAgents, key],
-    }));
-  }
-
   function buildManifest(): ClawupManifest {
-    const agents: AgentDefinition[] = state.selectedAgents.map((key) => {
-      const identity = BUILT_IN_IDENTITIES[key];
-      const [displayName] = identity.label.split(" (");
-      return {
-        name: key,
-        displayName,
-        role: key,
-        identity: identity.path,
-        volumeSize: 30,
-      };
-    });
+    const agents: AgentDefinition[] = state.agents.map((a) => ({
+      name: a.name,
+      displayName: a.displayName,
+      role: a.role,
+      identity: a.identity,
+      volumeSize: a.volumeSize,
+    }));
     return {
       stackName: state.stackName,
       provider: state.provider,
@@ -161,7 +179,7 @@ export default function NewDeploymentWizard() {
 
   function totalCost(): number {
     const perInstance = costMap[state.instanceType] ?? 0;
-    return perInstance * state.selectedAgents.length;
+    return perInstance * state.agents.length;
   }
 
   async function handleSubmit() {
@@ -297,36 +315,39 @@ export default function NewDeploymentWizard() {
         {step === 3 && (
           <>
             <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 16 }}>
-              Select the agents you want to deploy:
+              Define agents to deploy. Each agent needs an identity path (local directory or Git URL).
             </p>
-            {(Object.keys(BUILT_IN_IDENTITIES) as PresetKey[]).map((key) => {
-              const identity = BUILT_IN_IDENTITIES[key];
-              const selected = state.selectedAgents.includes(key);
-              return (
-                <div
-                  key={key}
-                  style={s.agentCard(selected)}
-                  onClick={() => toggleAgent(key)}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      readOnly
-                      style={{ width: 18, height: 18 }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 15 }}>
-                        {identity.label}
-                      </div>
-                      <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>
-                        {identity.hint}
-                      </div>
-                    </div>
+            {state.agents.map((agent, i) => (
+              <div key={i} style={{ ...s.agentCard(false), cursor: "default" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <span style={{ fontWeight: 600, fontSize: 15 }}>Agent {i + 1}</span>
+                  {state.agents.length > 1 && (
+                    <button style={s.removeBtn} onClick={() => removeAgent(i)}>Remove</button>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div>
+                    <label style={{ ...s.label, fontSize: 12 }}>Name</label>
+                    <input style={s.input} placeholder="agent-pm" value={agent.name} onChange={(e) => updateAgent(i, "name", e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={{ ...s.label, fontSize: 12 }}>Display Name</label>
+                    <input style={s.input} placeholder="Juno" value={agent.displayName} onChange={(e) => updateAgent(i, "displayName", e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={{ ...s.label, fontSize: 12 }}>Role</label>
+                    <input style={s.input} placeholder="pm" value={agent.role} onChange={(e) => updateAgent(i, "role", e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={{ ...s.label, fontSize: 12 }}>Volume Size (GB)</label>
+                    <input style={s.input} type="number" min={10} value={agent.volumeSize} onChange={(e) => updateAgent(i, "volumeSize", parseInt(e.target.value) || 30)} />
                   </div>
                 </div>
-              );
-            })}
+                <label style={{ ...s.label, fontSize: 12 }}>Identity Path</label>
+                <input style={s.input} placeholder="./pm or https://github.com/org/repo#pm" value={agent.identity} onChange={(e) => updateAgent(i, "identity", e.target.value)} />
+              </div>
+            ))}
+            <button style={s.smallBtn} onClick={addAgent}>+ Add Agent</button>
           </>
         )}
 
@@ -341,7 +362,7 @@ export default function NewDeploymentWizard() {
               ["Owner", state.ownerName],
               ["Timezone", state.timezone],
               ["Working Hours", state.workingHours],
-              ["Agents", state.selectedAgents.map((k) => BUILT_IN_IDENTITIES[k].label).join(", ")],
+              ["Agents", state.agents.map((a) => `${a.displayName} (${a.role})`).join(", ")],
             ].map(([label, value]) => (
               <div key={label} style={s.reviewRow}>
                 <span style={s.reviewLabel}>{label}</span>
@@ -361,11 +382,11 @@ export default function NewDeploymentWizard() {
             onClick={back}
             disabled={step === 0}
           >
-            ← Back
+            Back
           </button>
           {step < STEPS.length - 1 ? (
             <button style={s.btn(true)} onClick={next}>
-              Next →
+              Next
             </button>
           ) : (
             <button
@@ -373,7 +394,7 @@ export default function NewDeploymentWizard() {
               onClick={handleSubmit}
               disabled={submitting}
             >
-              {submitting ? "Deploying..." : "🚀 Deploy"}
+              {submitting ? "Deploying..." : "Deploy"}
             </button>
           )}
         </div>

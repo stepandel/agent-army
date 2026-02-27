@@ -20,7 +20,7 @@ npx clawup init
 
 Generates a `clawup.yaml` manifest and `.env.example` in the current directory. Non-interactive — edit the YAML by hand to configure your deployment.
 
-**Fresh init** (no `clawup.yaml`): scaffolds a new manifest with all built-in agents (Juno, Titus, Scout) and sensible defaults (AWS, us-east-1, t3.medium).
+**Fresh init** (no `clawup.yaml`): discovers local identity directories and scaffolds a new manifest with sensible defaults (AWS, us-east-1, t3.medium).
 
 **Repair mode** (existing `clawup.yaml`): re-fetches identities, updates secrets/plugins/deps from latest identity data, regenerates `.env.example`. Existing manifest values are preserved.
 
@@ -66,12 +66,12 @@ clawup status --local     # Local Docker container status
 
 ### `clawup ssh <agent>`
 
-SSH to an agent by name, role, or alias. Resolves agents flexibly — all of these work:
+SSH to an agent by name, role, or displayName. Resolves agents flexibly — all of these work:
 
 ```bash
-clawup ssh juno        # By alias
 clawup ssh pm          # By role
 clawup ssh agent-pm    # By resource name
+clawup ssh juno        # By displayName
 ```
 
 Run a command on the agent instead of opening an interactive session:
@@ -171,17 +171,9 @@ clawup list          # Pretty-printed output
 clawup list --json   # JSON output
 ```
 
-## Preset Agents
+## Agents
 
-The CLI ships with three preset agent configurations:
-
-| Alias | Role | Name | Description |
-|-------|------|------|-------------|
-| **Juno** | PM | `agent-pm` | Break down tickets, research, plan and sequence work, track progress, unblock teams |
-| **Titus** | Engineer | `agent-eng` | Lead engineering, coding, shipping |
-| **Scout** | Tester | `agent-tester` | Quality assurance, verification, bug hunting |
-
-You can also define fully custom agents during `init`.
+Agents are discovered from local identity directories (subdirectories containing `identity.yaml`) during `clawup init`. Each identity defines the agent's name, role, personality, skills, and configuration. See the [example identity](https://github.com/stepandel/clawup/tree/main/examples/identity) for the expected structure.
 
 ## Configuration
 

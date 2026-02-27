@@ -220,19 +220,11 @@ Workspace files support `{{VARIABLE}}` substitution. Variables declared in `temp
 
 You can define custom variables beyond these — any name listed in `templateVars` will be prompted during `clawup init` and substituted at deploy time.
 
-## Built-in Identities
+## Example Identities
 
-Clawup ships with three built-in identities hosted at [github.com/stepandel/army-identities](https://github.com/stepandel/army-identities):
+Clawup discovers identities from local directories (subdirectories containing `identity.yaml`) or Git repos. See the [example identity](https://github.com/stepandel/clawup/tree/main/examples/identity) for a minimal starting point.
 
-| Identity | Agent | Role | Volume | Model |
-|----------|-------|------|--------|-------|
-| `pm` | Juno | Product Manager — breaks down tickets, coordinates work, communicates via Slack | 30 GB | Claude Opus 4.6 |
-| `eng` | Titus | Engineer — writes code, opens PRs, iterates on review feedback | 50 GB | Claude Opus 4.6 |
-| `tester` | Scout | QA Tester — reviews PRs, tests changes, files bugs back to Linear | 30 GB | Claude Opus 4.6 |
-
-These are standard identities in the same format as any custom identity. They serve as both production-ready defaults and reference implementations.
-
-### Built-in Skills
+### Example Skills
 
 | Skill | Used By | Purpose |
 |-------|---------|---------|

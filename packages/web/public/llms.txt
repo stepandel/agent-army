@@ -8,7 +8,7 @@ Clawup is an open-source CLI tool that deploys, orchestrates, and monitors AI ag
 
 - One-command deployment of OpenClaw agents to AWS or Hetzner Cloud
 - Identity system: composable YAML definitions for agent personality, skills, model, and tools
-- Built-in agents: Juno (PM), Titus (Engineer), Scout (QA)
+- Composable identity system for agent personality, skills, and configuration
 - Built-in integrations with Linear, GitHub, and Slack
 - Secure infrastructure via Pulumi (VPC, EC2, networking)
 - Encrypted mesh networking via Tailscale (no public ports)

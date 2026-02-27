@@ -1,5 +1,5 @@
 name: clawup
-description: Multi-agent OpenClaw deployment - PM, Engineer, and Tester
+description: Multi-agent OpenClaw deployment
 main: packages/pulumi/dist/index.js
 runtime:
   name: nodejs
@@ -8,11 +8,7 @@ runtime:
 
 # This project deploys specialized AI agents on AWS, Hetzner Cloud, or local Docker.
 # Agent count and roles are defined in clawup.yaml.
-#
-# Built-in identities:
-#   - Juno (PM): Break down tickets, research, plan and sequence work, track progress, unblock teams
-#   - Titus (Eng): Lead engineering, coding, feature development
-#   - Scout (Tester): Quality assurance, verification, bug hunting
+# Identities are discovered from local directories or Git repos.
 #
 # Cloud agents share a single VPC/network for cost optimization.
 # Secrets are managed via Pulumi config (encrypted).

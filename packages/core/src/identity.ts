@@ -15,6 +15,45 @@ import type { IdentityManifest, IdentityResult } from "./types";
 import { IdentityManifestSchema, PluginManifestSchema } from "./schemas";
 import type { z } from "zod";
 
+/** Directories to skip when scanning for local identities */
+const SKIP_DIRS = new Set([
+  "node_modules", ".git", ".clawup", "dist", "build", "out",
+  ".next", ".turbo", "coverage", ".cache", "packages", "docs",
+  "scripts", "examples", "esc",
+]);
+
+/**
+ * Discover local identity directories under `dir`.
+ * Scans for subdirectories containing `identity.yaml` or `identity.json`.
+ * Returns relative paths (e.g., `["./pm", "./eng", "./tester"]`).
+ */
+export function discoverIdentities(dir: string): string[] {
+  const results: string[] = [];
+
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+    return results;
+  }
+
+  for (const entry of readdirSync(dir)) {
+    if (entry.startsWith(".") || SKIP_DIRS.has(entry)) continue;
+
+    const full = join(dir, entry);
+    try {
+      if (!statSync(full).isDirectory()) continue;
+    } catch {
+      continue;
+    }
+
+    const hasYaml = existsSync(join(full, "identity.yaml"));
+    const hasJson = existsSync(join(full, "identity.json"));
+    if (hasYaml || hasJson) {
+      results.push(`./${entry}`);
+    }
+  }
+
+  return results.sort();
+}
+
 /** Result of a captured command execution */
 interface ExecResult {
   stdout: string;

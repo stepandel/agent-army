@@ -15,12 +15,12 @@ clawup init
 
 ### Fresh Init (no `clawup.yaml`)
 
-Scaffolds a new manifest with all built-in agents and sensible defaults:
+Discovers local identity directories (subdirectories containing `identity.yaml`) and scaffolds a manifest with sensible defaults:
 
 - **Provider**: AWS
 - **Region**: us-east-1
 - **Instance type**: t3.medium
-- **Agents**: Juno (PM), Titus (Engineer), Scout (QA)
+- **Agents**: discovered from local identity directories
 
 The generated `clawup.yaml` includes `${env:VAR}` secret references, inline plugin config from identities, and per-agent secrets. Edit the values directly in the YAML file to match your setup.
 

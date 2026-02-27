@@ -11,7 +11,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { RuntimeAdapter, ToolImplementation, ExecAdapter } from "../adapters";
 import { requireManifest } from "../lib/config";
-import { AGENT_ALIASES, SSH_USER, tailscaleHostname, dockerContainerName } from "@clawup/core";
+import { SSH_USER, tailscaleHostname, dockerContainerName } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { getConfig, selectOrCreateStack, qualifiedStackName } from "../lib/pulumi";
 import type { AgentDefinition } from "@clawup/core";
@@ -155,7 +155,7 @@ function dockerSyncDir(
  */
 function findAgent(agents: AgentDefinition[], query: string): AgentDefinition | undefined {
   const q = query.toLowerCase();
-  const resolvedRole = AGENT_ALIASES[q] ?? q;
+  const resolvedRole = q;
   return agents.find(
     (a) =>
       a.role === resolvedRole ||

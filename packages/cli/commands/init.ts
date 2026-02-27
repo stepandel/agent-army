@@ -1,12 +1,13 @@
 /**
  * clawup init — Generate clawup.yaml scaffold
  *
- * Completely non-interactive. Generates a template clawup.yaml with sensible
- * defaults (all built-in agents, AWS us-east-1, t3.medium) and a .env.example.
+ * Completely non-interactive. Discovers local identity directories (subdirectories
+ * containing identity.yaml) and generates a template clawup.yaml with sensible
+ * defaults (AWS us-east-1, t3.medium) and a .env.example.
  * The user then edits clawup.yaml by hand.
  *
  * Two modes:
- * - Fresh init (no clawup.yaml): scaffold a new manifest with built-in agents
+ * - Fresh init (no clawup.yaml): discover local identities, scaffold a new manifest
  * - Repair mode (clawup.yaml exists): re-fetch identities, update secrets/plugins,
  *   regenerate .env.example — all non-interactively
  */
@@ -16,11 +17,10 @@ import * as p from "@clack/prompts";
 import YAML from "yaml";
 import type { AgentDefinition, ClawupManifest, IdentityManifest } from "@clawup/core";
 import {
-  BUILT_IN_IDENTITIES,
   MANIFEST_FILE,
   ClawupManifestSchema,
 } from "@clawup/core";
-import { fetchIdentity } from "@clawup/core/identity";
+import { fetchIdentity, discoverIdentities } from "@clawup/core/identity";
 import * as os from "os";
 import * as path from "path";
 import { showBanner, exitWithError } from "../lib/ui";
@@ -50,30 +50,44 @@ export async function initCommand(): Promise<void> {
   // -------------------------------------------------------------------------
   // Fresh init: scaffold a new clawup.yaml with defaults
   // -------------------------------------------------------------------------
-  p.log.step("Generating clawup.yaml with built-in agents...");
+  p.log.step("Generating clawup.yaml from local identities...");
 
   const identityCacheDir = path.join(os.homedir(), ".clawup", "identity-cache");
   const fetchedIdentities: FetchedIdentity[] = [];
 
-  // Fetch all built-in identities
+  // Discover local identity directories
   const spinner = p.spinner();
-  spinner.start("Fetching built-in agent identities...");
+  spinner.start("Discovering local identities...");
 
-  for (const [, entry] of Object.entries(BUILT_IN_IDENTITIES)) {
+  const identityPaths = discoverIdentities(process.cwd());
+  if (identityPaths.length === 0) {
+    spinner.stop("No identities found");
+    exitWithError(
+      "No identity directories found in the current directory.\n" +
+      "Each identity should be a subdirectory containing an identity.yaml file.\n" +
+      "Expected structure:\n" +
+      "  ./pm/identity.yaml\n" +
+      "  ./eng/identity.yaml\n" +
+      "  ./tester/identity.yaml"
+    );
+    return;
+  }
+
+  for (const identityPath of identityPaths) {
     try {
-      const identity = await fetchIdentity(entry.path, identityCacheDir);
+      const identity = await fetchIdentity(identityPath, identityCacheDir);
       const agent: AgentDefinition = {
         name: `agent-${identity.manifest.name}`,
         displayName: identity.manifest.displayName,
         role: identity.manifest.role,
-        identity: entry.path,
+        identity: identityPath,
         volumeSize: identity.manifest.volumeSize,
       };
       fetchedIdentities.push({ agent, manifest: identity.manifest });
     } catch (err) {
-      spinner.stop(`Failed to fetch identity: ${entry.label}`);
+      spinner.stop(`Failed to fetch identity: ${identityPath}`);
       exitWithError(
-        `Could not fetch identity "${entry.path}": ${
+        `Could not fetch identity "${identityPath}": ${
           err instanceof Error ? err.message : String(err)
         }`
       );
@@ -81,7 +95,7 @@ export async function initCommand(): Promise<void> {
     }
   }
 
-  spinner.stop(`Fetched ${fetchedIdentities.length} agent identities`);
+  spinner.stop(`Discovered ${fetchedIdentities.length} local identit${fetchedIdentities.length === 1 ? "y" : "ies"}`);
 
   const agents = fetchedIdentities.map((fi) => fi.agent);
 

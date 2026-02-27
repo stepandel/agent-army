@@ -169,9 +169,9 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Built-in Agents */}
+        {/* Example Agents */}
         <section className="lg:col-span-2 bg-card border border-border rounded-lg p-6">
-          <h2 className="text-xl font-bold tracking-tight mb-4">Built-in agents</h2>
+          <h2 className="text-xl font-bold tracking-tight mb-4">Example agents</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>

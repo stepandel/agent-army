@@ -2,37 +2,6 @@
  * Constants, preset definitions, aliases, and defaults
  */
 
-/**
- * Built-in agent identities.
- * Each entry points to a subfolder in the army-identities Git repo.
- * The identity.yaml inside provides displayName, role, volumeSize, plugins, etc.
- */
-export const BUILT_IN_IDENTITIES: Record<string, { path: string; label: string; hint: string }> = {
-  pm: {
-    path: "https://github.com/stepandel/army-identities#pm",
-    label: "Juno (PM)",
-    hint: "Break down tickets, research, plan and sequence work, track progress, unblock teams",
-  },
-  eng: {
-    path: "https://github.com/stepandel/army-identities#eng",
-    label: "Titus (Engineer)",
-    hint: "Lead engineering, coding, shipping",
-  },
-  tester: {
-    path: "https://github.com/stepandel/army-identities#tester",
-    label: "Scout (QA)",
-    hint: "Quality assurance, verification, bug hunting",
-  },
-};
-
-
-/** Map agent aliases to role keys */
-export const AGENT_ALIASES: Record<string, string> = {
-  juno: "pm",
-  titus: "eng",
-  scout: "tester",
-};
-
 /** Available cloud providers */
 export const PROVIDERS = [
   { value: "aws", label: "AWS", hint: "Amazon Web Services EC2 instances" },
