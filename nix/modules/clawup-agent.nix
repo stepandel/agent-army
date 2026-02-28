@@ -22,6 +22,7 @@
   environment.systemPackages = with pkgs; [
     git
     curl
+    jq
     gh
     nodejs_22
     pnpm_10

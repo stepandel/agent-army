@@ -58,7 +58,7 @@ fi
       BraveApiKey: {
         envVar: "BRAVE_API_KEY",
         scope: "global",
-        checkCommand: `python3 -c "import json,sys;c=json.load(open('/home/openclaw/.openclaw/openclaw.json'));sys.exit(0 if c.get('tools',{}).get('web',{}).get('search',{}).get('apiKey') else 1)"`,
+        checkCommand: `jq -e '.tools.web.search.apiKey // empty' /home/openclaw/.openclaw/openclaw.json > /dev/null 2>&1`,
       },
     },
   },

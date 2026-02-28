@@ -18,6 +18,7 @@ let
     findutils
     git
     curl
+    jq
     cacert
     gh
   ];
