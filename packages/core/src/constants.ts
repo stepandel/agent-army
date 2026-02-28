@@ -2,37 +2,6 @@
  * Constants, preset definitions, aliases, and defaults
  */
 
-/**
- * Built-in agent identities.
- * Each entry points to a subfolder in the army-identities Git repo.
- * The identity.yaml inside provides displayName, role, volumeSize, plugins, etc.
- */
-export const BUILT_IN_IDENTITIES: Record<string, { path: string; label: string; hint: string }> = {
-  pm: {
-    path: "https://github.com/stepandel/army-identities#pm",
-    label: "Juno (PM)",
-    hint: "Break down tickets, research, plan and sequence work, track progress, unblock teams",
-  },
-  eng: {
-    path: "https://github.com/stepandel/army-identities#eng",
-    label: "Titus (Engineer)",
-    hint: "Lead engineering, coding, shipping",
-  },
-  tester: {
-    path: "https://github.com/stepandel/army-identities#tester",
-    label: "Scout (QA)",
-    hint: "Quality assurance, verification, bug hunting",
-  },
-};
-
-
-/** Map agent aliases to role keys */
-export const AGENT_ALIASES: Record<string, string> = {
-  juno: "pm",
-  titus: "eng",
-  scout: "tester",
-};
-
 /** Available cloud providers */
 export const PROVIDERS = [
   { value: "aws", label: "AWS", hint: "Amazon Web Services EC2 instances" },
@@ -135,7 +104,21 @@ export const PLUGINS_DIR = "plugins";
 /**
  * Supported model providers with their API key prefixes and available models
  */
-export const MODEL_PROVIDERS = {
+export interface ModelProviderDef {
+  name: string;
+  envVar: string;
+  keyPrefix: string;
+  models: ReadonlyArray<{ value: string; label: string }>;
+  /** Returns CLI flags for `openclaw onboard --non-interactive` for this provider */
+  onboardFlags: (envVar: string) => string;
+}
+
+export const MODEL_PROVIDERS: Record<string, ModelProviderDef> & {
+  anthropic: ModelProviderDef;
+  openai: ModelProviderDef;
+  google: ModelProviderDef;
+  openrouter: ModelProviderDef;
+} = {
   anthropic: {
     name: "Anthropic",
     envVar: "ANTHROPIC_API_KEY",
@@ -145,6 +128,7 @@ export const MODEL_PROVIDERS = {
       { value: "anthropic/claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
       { value: "anthropic/claude-haiku-4-5", label: "Claude Haiku 4.5" },
     ],
+    onboardFlags: (envVar: string) => `--anthropic-api-key "\$${envVar}"`,
   },
   openai: {
     name: "OpenAI",
@@ -155,6 +139,7 @@ export const MODEL_PROVIDERS = {
       { value: "openai/o3", label: "o3" },
       { value: "openai/o4-mini", label: "o4-mini" },
     ],
+    onboardFlags: (envVar: string) => `--openai-api-key "\$${envVar}"`,
   },
   google: {
     name: "Google Gemini",
@@ -164,14 +149,16 @@ export const MODEL_PROVIDERS = {
       { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
       { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
     ],
+    onboardFlags: (envVar: string) => `--auth-choice gemini-api-key --gemini-api-key "\$${envVar}"`,
   },
   openrouter: {
     name: "OpenRouter",
     envVar: "OPENROUTER_API_KEY",
     keyPrefix: "sk-or-",
-    models: [] as ReadonlyArray<{ value: string; label: string }>,
+    models: [],
+    onboardFlags: (envVar: string) => `--auth-choice apiKey --token-provider openrouter --token "\$${envVar}"`,
   },
-} as const;
+};
 
 /**
  * Extract the provider key from a model string (e.g., "anthropic/claude-opus-4-6" → "anthropic").
@@ -180,6 +167,57 @@ export const MODEL_PROVIDERS = {
 export function getProviderForModel(modelString: string): string {
   const slashIndex = modelString.indexOf("/");
   return slashIndex === -1 ? modelString : modelString.substring(0, slashIndex);
+}
+
+/**
+ * Map of provider key → camelCase Pulumi config key for API keys.
+ * e.g., "openai" → "openaiApiKey", "anthropic" → "anthropicApiKey"
+ */
+export const PROVIDER_CONFIG_KEYS: Record<string, string> = Object.fromEntries(
+  Object.entries(MODEL_PROVIDERS).map(([key, def]) => {
+    const camel = def.envVar
+      .toLowerCase()
+      .split("_")
+      .map((part: string, i: number) => (i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+      .join("");
+    return [key, camel];
+  })
+);
+
+/**
+ * Deduplicate provider keys from an array of model strings.
+ * e.g., ["openai/gpt-4o", "anthropic/claude-sonnet-4-5", "openai/o3"] → Set{"openai", "anthropic"}
+ */
+export function getRequiredProviders(models: string[]): Set<string> {
+  const providers = new Set<string>();
+  for (const model of models) {
+    providers.add(getProviderForModel(model));
+  }
+  return providers;
+}
+
+/**
+ * Get the camelCase Pulumi config key for a provider's API key.
+ * e.g., "openai" → "openaiApiKey"
+ */
+export function getProviderConfigKey(providerKey: string): string {
+  const configKey = PROVIDER_CONFIG_KEYS[providerKey];
+  if (!configKey) {
+    throw new Error(`Unknown provider "${providerKey}". Supported: ${Object.keys(MODEL_PROVIDERS).join(", ")}`);
+  }
+  return configKey;
+}
+
+/**
+ * Get the environment variable name for a provider's API key.
+ * e.g., "openai" → "OPENAI_API_KEY"
+ */
+export function getProviderEnvVar(providerKey: string): string {
+  const providerDef = MODEL_PROVIDERS[providerKey];
+  if (!providerDef) {
+    throw new Error(`Unknown provider "${providerKey}". Supported: ${Object.keys(MODEL_PROVIDERS).join(", ")}`);
+  }
+  return providerDef.envVar;
 }
 
 /**

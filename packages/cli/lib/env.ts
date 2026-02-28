@@ -7,7 +7,7 @@
  */
 
 import * as fs from "fs";
-import { resolvePlugin, PLUGIN_MANIFEST_REGISTRY } from "@clawup/core";
+import { resolvePlugin, PLUGIN_MANIFEST_REGISTRY, MODEL_PROVIDERS, PROVIDER_CONFIG_KEYS, getRequiredProviders, getProviderConfigKey, getProviderEnvVar } from "@clawup/core";
 
 // ---------------------------------------------------------------------------
 // Validators — shared prefix/suffix checks for well-known secret types
@@ -15,9 +15,17 @@ import { resolvePlugin, PLUGIN_MANIFEST_REGISTRY } from "@clawup/core";
 
 /** Infrastructure validators — always present regardless of plugins */
 export const VALIDATORS: Record<string, (val: string) => string | undefined> = {
-  anthropicApiKey: (val) => {
-    if (!val.startsWith("sk-ant-")) return "Must start with sk-ant-";
-  },
+  // Per-provider API key validators (generated from MODEL_PROVIDERS)
+  ...Object.fromEntries(
+    Object.entries(MODEL_PROVIDERS)
+      .filter(([, def]) => def.keyPrefix)
+      .map(([key, def]) => {
+        const configKey = getProviderConfigKey(key);
+        return [configKey, (val: string) => {
+          if (!val.startsWith(def.keyPrefix)) return `Must start with ${def.keyPrefix}`;
+        }];
+      })
+  ),
   tailscaleAuthKey: (val) => {
     if (!val.startsWith("tskey-auth-")) return "Must start with tskey-auth-";
   },
@@ -255,11 +263,17 @@ interface SecretsBuilderOpts {
   allDepNames: Set<string>;
   agentPlugins: Map<string, Set<string>>;
   agentDeps: Map<string, Set<string>>;
+  /** All model strings across all agents (primary + backup). Used to determine required provider API keys. */
+  allModels: string[];
 }
 
 export interface ManifestSecrets {
   global: Record<string, string>;
   perAgent: Record<string, Record<string, string>>;
+  /** All global keys this function manages — stale ones should be pruned */
+  managedGlobalKeys: string[];
+  /** Per-agent managed keys — keyed by agent name */
+  managedPerAgentKeys: Record<string, string[]>;
 }
 
 /**
@@ -270,8 +284,13 @@ export function buildManifestSecrets(opts: SecretsBuilderOpts): ManifestSecrets 
   const global: Record<string, string> = {};
   const perAgent: Record<string, Record<string, string>> = {};
 
-  // Always required
-  global.anthropicApiKey = "${env:ANTHROPIC_API_KEY}";
+  // Per-provider API keys — only require keys for providers actually used
+  const requiredProviders = getRequiredProviders(opts.allModels);
+  for (const providerKey of requiredProviders) {
+    const configKey = getProviderConfigKey(providerKey);
+    const envVar = getProviderEnvVar(providerKey);
+    global[configKey] = `\${env:${envVar}}`;
+  }
 
   if (opts.provider !== "local") {
     global.tailscaleAuthKey = "${env:TAILSCALE_AUTH_KEY}";
@@ -288,6 +307,18 @@ export function buildManifestSecrets(opts: SecretsBuilderOpts): ManifestSecrets 
   if (opts.allDepNames.has("brave-search")) {
     global.braveApiKey = "${env:BRAVE_API_KEY}";
   }
+
+  // Compute managedGlobalKeys: all keys this function could possibly manage
+  const managedGlobalKeys: string[] = [
+    ...Object.values(PROVIDER_CONFIG_KEYS),
+    "tailscaleAuthKey",
+    "tailnetDnsName",
+    "tailscaleApiKey",
+    "hcloudToken",
+    "braveApiKey",
+  ];
+
+  const managedPerAgentKeys: Record<string, string[]> = {};
 
   // Per-agent secrets — generic loop over resolved plugin manifests
   for (const agent of opts.agents) {
@@ -325,12 +356,14 @@ export function buildManifestSecrets(opts: SecretsBuilderOpts): ManifestSecrets 
       }
     }
 
+    managedPerAgentKeys[agent.name] = Object.keys(agentSecrets);
+
     if (Object.keys(agentSecrets).length > 0) {
       perAgent[agent.name] = agentSecrets;
     }
   }
 
-  return { global, perAgent };
+  return { global, perAgent, managedGlobalKeys, managedPerAgentKeys };
 }
 
 // ---------------------------------------------------------------------------

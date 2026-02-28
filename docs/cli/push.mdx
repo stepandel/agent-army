@@ -1,0 +1,43 @@
+---
+title: "push"
+description: "Push workspace files, skills, and config to running agents"
+---
+
+Syncs workspace files, skills, and configuration to running agents over SSH (or into local Docker containers).
+
+## Usage
+
+```bash
+clawup push [options]
+```
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--skills` | Sync skills to remote workspace |
+| `--workspace` | Sync workspace files from identity |
+| `--memory-reset` | Remove remote `memory/` dir and `MEMORY.md` |
+| `--openclaw` | Upgrade OpenClaw to latest + restart gateway |
+| `--config-push` | Copy local `openclaw.json` to remote + restart gateway |
+| `-a, --agent <name>` | Target a single agent (name, role, or alias) |
+| `--local` | Push to local Docker containers |
+
+## Examples
+
+```bash
+# Push everything to all agents
+clawup push --workspace --skills
+
+# Push skills to a specific agent
+clawup push --skills -a titus
+
+# Reset memory for all agents
+clawup push --memory-reset
+
+# Upgrade OpenClaw on all agents
+clawup push --openclaw
+
+# Push to local Docker containers
+clawup push --workspace --local
+```

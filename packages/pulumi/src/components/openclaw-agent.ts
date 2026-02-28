@@ -84,7 +84,7 @@ export interface OpenClawAgentOutputs {
  * @example
  * ```typescript
  * const agent = new OpenClawAgent("my-agent", {
- *   anthropicApiKey: config.requireSecret("anthropicApiKey"),
+ *   providerApiKeys: { anthropic: config.requireSecret("anthropicApiKey") },
  *   tailscaleAuthKey: config.requireSecret("tailscaleAuthKey"),
  *   tailnetDnsName: config.require("tailnetDnsName"),
  * });

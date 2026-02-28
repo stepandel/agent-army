@@ -25,6 +25,8 @@ import {
   getSecretEnvVars,
   resolveDeps,
   collectDepSecrets,
+  getRequiredProviders,
+  getProviderConfigKey,
 } from "@clawup/core";
 import { fetchIdentitySync } from "@clawup/core/identity";
 import type { AgentDefinition, ClawupManifest, PluginConfigFile, IdentityResult } from "@clawup/core";
@@ -39,7 +41,6 @@ const config = new pulumi.Config();
 // Read provider early so we can conditionally load Tailscale config
 const configProvider = config.get("provider") ?? "aws";
 
-const anthropicApiKey = config.requireSecret("anthropicApiKey");
 const tailscaleAuthKey = configProvider === "local"
   ? pulumi.secret("not-used-for-local")
   : config.requireSecret("tailscaleAuthKey");
@@ -314,6 +315,28 @@ function envVarToConfigKey(envVar: string): string {
 }
 
 // -----------------------------------------------------------------------------
+// Per-Provider API Key Loading
+// -----------------------------------------------------------------------------
+
+// Collect all unique providers across all agents (primary + backup models)
+const allAgentModels: string[] = [];
+for (const agent of manifest.agents) {
+  const identity = fetchIdentitySync(agent.identity, identityCacheDir);
+  const model = identity.manifest.model ?? "anthropic/claude-opus-4-6";
+  allAgentModels.push(model);
+  if (identity.manifest.backupModel) {
+    allAgentModels.push(identity.manifest.backupModel);
+  }
+}
+
+const requiredProviders = getRequiredProviders(allAgentModels);
+const providerApiKeys: Record<string, pulumi.Output<string>> = {};
+for (const providerKey of requiredProviders) {
+  const configKey = getProviderConfigKey(providerKey);
+  providerApiKeys[providerKey] = config.requireSecret(configKey);
+}
+
+// -----------------------------------------------------------------------------
 // Dynamic Agent Deployments
 // -----------------------------------------------------------------------------
 
@@ -391,7 +414,7 @@ function buildBaseAgentArgs(agent: AgentDefinition): {
 
   return {
     baseArgs: {
-      anthropicApiKey,
+      providerApiKeys,
       tailscaleAuthKey,
       tailnetDnsName,
       model: agentModel,

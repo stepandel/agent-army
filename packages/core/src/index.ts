@@ -17,9 +17,7 @@ export { validateAgentDefinition } from "./types";
 
 // Constants
 export {
-  AGENT_ALIASES,
   AWS_REGIONS,
-  BUILT_IN_IDENTITIES,
   CONFIG_DIR,
   COST_ESTIMATES,
   HETZNER_COST_ESTIMATES,
@@ -36,6 +34,10 @@ export {
   PROVIDERS,
   SSH_USER,
   getProviderForModel,
+  getRequiredProviders,
+  getProviderConfigKey,
+  getProviderEnvVar,
+  PROVIDER_CONFIG_KEYS,
   hetznerServerTypes,
   slackAppManifest,
   tailscaleHostname,

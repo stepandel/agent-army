@@ -20,7 +20,7 @@ npx clawup init
 
 Generates a `clawup.yaml` manifest and `.env.example` in the current directory. Non-interactive — edit the YAML by hand to configure your deployment.
 
-**Fresh init** (no `clawup.yaml`): scaffolds a new manifest with all built-in agents (Juno, Titus, Scout) and sensible defaults (AWS, us-east-1, t3.medium).
+**Fresh init** (no `clawup.yaml`): discovers local identity directories and scaffolds a new manifest with sensible defaults (AWS, us-east-1, t3.medium).
 
 **Repair mode** (existing `clawup.yaml`): re-fetches identities, updates secrets/plugins/deps from latest identity data, regenerates `.env.example`. Existing manifest values are preserved.
 
@@ -66,12 +66,12 @@ clawup status --local     # Local Docker container status
 
 ### `clawup ssh <agent>`
 
-SSH to an agent by name, role, or alias. Resolves agents flexibly — all of these work:
+SSH to an agent by name, role, or displayName. Resolves agents flexibly — all of these work:
 
 ```bash
-clawup ssh juno        # By alias
 clawup ssh pm          # By role
 clawup ssh agent-pm    # By resource name
+clawup ssh juno        # By displayName
 ```
 
 Run a command on the agent instead of opening an interactive session:
@@ -129,7 +129,7 @@ clawup config show --json      # Full JSON output
 
 Update a config value with validation. No need to re-run `init`.
 
-Top-level keys: `region`, `instanceType`, `ownerName`, `timezone`, `workingHours`, `userNotes`, `linearTeam`, `githubRepo`
+Top-level keys: `region`, `instanceType`, `ownerName`, `timezone`, `workingHours`, `userNotes`, `templateVars.<KEY>`
 
 Per-agent keys: `instanceType`, `volumeSize`, `displayName`
 
@@ -171,17 +171,9 @@ clawup list          # Pretty-printed output
 clawup list --json   # JSON output
 ```
 
-## Preset Agents
+## Agents
 
-The CLI ships with three preset agent configurations:
-
-| Alias | Role | Name | Description |
-|-------|------|------|-------------|
-| **Juno** | PM | `agent-pm` | Break down tickets, research, plan and sequence work, track progress, unblock teams |
-| **Titus** | Engineer | `agent-eng` | Lead engineering, coding, shipping |
-| **Scout** | Tester | `agent-tester` | Quality assurance, verification, bug hunting |
-
-You can also define fully custom agents during `init`.
+Agents are discovered from local identity directories (subdirectories containing `identity.yaml`) during `clawup init`. Each identity defines the agent's name, role, personality, skills, and configuration. See the [example identity](https://github.com/stepandel/clawup/tree/main/examples/identity) for the expected structure.
 
 ## Configuration
 
@@ -228,14 +220,15 @@ The `secrets` section uses `${env:VAR}` references — actual values come from a
 
 ### Pulumi Config
 
-Secrets and stack configuration are stored in Pulumi config (encrypted). The `init` command sets these automatically:
+Secrets and stack configuration are stored in Pulumi config (encrypted). The `setup` command sets these automatically:
 
 - `anthropicApiKey` (secret)
 - `tailscaleAuthKey` (secret)
 - `tailnetDnsName`
-- `aws:region` (AWS) or `hcloud:token` (Hetzner)
-- `instanceType`
-- `ownerName`
+- `provider`, `modelProvider`, `defaultModel`
+- `aws:region` (AWS) or `hetzner:location` (Hetzner)
+- `instanceType`, `ownerName`, `timezone`, `workingHours`, `userNotes`
+- Per-agent secrets (Slack, Linear, GitHub tokens, etc.)
 
 ## Project Structure
 
@@ -246,14 +239,19 @@ packages/cli/
 ├── tools/              # Tool implementations (adapter-based: deploy, destroy, redeploy, status, validate, push, webhooks)
 ├── lib/                # CLI-only utilities
 │   ├── config.ts       # Load/save clawup.yaml manifest
+│   ├── constants.ts    # CLI-specific constants
 │   ├── env.ts          # .env parser, ${env:VAR} resolver, secret builder
 │   ├── exec.ts         # Shell command execution
 │   ├── prerequisites.ts # Prerequisite checks
 │   ├── process.ts      # Graceful shutdown handling
+│   ├── project.ts      # Project root finder
 │   ├── pulumi.ts       # Pulumi stack & config operations
 │   ├── tailscale.ts    # Tailscale device management
 │   ├── tool-helpers.ts # Shared helpers for tool implementations
-│   └── ui.ts           # UI helpers (banners, spinners, formatting)
+│   ├── ui.ts           # UI helpers (banners, spinners, formatting)
+│   ├── update-check.ts # Update notification system
+│   ├── vendor.ts       # Vendor utilities
+│   └── workspace.ts    # Workspace file management
 └── adapters/           # Runtime adapters (CLI vs API)
 
 # Shared types, constants, and registries live in @clawup/core (packages/core/)

@@ -7,7 +7,7 @@
  *   packages/core/package.json → packages/cli/infra/node_modules/@clawup/core/package.json
  */
 
-import { cpSync, rmSync, mkdirSync } from "fs";
+import { cpSync, rmSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -21,6 +21,12 @@ const corePkg = join(repoRoot, "packages", "core", "package.json");
 
 const infraDist = join(cliRoot, "infra", "dist");
 const infraCore = join(cliRoot, "infra", "node_modules", "@clawup", "core");
+
+// Skip if pulumi/dist hasn't been built yet (e.g. parallel pnpm -r build)
+if (!existsSync(pulumiDist)) {
+  console.log("⏭ Skipping infra sync (pulumi/dist not built yet)");
+  process.exit(0);
+}
 
 // Sync pulumi dist → infra/dist
 rmSync(infraDist, { recursive: true, force: true });

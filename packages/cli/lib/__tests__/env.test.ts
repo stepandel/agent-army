@@ -219,6 +219,21 @@ describe("VALIDATORS", () => {
     expect(VALIDATORS.anthropicApiKey("bad-key")).toBe("Must start with sk-ant-");
   });
 
+  it("validates openaiApiKey prefix", () => {
+    expect(VALIDATORS.openaiApiKey("sk-test")).toBeUndefined();
+    expect(VALIDATORS.openaiApiKey("bad-key")).toBe("Must start with sk-");
+  });
+
+  it("validates openrouterApiKey prefix", () => {
+    expect(VALIDATORS.openrouterApiKey("sk-or-test")).toBeUndefined();
+    expect(VALIDATORS.openrouterApiKey("bad-key")).toBe("Must start with sk-or-");
+  });
+
+  it("does not include validator for google (no keyPrefix)", () => {
+    // Google API keys have no standard prefix
+    expect(VALIDATORS.googleApiKey).toBeUndefined();
+  });
+
   it("validates tailscaleAuthKey prefix", () => {
     expect(VALIDATORS.tailscaleAuthKey("tskey-auth-test")).toBeUndefined();
     expect(VALIDATORS.tailscaleAuthKey("bad")).toBe("Must start with tskey-auth-");
@@ -261,7 +276,7 @@ describe("WELL_KNOWN_ENV_VARS", () => {
 });
 
 describe("buildManifestSecrets", () => {
-  it("includes required global secrets", () => {
+  it("includes required global secrets with allModels", () => {
     const result = buildManifestSecrets({
       provider: "aws",
       agents: [{ name: "agent-pm", role: "pm", displayName: "Juno" }],
@@ -269,6 +284,7 @@ describe("buildManifestSecrets", () => {
       allDepNames: new Set(),
       agentPlugins: new Map([["agent-pm", new Set()]]),
       agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.global.anthropicApiKey).toBe("${env:ANTHROPIC_API_KEY}");
@@ -276,6 +292,98 @@ describe("buildManifestSecrets", () => {
     expect(result.global.tailnetDnsName).toBe("${env:TAILNET_DNS_NAME}");
     expect(result.global.tailscaleApiKey).toBe("${env:TAILSCALE_API_KEY}");
     expect(result.global.hcloudToken).toBeUndefined();
+    // Should NOT include openai key
+    expect(result.global.openaiApiKey).toBeUndefined();
+  });
+
+  it("returns managedGlobalKeys and managedPerAgentKeys", () => {
+    const result = buildManifestSecrets({
+      provider: "aws",
+      agents: [{ name: "agent-pm", role: "pm", displayName: "Juno" }],
+      allPluginNames: new Set(),
+      allDepNames: new Set(),
+      agentPlugins: new Map([["agent-pm", new Set()]]),
+      agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
+    });
+
+    // managedGlobalKeys should include all possible provider keys plus infra keys
+    expect(result.managedGlobalKeys).toContain("anthropicApiKey");
+    expect(result.managedGlobalKeys).toContain("openaiApiKey");
+    expect(result.managedGlobalKeys).toContain("googleApiKey");
+    expect(result.managedGlobalKeys).toContain("openrouterApiKey");
+    expect(result.managedGlobalKeys).toContain("tailscaleAuthKey");
+    expect(result.managedGlobalKeys).toContain("tailnetDnsName");
+    expect(result.managedGlobalKeys).toContain("tailscaleApiKey");
+    expect(result.managedGlobalKeys).toContain("hcloudToken");
+    expect(result.managedGlobalKeys).toContain("braveApiKey");
+
+    // managedPerAgentKeys should be empty array for agent with no plugins/deps/requiredSecrets
+    expect(result.managedPerAgentKeys["agent-pm"]).toEqual([]);
+  });
+
+  it("managedGlobalKeys includes stale provider key on model switch (anthropic→openai)", () => {
+    const result = buildManifestSecrets({
+      provider: "aws",
+      agents: [{ name: "agent-pm", role: "pm", displayName: "Juno" }],
+      allPluginNames: new Set(),
+      allDepNames: new Set(),
+      agentPlugins: new Map([["agent-pm", new Set()]]),
+      agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["openai/gpt-4o"],
+    });
+
+    // global should NOT have anthropicApiKey (only openai is used)
+    expect(result.global.anthropicApiKey).toBeUndefined();
+    expect(result.global.openaiApiKey).toBe("${env:OPENAI_API_KEY}");
+    // But managedGlobalKeys SHOULD include anthropicApiKey so merge logic can prune it
+    expect(result.managedGlobalKeys).toContain("anthropicApiKey");
+  });
+
+  it("includes only openai key when allModels has openai models", () => {
+    const result = buildManifestSecrets({
+      provider: "aws",
+      agents: [{ name: "agent-pm", role: "pm", displayName: "Juno" }],
+      allPluginNames: new Set(),
+      allDepNames: new Set(),
+      agentPlugins: new Map([["agent-pm", new Set()]]),
+      agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["openai/gpt-4o"],
+    });
+
+    expect(result.global.openaiApiKey).toBe("${env:OPENAI_API_KEY}");
+    // Should NOT include anthropic key
+    expect(result.global.anthropicApiKey).toBeUndefined();
+  });
+
+  it("includes both provider keys for cross-provider models", () => {
+    const result = buildManifestSecrets({
+      provider: "aws",
+      agents: [{ name: "agent-pm", role: "pm", displayName: "Juno" }],
+      allPluginNames: new Set(),
+      allDepNames: new Set(),
+      agentPlugins: new Map([["agent-pm", new Set()]]),
+      agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["openai/gpt-4o", "anthropic/claude-sonnet-4-5"],
+    });
+
+    expect(result.global.openaiApiKey).toBe("${env:OPENAI_API_KEY}");
+    expect(result.global.anthropicApiKey).toBe("${env:ANTHROPIC_API_KEY}");
+  });
+
+  it("includes no provider keys when allModels is empty", () => {
+    const result = buildManifestSecrets({
+      provider: "aws",
+      agents: [{ name: "agent-pm", role: "pm", displayName: "Juno" }],
+      allPluginNames: new Set(),
+      allDepNames: new Set(),
+      agentPlugins: new Map([["agent-pm", new Set()]]),
+      agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: [],
+    });
+
+    expect(result.global.anthropicApiKey).toBeUndefined();
+    expect(result.global.openaiApiKey).toBeUndefined();
   });
 
   it("includes hcloudToken for Hetzner provider", () => {
@@ -286,6 +394,7 @@ describe("buildManifestSecrets", () => {
       allDepNames: new Set(),
       agentPlugins: new Map(),
       agentDeps: new Map(),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.global.hcloudToken).toBe("${env:HCLOUD_TOKEN}");
@@ -299,6 +408,7 @@ describe("buildManifestSecrets", () => {
       allDepNames: new Set(["brave-search"]),
       agentPlugins: new Map(),
       agentDeps: new Map(),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.global.braveApiKey).toBe("${env:BRAVE_API_KEY}");
@@ -312,12 +422,16 @@ describe("buildManifestSecrets", () => {
       allDepNames: new Set(),
       agentPlugins: new Map([["agent-pm", new Set(["slack"])]]),
       agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.perAgent["agent-pm"]).toEqual({
       slackBotToken: "${env:PM_SLACK_BOT_TOKEN}",
       slackAppToken: "${env:PM_SLACK_APP_TOKEN}",
     });
+    expect(result.managedPerAgentKeys["agent-pm"]).toEqual(
+      expect.arrayContaining(["slackBotToken", "slackAppToken"])
+    );
   });
 
   it("builds per-agent secrets for linear plugin", () => {
@@ -328,6 +442,7 @@ describe("buildManifestSecrets", () => {
       allDepNames: new Set(),
       agentPlugins: new Map([["agent-eng", new Set(["openclaw-linear"])]]),
       agentDeps: new Map([["agent-eng", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.perAgent["agent-eng"]).toEqual({
@@ -335,6 +450,9 @@ describe("buildManifestSecrets", () => {
       linearWebhookSecret: "${env:ENG_LINEAR_WEBHOOK_SECRET}",
       linearUserUuid: "${env:ENG_LINEAR_USER_UUID}",
     });
+    expect(result.managedPerAgentKeys["agent-eng"]).toEqual(
+      expect.arrayContaining(["linearApiKey", "linearWebhookSecret", "linearUserUuid"])
+    );
   });
 
   it("builds per-agent secrets for gh dep", () => {
@@ -345,11 +463,13 @@ describe("buildManifestSecrets", () => {
       allDepNames: new Set(["gh"]),
       agentPlugins: new Map([["agent-eng", new Set()]]),
       agentDeps: new Map([["agent-eng", new Set(["gh"])]]),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.perAgent["agent-eng"]).toEqual({
       githubToken: "${env:ENG_GITHUB_TOKEN}",
     });
+    expect(result.managedPerAgentKeys["agent-eng"]).toEqual(["githubToken"]);
   });
 });
 
@@ -386,6 +506,7 @@ describe("buildManifestSecrets with requiredSecrets", () => {
       allDepNames: new Set(),
       agentPlugins: new Map([["agent-pm", new Set()]]),
       agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.perAgent["agent-pm"]).toEqual({
@@ -403,6 +524,7 @@ describe("buildManifestSecrets with requiredSecrets", () => {
       allDepNames: new Set(),
       agentPlugins: new Map([["agent-pm", new Set(["slack"])]]),
       agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     // slackBotToken/slackAppToken from plugin, notionApiKey from requiredSecrets
@@ -424,6 +546,7 @@ describe("buildManifestSecrets with requiredSecrets", () => {
       allDepNames: new Set(),
       agentPlugins: new Map([["agent-pm", new Set()], ["agent-eng", new Set()]]),
       agentDeps: new Map([["agent-pm", new Set()], ["agent-eng", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.perAgent["agent-pm"]).toEqual({
@@ -444,6 +567,7 @@ describe("buildManifestSecrets with requiredSecrets", () => {
       allDepNames: new Set(),
       agentPlugins: new Map([["agent-pm", new Set()]]),
       agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.perAgent["agent-pm"]).toBeUndefined();
@@ -459,6 +583,7 @@ describe("buildManifestSecrets with requiredSecrets", () => {
       allDepNames: new Set(),
       agentPlugins: new Map([["agent-pm", new Set()]]),
       agentDeps: new Map([["agent-pm", new Set()]]),
+      allModels: ["anthropic/claude-opus-4-6"],
     });
 
     expect(result.perAgent["agent-pm"]).toBeUndefined();

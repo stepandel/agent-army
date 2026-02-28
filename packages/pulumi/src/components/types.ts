@@ -19,8 +19,8 @@ export interface DepInstallConfig {
  * Base arguments shared by all provider-specific agent components.
  */
 export interface BaseOpenClawAgentArgs {
-  /** Anthropic API key (required) */
-  anthropicApiKey: pulumi.Input<string>;
+  /** Per-provider API keys: { providerKey: pulumiSecret } e.g., { anthropic: secret("sk-ant-..."), openai: secret("sk-...") } */
+  providerApiKeys: Record<string, pulumi.Input<string>>;
 
   /** Tailscale auth key for secure access (required) */
   tailscaleAuthKey: pulumi.Input<string>;

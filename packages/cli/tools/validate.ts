@@ -48,11 +48,13 @@ function runSshCheck(
   command: string,
   timeout: number
 ): { ok: boolean; output: string } {
+  // Escape $ so the host shell passes them through to the remote shell
+  const escaped = command.replace(/"/g, '\\"').replace(/\$/g, '\\$');
   const result = exec.capture("ssh", [
     "-o", `ConnectTimeout=${timeout}`,
     ...SSH_OPTS,
     `${SSH_USER}@${host}`,
-    `"${command.replace(/"/g, '\\"')}"`,
+    `"${escaped}"`,
   ]);
   return { ok: result.exitCode === 0, output: result.stdout || result.stderr };
 }
@@ -66,9 +68,10 @@ function runDockerCheck(
   command: string,
 ): { ok: boolean; output: string } {
   // Run as ubuntu user (-u) to match SSH behavior (gh auth, NVM, etc.)
-  // Wrap command in double quotes so execSync (which joins args with spaces)
-  // passes it as a single argument to bash -c
-  const escaped = command.replace(/"/g, '\\"');
+  // Source NVM so Node.js-based CLIs (codex, etc.) can find `node`
+  const nvmPreamble = 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; ';
+  // Escape $ so the host shell passes them through to the container's bash
+  const escaped = (nvmPreamble + command).replace(/"/g, '\\"').replace(/\$/g, '\\$');
   const result = exec.capture("docker", [
     "exec", "-u", SSH_USER, containerName, "bash", "-c", `"${escaped}"`,
   ]);
@@ -308,13 +311,15 @@ timeout 15 /home/${SSH_USER}/.local/bin/${cmd} -p 'hi' 2>&1 | head -5
           const pluginManifest = resolvePlugin(plugin, identityResultMap[agent.name]);
           if (Object.keys(pluginManifest.secrets).length === 0) continue;
 
+          const internalKeys = new Set(pluginManifest.internalKeys ?? []);
           for (const [key, secret] of Object.entries(pluginManifest.secrets)) {
-            // Use configPath to determine where secrets live in openclaw.json
-            const pyPath = pluginManifest.configPath === "channels"
-              ? `c.get('channels',{}).get('${plugin}',{}).get('${key}')`
-              : `c.get('plugins',{}).get('entries',{}).get('${plugin}',{}).get('config',{}).get('${key}')`;
+            // Skip internal keys — they're intermediate values not written to plugin config
+            if (internalKeys.has(key)) continue;
+            const configPath = pluginManifest.configPath === "channels"
+              ? `channels.${plugin}.${key}`
+              : `plugins.entries.${plugin}.config.${key}`;
             const secretCheck = runCheck(
-              `python3 -c "import json,sys;c=json.load(open('/home/${SSH_USER}/.openclaw/openclaw.json'));sys.exit(0 if ${pyPath} else 1)"`
+              `openclaw config get ${configPath} 2>/dev/null | grep -q '[^[:space:]]'`
             );
             checks.push({
               name: `${plugin} secret (${secret.envVar})`,
@@ -422,7 +427,9 @@ timeout 15 /home/${SSH_USER}/.local/bin/claude -p 'hi' 2>&1 | head -5
         }
         for (const plugin of identityManifest.plugins ?? []) {
           const pluginManifest = resolvePlugin(plugin, identityResultMap[agent.name]);
-          for (const [_key, secret] of Object.entries(pluginManifest.secrets)) {
+          const skipInternalKeys = new Set(pluginManifest.internalKeys ?? []);
+          for (const [key, secret] of Object.entries(pluginManifest.secrets)) {
+            if (skipInternalKeys.has(key)) continue;
             checks.push({ name: `${plugin} secret (${secret.envVar})`, passed: false, detail: skipReason });
           }
         }

@@ -83,7 +83,7 @@ emoji: telescope
 description: Deep research, source analysis, report generation
 volumeSize: 20
 
-model: anthropic/claude-sonnet-4-5
+model: anthropic/claude-opus-4-6
 codingAgent: claude-code
 
 deps:
@@ -113,18 +113,6 @@ requiredSecrets:
   - notionApiKey       # → <ROLE>_NOTION_API_KEY in .env
 ```
 
-### Built-in Identities
-
-Clawup ships with three built-in identities to get you started:
-
-| Alias | Role | What It Does |
-|-------|------|-------------|
-| **Juno** | PM | Breaks down tickets, researches requirements, plans & sequences work, tracks progress |
-| **Titus** | Engineer | Picks up tickets, writes code via Claude Code, builds/tests, creates PRs |
-| **Scout** | Tester | Reviews PRs, tests happy/sad/edge cases, files bugs, verifies fixes |
-
-These are standard identities hosted in a Git repo — the same format as any custom identity you'd create.
-
 ### Creating Your Own Identity
 
 See the [`examples/identity/`](./examples/identity/) directory for a complete, minimal example (a "researcher" agent), and the [Creating Identities](./docs/guides/creating-identities.mdx) guide for the full authoring reference covering:
@@ -150,7 +138,7 @@ npm install -g clawup
 clawup init
 ```
 
-Scaffolds a `clawup.yaml` manifest and `.env.example` with sensible defaults (AWS, us-east-1, all built-in agents). Edit `clawup.yaml` by hand to customize your provider, region, instance type, owner info, and agents.
+Discovers local identity directories and scaffolds a `clawup.yaml` manifest and `.env.example` with sensible defaults (AWS, us-east-1). Edit `clawup.yaml` by hand to customize your provider, region, instance type, owner info, and agents.
 
 ### 3. Fill in Secrets
 
@@ -221,9 +209,9 @@ Run `clawup --help` for the full list.
 Agent resolution is flexible — all of these target the same agent:
 
 ```bash
-clawup ssh juno        # by alias
 clawup ssh pm          # by role
 clawup ssh agent-pm    # by resource name
+clawup ssh juno        # by displayName
 ```
 
 ## Cloud Providers
@@ -232,7 +220,7 @@ clawup ssh agent-pm    # by resource name
 
 | Feature | AWS | Hetzner Cloud |
 |---------|-----|---------------|
-| **3x Agents (monthly)** | ~$110-120 | ~$18-22 |
+| **3x Agents (monthly)** | ~$99 | ~$18-22 |
 | **Instance Type** | t3.medium (2 vCPU, 4GB) | CX22 (2 vCPU, 4GB) |
 | **Storage** | ~$2.40/month per 30GB | Included |
 | **Data Transfer** | ~$5-10/month | 20TB included |
@@ -282,7 +270,7 @@ Tailscale requires a few one-time setup steps:
 
 1. [Create an account](https://login.tailscale.com/start)
 2. [Enable HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) (required for OpenClaw web UI)
-3. [Generate a reusable auth key](https://login.tailscale.com/admin/settings/keys) with tags
+3. [Generate a reusable auth key](https://login.tailscale.com/admin/settings/keys) with tags — enable both "Reusable" and "Ephemeral" (ephemeral nodes auto-remove when offline)
 4. Note your tailnet DNS name (e.g., `tail12345.ts.net`)
 
 ### Installed on agents automatically
@@ -386,11 +374,10 @@ agents:
       slackBotToken: "${env:PM_SLACK_BOT_TOKEN}"
       slackAppToken: "${env:PM_SLACK_APP_TOKEN}"
     plugins:
-      - openclaw-linear
-      - slack
-    deps:
-      - gh
-      - brave-search
+      openclaw-linear:
+        agentId: agent-pm
+      slack:
+        mode: socket
   - name: agent-researcher
     displayName: Atlas
     role: researcher
@@ -439,12 +426,12 @@ clawup/
 │   │       ├── components/
 │   │       │   ├── openclaw-agent.ts    # AWS EC2 agent component
 │   │       │   ├── hetzner-agent.ts     # Hetzner Cloud agent component
+│   │       │   ├── local-docker-agent.ts # Local Docker agent component
 │   │       │   ├── cloud-init.ts        # Cloud-init script generation
 │   │       │   └── config-generator.ts  # OpenClaw config builder
 │   │       ├── shared-vpc.ts
 │   │       └── index.ts    # Main Pulumi stack program
 │   └── web/                # Next.js dashboard (clawup-web)
-├── identities/             # Built-in identity stubs (point to external repos)
 ├── examples/               # Example identities for reference
 │   └── identity/           # Complete "researcher" identity example
 ├── docs/                   # Documentation (Mintlify site + guides)

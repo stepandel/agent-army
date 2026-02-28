@@ -5,7 +5,7 @@
 import * as p from "@clack/prompts";
 import { requireManifest } from "../lib/config";
 import { getConfig, selectOrCreateStack } from "../lib/pulumi";
-import { AGENT_ALIASES, SSH_USER, tailscaleHostname, dockerContainerName } from "@clawup/core";
+import { SSH_USER, tailscaleHostname, dockerContainerName } from "@clawup/core";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { exitWithError } from "../lib/ui";
 import { requireTailscale } from "../lib/tailscale";
@@ -47,7 +47,7 @@ export async function sshCommand(agentNameOrAlias: string, commandArgs: string[]
 
   // Resolve agent name/alias
   const query = agentNameOrAlias.toLowerCase();
-  const resolvedRole = AGENT_ALIASES[query] ?? query;
+  const resolvedRole = query;
 
   // Find agent in manifest
   const agent = manifest.agents.find(

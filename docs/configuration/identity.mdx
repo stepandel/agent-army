@@ -49,8 +49,17 @@ interface IdentityManifest {
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `model` | string | — | Primary AI model identifier. Format: `provider/model-name` (e.g., `anthropic/claude-opus-4-6`). If omitted, uses the stack-level default. |
+| `model` | string | — | Primary AI model identifier. Format: `provider/model-name`. Supports multiple providers — see examples below. If omitted, uses the stack-level `defaultModel`. |
 | `backupModel` | string | — | Fallback model used when the primary is unavailable. Same format as `model`. |
+
+#### Supported Model Providers
+
+| Provider | Example Models |
+|----------|---------------|
+| Anthropic | `anthropic/claude-opus-4-6`, `anthropic/claude-sonnet-4-5`, `anthropic/claude-haiku-4-5` |
+| OpenAI | `openai/gpt-4o`, `openai/o3`, `openai/o4-mini` |
+| Google | `google/gemini-2.5-pro`, `google/gemini-2.5-flash` |
+| OpenRouter | Any model available on OpenRouter |
 | `codingAgent` | string | `claude-code` | Coding agent CLI to install on the cloud instance. Must match a key in the [coding agent registry](/architecture/identities#coding-agent-registry). |
 
 ### Infrastructure
@@ -202,6 +211,7 @@ The `codingAgent` field selects which coding CLI is installed.
 | Key | CLI Binary | Description |
 |-----|-----------|-------------|
 | `claude-code` | `claude` | Claude Code CLI (default) |
+| `codex` | `codex` | OpenAI Codex CLI (`@openai/codex`) |
 
 Each entry provides an install script, model configuration, and OpenClaw `cliBackends` config. Defined in `packages/core/src/coding-agent-registry.ts`.
 

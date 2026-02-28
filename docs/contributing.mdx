@@ -25,7 +25,6 @@ pnpm --filter clawup build
 - `packages/cli/` — CLI package (commands, config, adapters)
 - `packages/pulumi/` — Pulumi infrastructure components (`@clawup/pulumi`)
 - `packages/web/` — Next.js dashboard
-- `identities/` — Built-in identity stubs (point to external Git repos)
 - `examples/` — Example identities for reference
 - `docs/` — Mintlify documentation
 
@@ -41,13 +40,6 @@ pnpm --filter clawup build
 - **Commits:** Use [conventional commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, etc.)
 - **PRs:** One PR per feature/fix, link to relevant issues
 - **TypeScript:** Strict mode, no `any` without comment
-
-## Adding a New Built-in Identity
-
-1. Create an identity directory with `identity.yaml` and workspace files (see [examples/identity/](https://github.com/stepandel/clawup/tree/main/examples/identity) for the format)
-2. Host the identity in a Git repo (or add to an existing identities repo)
-3. Register it in `packages/core/src/constants.ts` under `BUILT_IN_IDENTITIES`
-4. Update documentation in `docs/architecture/identities.mdx`
 
 ## Adding a New Cloud Provider
 
