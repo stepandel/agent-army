@@ -89,6 +89,8 @@ export {
   PluginManifestSchema,
   PluginSecretSchema,
   PluginHooksSchema,
+  OnboardHookSchema,
+  OnboardHookInputSchema,
   WebhookSetupSchema,
   ConfigTransformSchema,
 } from "./schemas";

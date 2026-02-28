@@ -25,12 +25,14 @@ import {
   getRequiredProviders,
   getProviderConfigKey,
 } from "@clawup/core";
-import { resolvePluginSecrets, runLifecycleHook } from "@clawup/core/manifest-hooks";
+import { resolvePluginSecrets, runLifecycleHook, runOnboardHook } from "@clawup/core/manifest-hooks";
 import { fetchIdentity } from "@clawup/core/identity";
 import { findProjectRoot } from "../lib/project";
 import { selectOrCreateStack, setConfig, qualifiedStackName } from "../lib/pulumi";
 import { ensureWorkspace, getWorkspaceDir } from "../lib/workspace";
 import { showBanner, exitWithError } from "../lib/ui";
+import { runOnboardHooks } from "../lib/onboard-hooks";
+import { redactSecretsFromString } from "../lib/redact";
 import {
   buildEnvDict,
   buildManifestSecrets,
@@ -46,6 +48,7 @@ interface SetupOptions {
   deploy?: boolean;
   yes?: boolean;
   skipHooks?: boolean;
+  onboard?: boolean;
 }
 
 /** Fetched identity data stored alongside the agent definition */
@@ -407,6 +410,22 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
   if (opts.skipHooks) {
     p.log.warn("Hooks skipped (--skip-hooks)");
   }
+
+  // -------------------------------------------------------------------------
+  // 7b. Run onboard hooks (interactive first-time plugin setup)
+  // -------------------------------------------------------------------------
+  await runOnboardHooks({
+    fetchedIdentities,
+    agentPlugins,
+    resolvePlugin,
+    autoResolvedSecrets,
+    envDict,
+    resolvedSecrets,
+    p,
+    runOnboardHook,
+    exitWithError,
+    skipOnboard: !opts.onboard,
+  });
 
   // -------------------------------------------------------------------------
   // 8. Update manifest
