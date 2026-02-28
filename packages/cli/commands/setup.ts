@@ -46,7 +46,7 @@ interface SetupOptions {
   deploy?: boolean;
   yes?: boolean;
   skipHooks?: boolean;
-  skipOnboard?: boolean;
+  onboard?: boolean;
 }
 
 /** Fetched identity data stored alongside the agent definition */
@@ -394,7 +394,7 @@ export async function setupCommand(opts: SetupOptions = {}): Promise<void> {
     p,
     runOnboardHook,
     exitWithError,
-    skipOnboard: !!opts.skipOnboard,
+    skipOnboard: !opts.onboard,
   });
 
   // -------------------------------------------------------------------------
