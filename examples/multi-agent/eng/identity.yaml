@@ -1,0 +1,41 @@
+name: eng
+displayName: Titus
+role: eng
+emoji: building_construction
+description: Lead engineering, coding, shipping
+volumeSize: 50
+model: openai/gpt-5.2
+codingAgent: codex
+
+deps:
+  - gh
+  - brave-search
+
+plugins:
+  - openclaw-linear
+  - slack
+
+pluginDefaults:
+  slack:
+    mode: socket
+    userTokenReadOnly: true
+    groupPolicy: open
+    dm:
+      enabled: true
+      policy: open
+      allowFrom:
+        - "*"
+
+skills:
+  - eng-queue-handler
+  - eng-ticket-workflow
+  - eng-pr-tester
+  - pr-review-resolver
+
+templateVars:
+  - OWNER_NAME
+  - TIMEZONE
+  - WORKING_HOURS
+  - USER_NOTES
+  - LINEAR_TEAM
+  - GITHUB_REPO

@@ -1,0 +1,38 @@
+name: tester
+displayName: Scout
+role: tester
+emoji: mag
+description: Quality assurance, verification, bug hunting
+volumeSize: 30
+model: openai/gpt-5.2
+codingAgent: codex
+
+deps:
+  - gh
+  - brave-search
+
+plugins:
+  - openclaw-linear
+  - slack
+
+pluginDefaults:
+  slack:
+    mode: socket
+    userTokenReadOnly: true
+    groupPolicy: open
+    dm:
+      enabled: true
+      policy: open
+      allowFrom:
+        - "*"
+
+skills:
+  - tester-queue-handler
+
+templateVars:
+  - OWNER_NAME
+  - TIMEZONE
+  - WORKING_HOURS
+  - USER_NOTES
+  - LINEAR_TEAM
+  - GITHUB_REPO
