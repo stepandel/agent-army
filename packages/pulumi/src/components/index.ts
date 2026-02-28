@@ -9,5 +9,6 @@ export {
   OpenClawConfigOptions,
   OpenClawConfig,
 } from "./config-generator";
+export { generateNixEntrypoint, type NixEntrypointConfig } from "./nix-entrypoint";
 export type { BaseOpenClawAgentArgs, DepInstallConfig } from "./types";
-export { generateKeyPairAndToken, buildCloudInitUserData } from "./shared";
+export { generateKeyPairAndToken, buildCloudInitUserData, buildNixEntrypoint } from "./shared";

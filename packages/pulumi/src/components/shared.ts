@@ -9,6 +9,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as tls from "@pulumi/tls";
 import * as crypto from "crypto";
 import { generateCloudInit, interpolateCloudInit, compressCloudInit, CloudInitConfig } from "./cloud-init";
+import { generateNixEntrypoint, type NixEntrypointConfig } from "./nix-entrypoint";
 import { generateFullOpenClawConfig, type PluginEntry } from "./config-generator";
 import { getProviderEnvVar } from "@clawup/core";
 import type { BaseOpenClawAgentArgs } from "./types";
@@ -200,6 +201,132 @@ export function buildCloudInitUserData(
           });
 
           return defaults?.compress ? compressCloudInit(interpolated) : interpolated;
+        });
+    });
+}
+
+/**
+ * Build the Nix entrypoint script from base agent args.
+ *
+ * Same secret resolution and OAuth detection as buildCloudInitUserData(),
+ * but produces a minimal entrypoint for the pre-built Nix Docker image.
+ */
+export function buildNixEntrypoint(
+  name: string,
+  args: BaseOpenClawAgentArgs,
+  gatewayTokenValue: pulumi.Output<string>,
+): pulumi.Output<string> {
+  const pluginSecretEntries = Object.entries(args.pluginSecrets ?? {});
+  const pluginSecretOutputs = pluginSecretEntries.map(([, v]) => pulumi.output(v));
+
+  const depSecretEntries = Object.entries(args.depSecrets ?? {});
+  const depSecretOutputs = depSecretEntries.map(([, v]) => pulumi.output(v));
+
+  const providerKeyEntries = Object.entries(args.providerApiKeys);
+  const providerKeyOutputs = providerKeyEntries.map(([, v]) => pulumi.output(v));
+
+  return pulumi
+    .all([
+      args.tailscaleAuthKey,
+      gatewayTokenValue,
+      ...providerKeyOutputs,
+      ...pluginSecretOutputs,
+      ...depSecretOutputs,
+    ])
+    .apply(([_tsAuthKey, gwToken, ...secretValues]) => {
+      const resolvedProviderKeys: Record<string, string> = {};
+      providerKeyEntries.forEach(([providerKey], idx) => {
+        resolvedProviderKeys[providerKey] = secretValues[idx] as string;
+      });
+      const remainingSecrets = secretValues.slice(providerKeyEntries.length);
+
+      return pulumi
+        .all([
+          pulumi.output(args.gatewayPort ?? 18789),
+          pulumi.output(args.model ?? "anthropic/claude-opus-4-6"),
+        ])
+        .apply(([gatewayPort, model]) => {
+          // OAuth detection (same logic as cloud-init path)
+          const providerEnv: Record<string, string> = {};
+          for (const [providerKey, value] of Object.entries(resolvedProviderKeys)) {
+            if (providerKey === "anthropic" && value.startsWith("sk-ant-oat")) {
+              providerEnv["CLAUDE_CODE_OAUTH_TOKEN"] = value;
+            } else {
+              const envVar = getProviderEnvVar(providerKey);
+              providerEnv[envVar] = value;
+            }
+          }
+
+          const additionalSecrets: Record<string, string> = {};
+          for (const [envVar, value] of Object.entries(providerEnv)) {
+            additionalSecrets[envVar] = value;
+          }
+
+          const resolvedSecrets: Record<string, string> = {};
+          pluginSecretEntries.forEach(([envVar], idx) => {
+            const value = remainingSecrets[idx] as string;
+            resolvedSecrets[envVar] = value;
+            additionalSecrets[envVar] = value;
+          });
+
+          depSecretEntries.forEach(([envVar], idx) => {
+            additionalSecrets[envVar] = remainingSecrets[pluginSecretEntries.length + idx] as string;
+          });
+
+          const pluginEntries: PluginEntry[] = (args.plugins ?? []).map((p) => ({
+            name: p.name,
+            enabled: true,
+            config: p.config ?? {},
+            secretEnvVars: p.secretEnvVars,
+            configPath: p.configPath,
+            internalKeys: p.internalKeys,
+            configTransforms: p.configTransforms,
+          }));
+
+          const openclawConfig = generateFullOpenClawConfig({
+            gatewayPort: gatewayPort as number,
+            gatewayToken: gwToken,
+            model: model as string,
+            backupModel: args.backupModel as string | undefined,
+            codingAgent: args.codingAgent,
+            plugins: pluginEntries,
+            braveApiKey: additionalSecrets["BRAVE_API_KEY"],
+            agentName: args.envVars?.AGENT_NAME,
+            agentEmoji: args.envVars?.AGENT_EMOJI,
+            providerEnv,
+            resolvedSecrets,
+          });
+          const openclawConfigJson = JSON.stringify(openclawConfig, null, 2);
+
+          // Build Nix entrypoint config (deps without installScript)
+          const nixDeps = (args.deps ?? []).map((d) => ({
+            name: d.name,
+            postInstallScript: d.postInstallScript,
+            secrets: d.secrets,
+          }));
+
+          const nixConfig: NixEntrypointConfig = {
+            openclawConfigJson,
+            providerEnv,
+            gatewayToken: gwToken,
+            codingAgent: args.codingAgent,
+            model: model as string,
+            workspaceFiles: args.workspaceFiles,
+            envVars: args.envVars,
+            plugins: args.plugins,
+            deps: nixDeps,
+            clawhubSkills: args.clawhubSkills,
+            postSetupCommands: args.postSetupCommands,
+          };
+
+          const script = generateNixEntrypoint(nixConfig);
+
+          // Interpolate secrets (same as cloud-init path)
+          return interpolateCloudInit(script, {
+            tailscaleAuthKey: _tsAuthKey,
+            gatewayToken: gwToken,
+            additionalSecrets,
+          });
         });
     });
 }
