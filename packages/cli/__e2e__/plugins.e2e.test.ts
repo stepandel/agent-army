@@ -283,9 +283,14 @@ describe("Plugin Lifecycle: deploy → validate → destroy (Slack + Linear)", (
       expect(configCmds).toContain("channels.test-slack.botToken");
       expect(configCmds).toContain("channels.test-slack.appToken");
 
-      // Assert: Linear plugin secrets are in configSetCommands (as plugin config keys)
-      expect(configCmds).toContain("plugins.entries.test-linear.config.apiKey");
-      expect(configCmds).toContain("plugins.entries.test-linear.config.webhookSecret");
+      // Assert: Linear plugin config is in configSetCommands as an atomic object
+      expect(configCmds).toContain("plugins.entries.test-linear.config");
+      const linearConfigCmd = provisionerConfig.configSetCommands.find(
+        (c: { key: string }) => c.key === "plugins.entries.test-linear.config",
+      );
+      expect(linearConfigCmd).toBeTruthy();
+      expect(linearConfigCmd.value).toHaveProperty("apiKey");
+      expect(linearConfigCmd.value).toHaveProperty("webhookSecret");
       // LINEAR_USER_UUID was resolved by the test-linear hook (echo-based stub)
       expect(provisionerConfig.profileEnvVars).toHaveProperty("LINEAR_USER_UUID");
       expect(provisionerConfig.profileEnvVars.LINEAR_USER_UUID).toContain("test-resolved-uuid-");
