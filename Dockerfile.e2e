@@ -15,10 +15,22 @@ RUN existing=$(getent passwd 1000 | cut -d: -f1) \
   && mkdir -p /home/openclaw/.openclaw/workspace \
   && chown -R openclaw:openclaw /home/openclaw
 
+# Stub binaries so the entrypoint script doesn't fail with set -e.
+# "openclaw gateway" sleeps forever to keep the container alive.
+# "openclaw devices approve" is a no-op.
+# "claude --version" returns a fake version.
+RUN mkdir -p /usr/local/bin \
+  && printf '#!/bin/bash\nif [ "$1" = "gateway" ]; then\n  exec sleep infinity\nelif [ "$1" = "devices" ]; then\n  exit 0\nelif [ "$1" = "plugins" ]; then\n  exit 0\nfi\n' > /usr/local/bin/openclaw \
+  && chmod +x /usr/local/bin/openclaw \
+  && printf '#!/bin/bash\necho "claude-code 1.0.0-e2e-stub"\n' > /usr/local/bin/claude \
+  && chmod +x /usr/local/bin/claude \
+  && printf '#!/bin/bash\nexit 0\n' > /usr/local/bin/clawhub \
+  && chmod +x /usr/local/bin/clawhub
+
 USER openclaw
 WORKDIR /home/openclaw
 ENV HOME=/home/openclaw
-ENV PATH="/home/openclaw/.local/bin:${PATH}"
+ENV PATH="/home/openclaw/.local/bin:/usr/local/bin:${PATH}"
 
 EXPOSE 18789
 
